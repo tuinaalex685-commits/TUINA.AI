@@ -9,16 +9,24 @@ import { Badge } from '@/components/ui/Badge/Badge';
 export default function AccessCodeManager({ initialCodes }: { initialCodes: any[] }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [customCode, setCustomCode] = useState('');
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
     
-    const res = await createAccessCode();
+    if (!customCode.trim()) {
+      setMessage("Veuillez saisir un code.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await createAccessCode(customCode);
     if (res.error) setMessage(res.error);
     else {
-      setMessage("Code généré avec succès !");
+      setMessage("Code ajouté avec succès !");
+      setCustomCode(''); // Clear the input
     }
     setLoading(false);
   };
@@ -36,9 +44,16 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)'}}>
-      <form onSubmit={handleGenerate} style={{ display: 'flex', gap: 'var(--spacing-standard)', alignItems: 'flex-end' }}>
-        <Button type="submit" disabled={loading}>
-          {loading ? 'Création...' : 'Générer un nouveau code vierge'}
+      <form onSubmit={handleGenerate} style={{ display: 'flex', gap: 'var(--spacing-standard)', alignItems: 'flex-end', maxWidth: '500px' }}>
+        <Input 
+          label="Nouveau code d'accès"
+          value={customCode}
+          onChange={(e) => setCustomCode(e.target.value)}
+          placeholder="Ex: DROIT-2026"
+          required
+        />
+        <Button type="submit" disabled={loading} style={{ whiteSpace: 'nowrap', marginBottom: '4px' }}>
+          {loading ? 'Création...' : 'Ajouter le code'}
         </Button>
       </form>
 

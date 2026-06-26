@@ -3,20 +3,14 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
-// Générer un code aléatoire de type TUINA-XXXXX
-function generateRandomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Pas de O, 0, 1, I pour éviter les confusions
-  let result = '';
-  for (let i = 0; i < 5; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `TUINA-${result}`;
-}
-
-export async function createAccessCode() {
+export async function createAccessCode(customCode: string) {
   try {
-    const code = generateRandomCode();
+    if (!customCode || customCode.trim() === '') {
+      return { error: "Le code d'accès ne peut pas être vide." };
+    }
     
+    const code = customCode.trim();
+
     // On insère le code sans email (il sera lié lors de la première utilisation)
     const { data, error } = await supabaseAdmin
       .from('access_codes')
@@ -28,7 +22,7 @@ export async function createAccessCode() {
 
     if (error) {
       if (error.code === '23505') {
-        return { error: "Un code d'accès existe déjà pour cet email." };
+        return { error: "Ce code d'accès existe déjà." };
       }
       return { error: error.message };
     }
