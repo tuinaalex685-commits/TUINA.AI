@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
     setMessage('');
     
-    // Appel sécurisé au backend
+    // Appel sécurisé au backend unifié
     const result = await loginWithAccessCode(email, code);
 
     if (result.error) {
@@ -40,7 +40,7 @@ export default function LoginPage() {
       <Card className={styles.loginCard}>
         <div className={styles.header}>
           <h1 className={styles.logo}>Tuina.ai</h1>
-          <p className={styles.subtitle}>Accès privé étudiant</p>
+          <p className={styles.subtitle}>Connexion</p>
         </div>
         
         <form className={styles.form} onSubmit={handleLogin}>
@@ -49,15 +49,15 @@ export default function LoginPage() {
             type="email" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="votre.email@etudiant.com"
+            placeholder="votre.email@exemple.com"
             required
           />
           <Input 
-            label="Code d'accès" 
-            type="text" 
+            label="Mot de passe ou Code d'accès" 
+            type="password" 
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="TUINA-XXXXX"
+            placeholder="Mot de passe ou TUINA-XXXXX"
             required
           />
           
@@ -65,7 +65,7 @@ export default function LoginPage() {
           
           <div className={styles.actions}>
             <Button type="submit" disabled={loading} style={{width: '100%'}}>
-              {loading ? 'Vérification...' : 'Accéder à la plateforme'}
+              {loading ? 'Vérification...' : 'Se connecter'}
             </Button>
           </div>
         </form>

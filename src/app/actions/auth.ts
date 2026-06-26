@@ -3,46 +3,97 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
-export async function loginWithAccessCode(email: string, code: string) {
+export async function loginWithAccessCode(email: string, secret: string) {
   try {
-    // 0. BYPASS ADMINISTRATEUR : L'admin se connecte avec son mot de passe habituel
-    if (email === 'tuinaalex685@gmail.com') {
-      const supabase = await createClient();
-      const { error: adminAuthError } = await supabase.auth.signInWithPassword({
-        email,
-        password: code, // Le champ "code" agit ici comme le mot de passe pour l'admin
+    const supabase = await createClient();
+
+    // 1. TENTATIVE CLASSIQUE DE CONNEXION (Email + Mot de passe ou Code utilisé comme mdp)
+    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: secret,
+    });
+
+    if (!signInError && authData.user) {
+      // Succès de la connexion : on récupère le rôle de l'utilisateur
+      const { data: roleData } = await supabaseAdmin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', authData.user.id)
+        .single();
+
+      return { success: true, role: roleData?.role || 'student' };
+    }
+
+    // 2. SI ECHEC : Soit le compte n'existe pas, soit le code/mdp est faux.
+    // On va vérifier l'état de la base de données.
+    
+    // Y a-t-il au moins un admin (ou un utilisateur) dans user_roles ?
+    const { count: roleCount, error: countError } = await supabaseAdmin
+      .from('user_roles')
+      .select('*', { count: 'exact', head: true });
+
+    if (countError) {
+      console.error("Erreur de comptage user_roles:", countError);
+      return { error: "Erreur technique de vérification des rôles." };
+    }
+
+    // --- CAS A : Aucun utilisateur dans la base (C'est le tout premier compte !) ---
+    if (roleCount === 0) {
+      // C'est l'administrateur qui s'inscrit. On le crée silencieusement.
+      const { data: newUserData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: secret,
+        email_confirm: true,
       });
-      if (adminAuthError) {
-        return { error: "Mot de passe administrateur invalide." };
+
+      if (signUpError || !newUserData.user) {
+        console.error("Erreur création 1er admin:", signUpError);
+        return { error: "Erreur lors de la création du compte administrateur." };
       }
+
+      // Le trigger en base (s'il est mis à jour) ou cette logique le mettra Admin.
+      // Par sécurité, s'il n'y a personne, on force l'insertion Admin ici :
+      await supabaseAdmin.from('user_roles').insert({
+        user_id: newUserData.user.id,
+        email: email,
+        role: 'admin'
+      });
+
+      // On connecte cet utilisateur sur le client
+      await supabase.auth.signInWithPassword({ email, password: secret });
+      
       return { success: true, role: 'admin' };
     }
 
-    // 1. Vérifier si le code existe globalement
+    // --- CAS B : La base contient déjà des utilisateurs. C'est donc un étudiant. ---
+    // Le "secret" doit être un Code d'accès valide généré par l'admin.
+    
     const { data: accessCode, error: codeError } = await supabaseAdmin
       .from('access_codes')
       .select('*')
-      .eq('code', code)
+      .eq('code', secret)
       .single();
 
+    // Si le code n'existe pas
     if (codeError || !accessCode) {
-      return { error: "Code d'accès invalide ou inexistant." };
+      return { error: "Identifiants ou code d'accès invalides." };
     }
 
-    // 2. Vérifier si le code est déjà assigné à quelqu'un d'autre
+    // Vérifier si le code est déjà assigné à un autre email
     if (accessCode.email && accessCode.email !== email) {
-      return { error: "Ce code d'accès est déjà utilisé par un autre compte." };
+      return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
     }
 
-    // 3. Vérifier le statut du code
+    // Vérifier les statuts du code
     if (accessCode.status === 'inactive') {
-      return { error: "Ce code d'accès a été désactivé par l'administrateur." };
+      return { error: "Ce code d'accès a été désactivé." };
     }
     if (accessCode.status === 'blocked') {
       return { error: "L'accès à ce compte a été bloqué." };
     }
 
-    // 4. Si le code est libre (email null), on l'assigne à cet utilisateur (Claiming)
+    // Le code est valide et disponible (ou déjà assigné à cet email précis).
+    // On l'assigne si ce n'est pas fait :
     if (!accessCode.email) {
       await supabaseAdmin
         .from('access_codes')
@@ -50,47 +101,42 @@ export async function loginWithAccessCode(email: string, code: string) {
         .eq('id', accessCode.id);
     }
 
-    // 5. Vérifier si l'utilisateur existe déjà dans l'authentification Supabase
+    // On vérifie si l'étudiant a déjà un compte Auth
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const userExists = existingUsers.users.find(u => u.email === email);
 
-    // Si l'utilisateur n'existe pas, on le crée silencieusement en utilisant le code comme mot de passe
     if (!userExists) {
-      const { error: signUpError } = await supabaseAdmin.auth.admin.createUser({
+      // On crée son compte avec son code comme mot de passe
+      const { data: newStudentData, error: studentSignUpError } = await supabaseAdmin.auth.admin.createUser({
         email: email,
-        password: code,
-        email_confirm: true, // Bypass l'email de confirmation !
+        password: secret,
+        email_confirm: true,
       });
 
-      if (signUpError) {
-        console.error("Erreur création auth:", signUpError);
+      if (studentSignUpError || !newStudentData.user) {
+        console.error("Erreur création étudiant:", studentSignUpError);
         return { error: "Erreur technique lors de la création du compte." };
       }
+
+      // On force le rôle étudiant (même si le trigger doit le faire)
+      await supabaseAdmin.from('user_roles').insert({
+        user_id: newStudentData.user.id,
+        email: email,
+        role: 'student'
+      }).select().single();
     }
 
-    // 4. On connecte l'utilisateur sur le client
-    // (Cette étape crée la session dans les cookies via le server component)
-    const supabase = await createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    // Finalement, on connecte l'étudiant
+    const { error: finalSignInError } = await supabase.auth.signInWithPassword({
       email,
-      password: code,
+      password: secret,
     });
 
-    if (signInError) {
-      // S'il ne peut pas se connecter, c'est peut-être que son mot de passe initial
-      // ne correspond plus (si on a régénéré un compte). Mais dans 99% des cas ça passera.
-      console.error("Erreur signIn:", signInError);
-      return { error: "Erreur de connexion. Vérifiez vos identifiants." };
+    if (finalSignInError) {
+      return { error: "Impossible de se connecter après validation du code." };
     }
 
-    // 5. On renvoie le rôle pour rediriger correctement
-    const { data: roleData } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('email', email)
-      .single();
-
-    return { success: true, role: roleData?.role || 'student' };
+    return { success: true, role: 'student' };
 
   } catch (err: any) {
     console.error("Auth server error:", err);

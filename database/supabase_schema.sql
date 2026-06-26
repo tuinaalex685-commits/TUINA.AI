@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Fonction pour attribuer automatiquement le rôle 'admin' à l'email spécifique lors de l'inscription
+-- Fonction pour attribuer automatiquement le rôle 'admin' au premier utilisateur, et 'student' aux suivants
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -20,7 +20,7 @@ BEGIN
   VALUES (
     NEW.id, 
     NEW.email, 
-    CASE WHEN NEW.email = 'tuinaalex685@gmail.com' THEN 'admin' ELSE 'student' END
+    CASE WHEN (SELECT count(*) FROM public.user_roles) = 0 THEN 'admin' ELSE 'student' END
   );
   RETURN NEW;
 END;
