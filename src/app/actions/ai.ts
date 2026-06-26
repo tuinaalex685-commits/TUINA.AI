@@ -58,13 +58,56 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
       const { data: chapitres, error: chapError } = await supabase.from('chapitres').select('titre, contenu_texte').eq('cours_id', coursId);
       if (chapError) debugLog(`[FETCH ERROR] Erreur Supabase chapitres: ${chapError.message}`);
       
+      let text = "";
       if (chapitres && chapitres.length > 0) {
-        const text = chapitres.map(c => `${c.titre}\n${c.contenu_texte}`).join('\n\n');
-        debugLog(`[FETCH] Extraction réussie depuis chapitres. Texte: ${text.length} char.`);
-        return { text, wasTruncated: false };
+        text += chapitres.map(c => `${c.titre}\n${c.contenu_texte}`).join('\n\n');
       }
-      debugLog(`[FETCH ERROR] Le cours ne contient aucun chapitre.`);
-      return { error: "Le cours sélectionné ne contient aucun chapitre." };
+
+      // NOUVEAU: Récupérer les documents PDF associés au cours
+      debugLog(`[FETCH] Recherche des documents (PDF) liés au cours ${coursId}...`);
+      const { data: documents, error: docsError } = await supabase.from('documents').select('url_fichier').eq('cours_id', coursId);
+      if (docsError) debugLog(`[FETCH ERROR] Erreur Supabase documents: ${docsError.message}`);
+
+      let wasTruncated = false;
+      let firstPdfBase64: string | undefined = undefined;
+
+      if (documents && documents.length > 0) {
+        debugLog(`[FETCH] ${documents.length} document(s) trouvé(s) pour ce cours.`);
+        for (const doc of documents) {
+          if (doc.url_fichier) {
+            debugLog(`[FETCH] Téléchargement du PDF associé : ${doc.url_fichier}...`);
+            try {
+              const response = await fetch(doc.url_fichier);
+              if (!response.ok) throw new Error(`Fetch failed with status ${response.status}`);
+              const arrayBuffer = await response.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              
+              if (!firstPdfBase64) {
+                 firstPdfBase64 = buffer.toString('base64');
+              }
+              
+              debugLog(`[FETCH] Extraction du texte du PDF lié...`);
+              const pdfData = await pdfParse(buffer, { max: 30 });
+              text += `\n\n[Contenu PDF attaché]\n${pdfData.text}`;
+              
+              if (pdfData.numpages > 30) {
+                wasTruncated = true;
+                debugLog(`[FETCH] Le PDF associé dépassait 30 pages. Il a été tronqué.`);
+              }
+            } catch (err: any) {
+              debugLog(`[FETCH ERROR] Impossible de lire un PDF associé : ${err.message || err}`);
+            }
+          }
+        }
+      }
+
+      if (text.trim().length > 0) {
+        debugLog(`[FETCH] Extraction réussie depuis chapitres et PDFs. Texte total: ${text.length} char.`);
+        return { text, wasTruncated, pdfBase64: firstPdfBase64 };
+      }
+      
+      debugLog(`[FETCH ERROR] Le cours ne contient aucun chapitre ni PDF valides.`);
+      return { error: "Le cours sélectionné ne contient aucun chapitre ni PDF valides." };
     }
 
     return { error: "Aucune source valide fournie." };
@@ -211,68 +254,100 @@ export async function updateFlashcardReview(flashcardId: string, evaluation: 'ma
 
 // --- 2. GÉNÉRATION D'ÉVALUATIONS ---
 export async function generateEvaluationAction(documentId: string, documentName: string, coursId: string, type: 'quiz' | 'qcm' | 'vrai_faux' | 'juridique', count: number) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
-
-  if (type === 'qcm' && count > 20) return { error: "Limite de 20 questions pour un QCM." };
-  if (type !== 'qcm' && count > 15) return { error: "Limite de 15 questions pour ce type d'évaluation." };
-  if (!coursId) return { error: "Un cours doit être sélectionné." };
-
-  const { text, pdfBase64, error } = await fetchSourceContent(documentId, coursId);
-  if (error) return { error };
-
-  let schemaTypeProps: any = {};
-  let instruction = "";
-
-  if (type === 'qcm') {
-    instruction = `Génère ${count} questions à choix multiples (4 options, 1 seule bonne réponse).`;
-    schemaTypeProps = {
-      question: { type: SchemaType.STRING },
-      options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      correctAnswer: { type: SchemaType.NUMBER, description: "Index de la bonne réponse (0 à 3)" },
-      explication: { type: SchemaType.STRING }
-    };
-  } else if (type === 'vrai_faux') {
-    instruction = `Génère ${count} affirmations. L'étudiant devra répondre Vrai ou Faux.`;
-    schemaTypeProps = {
-      question: { type: SchemaType.STRING },
-      options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      correctAnswer: { type: SchemaType.NUMBER, description: "Index (0 pour Vrai, 1 pour Faux)" },
-      explication: { type: SchemaType.STRING }
-    };
-  } else if (type === 'juridique') {
-    instruction = `Génère ${count} petits cas pratiques juridiques.`;
-    schemaTypeProps = {
-      question: { type: SchemaType.STRING, description: "Le cas pratique court" },
-      expectedAnswer: { type: SchemaType.STRING, description: "La solution juridique attendue avec fondement" }
-    };
-  } else {
-    instruction = `Génère ${count} questions ouvertes.`;
-    schemaTypeProps = {
-      question: { type: SchemaType.STRING },
-      expectedAnswer: { type: SchemaType.STRING, description: "Les mots clés ou l'idée principale attendue" }
-    };
-  }
-
-  const schema = {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: { id: { type: SchemaType.NUMBER }, ...schemaTypeProps },
-      required: ["id", "question", type === 'qcm' || type === 'vrai_faux' ? "options" : "expectedAnswer"]
-    }
+  const logs: string[] = [];
+  const debugLog = (msg: string) => {
+    console.log(msg);
+    logs.push(msg);
   };
 
+  debugLog(`[ACTION EVAL] Début generateEvaluationAction (${count} questions, type: ${type})`);
+  
   try {
-    const questionsJson = await generateJSON(
-      "Tu es un examinateur en droit exigeant. " + instruction,
-      text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.",
-      schema as Schema,
-      pdfBase64
-    );
+    debugLog(`[ACTION EVAL] Initialisation Supabase...`);
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!Array.isArray(questionsJson)) throw new Error("Format JSON invalide");
+    if (authError) debugLog(`[ACTION EVAL ERROR] auth.getUser: ${authError.message}`);
+
+    if (!user) {
+      debugLog(`[ACTION EVAL ERROR] Non authentifié.`);
+      return { error: "Non authentifié", logs };
+    }
+    debugLog(`[ACTION EVAL] User identifié: ${user.id}`);
+
+    if (type === 'qcm' && count > 20) return { error: "Limite de 20 questions pour un QCM.", logs };
+    if (type !== 'qcm' && count > 15) return { error: "Limite de 15 questions pour ce type d'évaluation.", logs };
+    if (!coursId) return { error: "Un cours doit être sélectionné.", logs };
+
+    const { text, pdfBase64, error, wasTruncated } = await fetchSourceContent(documentId, coursId, debugLog);
+    if (error) {
+      debugLog(`[ACTION EVAL ERROR] Erreur retournée par fetchSourceContent: ${error}`);
+      return { error, logs };
+    }
+
+    let schemaTypeProps: any = {};
+    let instruction = "";
+
+    if (type === 'qcm') {
+      instruction = `Génère ${count} questions à choix multiples (4 options, 1 seule bonne réponse).`;
+      schemaTypeProps = {
+        question: { type: SchemaType.STRING },
+        options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        correctAnswer: { type: SchemaType.NUMBER, description: "Index de la bonne réponse (0 à 3)" },
+        explication: { type: SchemaType.STRING }
+      };
+    } else if (type === 'vrai_faux') {
+      instruction = `Génère ${count} affirmations. L'étudiant devra répondre Vrai ou Faux.`;
+      schemaTypeProps = {
+        question: { type: SchemaType.STRING },
+        options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        correctAnswer: { type: SchemaType.NUMBER, description: "Index (0 pour Vrai, 1 pour Faux)" },
+        explication: { type: SchemaType.STRING }
+      };
+    } else if (type === 'juridique') {
+      instruction = `Génère ${count} petits cas pratiques juridiques.`;
+      schemaTypeProps = {
+        question: { type: SchemaType.STRING, description: "Le cas pratique court" },
+        expectedAnswer: { type: SchemaType.STRING, description: "La solution juridique attendue avec fondement" }
+      };
+    } else {
+      instruction = `Génère ${count} questions ouvertes.`;
+      schemaTypeProps = {
+        question: { type: SchemaType.STRING },
+        expectedAnswer: { type: SchemaType.STRING, description: "Les mots clés ou l'idée principale attendue" }
+      };
+    }
+
+    const schema = {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: { id: { type: SchemaType.NUMBER }, ...schemaTypeProps },
+        required: ["id", "question", type === 'qcm' || type === 'vrai_faux' ? "options" : "expectedAnswer"]
+      }
+    };
+
+    debugLog(`[ACTION EVAL] Appel generateJSON (Gemini/Mock)...`);
+    let questionsJson;
+    try {
+      questionsJson = await generateJSON(
+        "Tu es un examinateur en droit exigeant. " + instruction,
+        text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.",
+        schema as Schema,
+        wasTruncated ? undefined : pdfBase64 // Si tronqué, on force l'utilisation du texte
+      );
+      debugLog(`[ACTION EVAL] generateJSON terminé avec succès.`);
+    } catch (aiError: any) {
+      debugLog(`[ACTION EVAL ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
+      return { error: `Erreur IA: ${aiError.message}`, logs };
+    }
+
+    if (!Array.isArray(questionsJson)) {
+      debugLog(`[ACTION EVAL ERROR] Format JSON invalide retourné par IA.`);
+      return { error: "L'IA n'a pas retourné un tableau valide", logs };
+    }
+
+    debugLog(`[ACTION EVAL] Préparation de l'insertion de l'évaluation...`);
 
     const { data, error: dbError } = await supabase.from('evaluations').insert([{
       type: type,
@@ -284,12 +359,24 @@ export async function generateEvaluationAction(documentId: string, documentName:
       document_id: documentId !== 'dummy' ? documentId : null
     }]).select().single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      debugLog(`[ACTION EVAL ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
+      return { error: `Erreur BDD: ${dbError.message}`, logs };
+    }
 
-    revalidatePath('/app/evaluations');
-    return { success: true, evaluation: data };
-  } catch (err: any) {
-    return { error: err.message };
+    debugLog(`[ACTION EVAL] Insertion réussie. Appel revalidatePath...`);
+    try {
+      revalidatePath('/app/evaluations');
+      debugLog(`[ACTION EVAL] revalidatePath OK.`);
+    } catch (revError: any) {
+      debugLog(`[ACTION EVAL ERROR] revalidatePath a échoué: ${revError.message}`);
+    }
+
+    debugLog(`[ACTION EVAL] Fin de l'action serveur avec succès.`);
+    return { success: true, evaluation: data, wasTruncated, logs };
+  } catch (globalError: any) {
+    debugLog(`[ACTION EVAL FATAL] Exception non interceptée: ${globalError.message}\n${globalError.stack}`);
+    return { error: `Erreur Serveur Fatale: ${globalError.message}`, logs, fatal: true };
   }
 }
 

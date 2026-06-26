@@ -57,15 +57,29 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
     const coursName = coursList.find(c => c.id === selectedCoursId)?.titre || '';
 
-    // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
-    const res = await generateEvaluationAction('dummy', coursName, selectedCoursId, selectedType, count);
-    setIsGenerating(false);
+    try {
+      // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
+      const res = await generateEvaluationAction('dummy', coursName, selectedCoursId, selectedType, count);
+      setIsGenerating(false);
 
-    if (res.error) {
-      alert(res.error);
-    } else {
-      alert("Évaluation générée avec succès !");
-      router.refresh();
+      const serverLogs = res.logs ? `\n\n--- LOGS SERVEUR ---\n${res.logs.join('\n')}` : '';
+
+      if (res.error) {
+        console.error(`[EVAL ERROR] Backend a retourné une erreur :`, res.error);
+        alert(`Erreur: ${res.error}${serverLogs}`);
+      } else {
+        console.log(`[EVAL SUCCESS] Succès retourné par le backend.`);
+        if (res.wasTruncated) {
+          alert(`Évaluation générée !\n\nInformation : Le ou les PDF associés à ce cours dépassaient 30 pages. L'analyse s'est limitée aux 30 premières pages pour optimiser le traitement.${serverLogs}`);
+        } else {
+          alert(`Évaluation générée avec succès !${serverLogs}`);
+        }
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error(`[EVAL FATAL ERROR] Erreur inattendue :`, err);
+      setIsGenerating(false);
+      alert("Erreur système critique ou Timeout de Vercel (délai > 10s dépassé sans réponse du serveur). Détail: " + err.message);
     }
   };
 
