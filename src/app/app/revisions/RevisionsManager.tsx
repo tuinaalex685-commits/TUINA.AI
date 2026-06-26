@@ -101,16 +101,22 @@ export default function RevisionsManager({
       if (c) docName = c.titre;
     }
 
-    console.log(`[FLOW 2] Appel de la Server Action generateFlashcardsAction...`);
-    const res = await generateFlashcardsAction(docId, docName, cId, flashcardCount);
-    setIsGenerating(false);
-    if (res.error) {
-       console.error(`[FLOW END ERROR] Erreur retournée par le backend :`, res.error);
-       alert(res.error);
-    } else {
-      console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
-      alert("Flashcards générées !");
-      fetchFlashcards();
+    try {
+      console.log(`[FLOW 2] Appel de la Server Action generateFlashcardsAction...`);
+      const res = await generateFlashcardsAction(docId, docName, cId, flashcardCount);
+      setIsGenerating(false);
+      if (res.error) {
+         console.error(`[FLOW END ERROR] Erreur retournée par le backend :`, res.error);
+         alert("Erreur: " + res.error);
+      } else {
+        console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
+        alert("Flashcards générées !");
+        fetchFlashcards();
+      }
+    } catch (err: any) {
+      console.error(`[FLOW FATAL ERROR] Erreur inattendue :`, err);
+      setIsGenerating(false);
+      alert("Erreur système ou timeout. Veuillez réessayer. Détail: " + err.message);
     }
   };
 
