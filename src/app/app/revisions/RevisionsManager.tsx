@@ -105,22 +105,25 @@ export default function RevisionsManager({
       console.log(`[FLOW 2] Appel de la Server Action generateFlashcardsAction...`);
       const res = await generateFlashcardsAction(docId, docName, cId, flashcardCount);
       setIsGenerating(false);
+      
+      const serverLogs = res.logs ? `\n\n--- LOGS SERVEUR ---\n${res.logs.join('\n')}` : '';
+
       if (res.error) {
          console.error(`[FLOW END ERROR] Erreur retournée par le backend :`, res.error);
-         alert("Erreur: " + res.error);
+         alert(`Erreur: ${res.error}${serverLogs}`);
       } else {
         console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
         if (res.wasTruncated) {
-          alert("Flashcards générées !\n\nInformation : Seules les 30 premières pages du PDF ont été analysées pour optimiser les performances de traitement.");
+          alert(`Flashcards générées !\n\nInformation : Seules les 30 premières pages du PDF ont été analysées pour optimiser les performances de traitement.${serverLogs}`);
         } else {
-          alert("Flashcards générées avec succès !");
+          alert(`Flashcards générées avec succès !${serverLogs}`);
         }
         fetchFlashcards();
       }
     } catch (err: any) {
       console.error(`[FLOW FATAL ERROR] Erreur inattendue :`, err);
       setIsGenerating(false);
-      alert("Erreur système ou timeout. Veuillez réessayer. Détail: " + err.message);
+      alert("Erreur système critique ou Timeout de Vercel (délai > 10s dépassé sans réponse du serveur). Détail: " + err.message);
     }
   };
 

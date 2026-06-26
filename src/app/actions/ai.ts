@@ -7,95 +7,135 @@ import { SchemaType, Schema } from '@google/generative-ai';
 const pdfParse = require('pdf-parse');
 
 // --- UTILITAIRE : Extraction du contenu source ---
-async function fetchSourceContent(documentId: string, coursId: string | null): Promise<{ text?: string; pdfBase64?: string; error?: string; wasTruncated?: boolean }> {
-  console.log(`[FLOW 4] Début fetchSourceContent - documentId: ${documentId}, coursId: ${coursId}`);
-  const supabase = await createClient();
+async function fetchSourceContent(documentId: string, coursId: string | null, debugLog: (msg: string) => void): Promise<{ text?: string; pdfBase64?: string; error?: string; wasTruncated?: boolean }> {
+  debugLog(`[FETCH] Début fetchSourceContent - documentId: ${documentId}, coursId: ${coursId}`);
+  try {
+    const supabase = await createClient();
 
-  if (documentId && documentId !== 'dummy') {
-    console.log(`[FLOW 4.1] Recherche du document PDF dans Supabase...`);
-    const { data: document } = await supabase.from('documents').select('url_fichier').eq('id', documentId).single();
-    if (document?.url_fichier) {
-      console.log(`[FLOW 4.2] Document trouvé, URL: ${document.url_fichier}. Téléchargement...`);
-      try {
-        const response = await fetch(document.url_fichier);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString('base64');
-        
-        console.log(`[FLOW 4.3] Téléchargement OK (taille: ${buffer.length} bytes). Démarrage de l'extraction pdf-parse...`);
-        let extractedText = "";
-        let wasTruncated = false;
+    if (documentId && documentId !== 'dummy') {
+      debugLog(`[FETCH] Recherche du document PDF dans Supabase...`);
+      const { data: document, error: docError } = await supabase.from('documents').select('url_fichier').eq('id', documentId).single();
+      if (docError) debugLog(`[FETCH ERROR] Erreur Supabase documents: ${docError.message}`);
+      
+      if (document?.url_fichier) {
+        debugLog(`[FETCH] Document trouvé, URL: ${document.url_fichier}. Téléchargement...`);
         try {
-          // Limite stricte à 30 pages pour éviter le timeout Vercel (10s)
-          const pdfData = await pdfParse(buffer, { max: 30 });
-          extractedText = pdfData.text;
-          wasTruncated = pdfData.numpages > 30;
-          console.log(`[FLOW 5] Extraction réussie. Texte extrait : ${extractedText.length} caractères. Tronqué: ${wasTruncated}`);
-        } catch (err) {
-          console.log(`[FLOW 5 ERROR] Erreur pdf-parse :`, err);
+          const response = await fetch(document.url_fichier);
+          if (!response.ok) throw new Error(`Fetch failed with status ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          debugLog(`[FETCH] ArrayBuffer récupéré.`);
+          const buffer = Buffer.from(arrayBuffer);
+          debugLog(`[FETCH] Buffer créé.`);
+          const base64 = buffer.toString('base64');
+          
+          debugLog(`[FETCH] Téléchargement OK (taille: ${buffer.length} bytes). Démarrage de l'extraction pdf-parse...`);
+          let extractedText = "";
+          let wasTruncated = false;
+          try {
+            debugLog(`[FETCH] Appel de pdfParse...`);
+            const pdfData = await pdfParse(buffer, { max: 30 });
+            debugLog(`[FETCH] pdfParse terminé.`);
+            extractedText = pdfData.text;
+            wasTruncated = pdfData.numpages > 30;
+            debugLog(`[FETCH] Extraction réussie. Texte: ${extractedText.length} char. Tronqué: ${wasTruncated}`);
+          } catch (err: any) {
+            debugLog(`[FETCH ERROR] Erreur pdf-parse fatale : ${err.message || err}`);
+            throw err; // On relance pour voir le vrai crash
+          }
+
+          return { pdfBase64: base64, text: extractedText, wasTruncated };
+        } catch (e: any) {
+          debugLog(`[FETCH ERROR] Erreur lors du téléchargement : ${e.message || e}`);
+          return { error: `Erreur lors du téléchargement du PDF source: ${e.message}` };
         }
-
-        return { pdfBase64: base64, text: extractedText, wasTruncated };
-      } catch (e) {
-        return { error: "Erreur lors du téléchargement du PDF source." };
       }
+      debugLog(`[FETCH ERROR] Document introuvable ou URL invalide.`);
+      return { error: "Document introuvable ou URL invalide." };
     }
-    return { error: "Document introuvable ou URL invalide." };
-  }
 
-  if (coursId) {
-    console.log(`[FLOW 4.1] Recherche des chapitres du cours ${coursId} dans Supabase...`);
-    const { data: chapitres } = await supabase.from('chapitres').select('titre, contenu_texte').eq('cours_id', coursId);
-    if (chapitres && chapitres.length > 0) {
-      const text = chapitres.map(c => `${c.titre}\n${c.contenu_texte}`).join('\n\n');
-      console.log(`[FLOW 5] Extraction réussie depuis chapitres. Texte: ${text.length} caractères.`);
-      return { text, wasTruncated: false };
+    if (coursId) {
+      debugLog(`[FETCH] Recherche des chapitres du cours ${coursId}...`);
+      const { data: chapitres, error: chapError } = await supabase.from('chapitres').select('titre, contenu_texte').eq('cours_id', coursId);
+      if (chapError) debugLog(`[FETCH ERROR] Erreur Supabase chapitres: ${chapError.message}`);
+      
+      if (chapitres && chapitres.length > 0) {
+        const text = chapitres.map(c => `${c.titre}\n${c.contenu_texte}`).join('\n\n');
+        debugLog(`[FETCH] Extraction réussie depuis chapitres. Texte: ${text.length} char.`);
+        return { text, wasTruncated: false };
+      }
+      debugLog(`[FETCH ERROR] Le cours ne contient aucun chapitre.`);
+      return { error: "Le cours sélectionné ne contient aucun chapitre." };
     }
-    console.log(`[FLOW 5 ERROR] Le cours ne contient aucun chapitre.`);
-    return { error: "Le cours sélectionné ne contient aucun chapitre." };
-  }
 
-  return { error: "Aucune source valide fournie." };
+    return { error: "Aucune source valide fournie." };
+  } catch (globalErr: any) {
+    debugLog(`[FETCH FATAL] Erreur non gérée dans fetchSourceContent: ${globalErr.message}\n${globalErr.stack}`);
+    return { error: `Fatal fetch error: ${globalErr.message}` };
+  }
 }
 
 // --- 1. GÉNÉRATION DE FLASHCARDS ---
 export async function generateFlashcardsAction(documentId: string, documentName: string, coursId: string | null = null, count: number = 10) {
-  console.log(`[FLOW 3] Server Action appelée: generateFlashcardsAction (${count} cartes demandées)`);
-  
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    console.log(`[FLOW 3 ERROR] Non authentifié.`);
-    return { error: "Non authentifié" };
-  }
-
-  const { text, pdfBase64, error, wasTruncated } = await fetchSourceContent(documentId, coursId);
-  if (error) return { error };
-
-  const schema = {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: {
-        question: { type: SchemaType.STRING, description: "Question courte et directe" },
-        reponse: { type: SchemaType.STRING, description: "Réponse précise et concise" }
-      },
-      required: ["question", "reponse"]
-    }
+  const logs: string[] = [];
+  const debugLog = (msg: string) => {
+    console.log(msg);
+    logs.push(msg);
   };
 
+  debugLog(`[ACTION] Début generateFlashcardsAction (${count} cartes)`);
+  
   try {
-    console.log(`[FLOW 6] Appel à l'IA pour générer les flashcards...`);
-    const flashcardsJson = await generateJSON(
-      `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
-      text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
-      schema as Schema,
-      wasTruncated ? undefined : pdfBase64 // Si tronqué, on force l'utilisation du texte limité à 30 pages
-    );
+    debugLog(`[ACTION] Initialisation Supabase...`);
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!Array.isArray(flashcardsJson)) throw new Error("Format JSON invalide");
-    console.log(`[FLOW 6.1] Flashcards générées (${flashcardsJson.length} unités). Insertion...`);
+    if (authError) debugLog(`[ACTION ERROR] auth.getUser: ${authError.message}`);
+
+    if (!user) {
+      debugLog(`[ACTION ERROR] Non authentifié.`);
+      return { error: "Non authentifié", logs };
+    }
+    debugLog(`[ACTION] User identifié: ${user.id}`);
+
+    const { text, pdfBase64, error, wasTruncated } = await fetchSourceContent(documentId, coursId, debugLog);
+    if (error) {
+      debugLog(`[ACTION ERROR] Erreur retournée par fetchSourceContent: ${error}`);
+      return { error, logs };
+    }
+
+    const schema = {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          question: { type: SchemaType.STRING, description: "Question courte et directe" },
+          reponse: { type: SchemaType.STRING, description: "Réponse précise et concise" }
+        },
+        required: ["question", "reponse"]
+      }
+    };
+
+    debugLog(`[ACTION] Appel generateJSON (Gemini/Mock)...`);
+    let flashcardsJson;
+    try {
+      flashcardsJson = await generateJSON(
+        `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
+        text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
+        schema as Schema,
+        wasTruncated ? undefined : pdfBase64
+      );
+      debugLog(`[ACTION] generateJSON terminé avec succès.`);
+    } catch (aiError: any) {
+      debugLog(`[ACTION ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
+      return { error: `Erreur IA: ${aiError.message}`, logs };
+    }
+
+    if (!Array.isArray(flashcardsJson)) {
+      debugLog(`[ACTION ERROR] Format JSON invalide retourné par IA: ${JSON.stringify(flashcardsJson).substring(0, 50)}...`);
+      return { error: "L'IA n'a pas retourné un tableau valide", logs };
+    }
+    
+    debugLog(`[ACTION] Préparation de l'insertion de ${flashcardsJson.length} flashcards...`);
 
     const flashcardsToInsert = flashcardsJson.map((fc: any) => ({
       question: fc.question,
@@ -107,21 +147,29 @@ export async function generateFlashcardsAction(documentId: string, documentName:
       next_review: new Date().toISOString()
     }));
 
+    debugLog(`[ACTION] Appel Supabase insert...`);
     const { error: dbError } = await supabase.from('flashcards').insert(flashcardsToInsert);
     
     if (dbError) {
-      console.log(`[FLOW 7 ERROR] Erreur insertion Supabase :`, dbError);
-      return { error: dbError.message };
+      debugLog(`[ACTION ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
+      return { error: `Erreur BDD: ${dbError.message}`, logs };
     }
 
-    console.log(`[FLOW 7.1] Insertion réussie dans Supabase.`);
-    revalidatePath('/app/bibliotheque');
-    revalidatePath('/app/revisions');
-    console.log(`[FLOW 8] Retour avec succès au Frontend.`);
-    return { success: true, wasTruncated };
-  } catch (error: any) {
-    console.log(`[FLOW GLOBAL ERROR]`, error);
-    return { error: error.message };
+    debugLog(`[ACTION] Insertion réussie. Appel revalidatePath...`);
+    try {
+      revalidatePath('/app/bibliotheque');
+      revalidatePath('/app/revisions');
+      debugLog(`[ACTION] revalidatePath OK.`);
+    } catch (revError: any) {
+      debugLog(`[ACTION ERROR] revalidatePath a échoué: ${revError.message}`);
+      // On ne bloque pas si revalidatePath échoue, c'est cosmétique
+    }
+
+    debugLog(`[ACTION] Fin de l'action serveur avec succès.`);
+    return { success: true, wasTruncated, logs };
+  } catch (globalError: any) {
+    debugLog(`[ACTION FATAL] Exception non interceptée: ${globalError.message}\n${globalError.stack}`);
+    return { error: `Erreur Serveur Fatale: ${globalError.message}`, logs, fatal: true };
   }
 }
 
