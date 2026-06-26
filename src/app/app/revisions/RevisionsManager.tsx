@@ -110,7 +110,11 @@ export default function RevisionsManager({
          alert("Erreur: " + res.error);
       } else {
         console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
-        alert("Flashcards générées !");
+        if (res.wasTruncated) {
+          alert("Flashcards générées !\n\nInformation : Seules les 30 premières pages du PDF ont été analysées pour optimiser les performances de traitement.");
+        } else {
+          alert("Flashcards générées avec succès !");
+        }
         fetchFlashcards();
       }
     } catch (err: any) {

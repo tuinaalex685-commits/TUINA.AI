@@ -7,7 +7,7 @@ import { SchemaType, Schema } from '@google/generative-ai';
 const pdfParse = require('pdf-parse');
 
 // --- UTILITAIRE : Extraction du contenu source ---
-async function fetchSourceContent(documentId: string, coursId: string | null): Promise<{ text?: string; pdfBase64?: string; error?: string }> {
+async function fetchSourceContent(documentId: string, coursId: string | null): Promise<{ text?: string; pdfBase64?: string; error?: string; wasTruncated?: boolean }> {
   console.log(`[FLOW 4] Début fetchSourceContent - documentId: ${documentId}, coursId: ${coursId}`);
   const supabase = await createClient();
 
@@ -24,15 +24,18 @@ async function fetchSourceContent(documentId: string, coursId: string | null): P
         
         console.log(`[FLOW 4.3] Téléchargement OK (taille: ${buffer.length} bytes). Démarrage de l'extraction pdf-parse...`);
         let extractedText = "";
+        let wasTruncated = false;
         try {
-          const pdfData = await pdfParse(buffer);
+          // Limite stricte à 30 pages pour éviter le timeout Vercel (10s)
+          const pdfData = await pdfParse(buffer, { max: 30 });
           extractedText = pdfData.text;
-          console.log(`[FLOW 5] Extraction réussie. Texte extrait : ${extractedText.length} caractères.`);
+          wasTruncated = pdfData.numpages > 30;
+          console.log(`[FLOW 5] Extraction réussie. Texte extrait : ${extractedText.length} caractères. Tronqué: ${wasTruncated}`);
         } catch (err) {
           console.log(`[FLOW 5 ERROR] Erreur pdf-parse :`, err);
         }
 
-        return { pdfBase64: base64, text: extractedText };
+        return { pdfBase64: base64, text: extractedText, wasTruncated };
       } catch (e) {
         return { error: "Erreur lors du téléchargement du PDF source." };
       }
@@ -46,7 +49,7 @@ async function fetchSourceContent(documentId: string, coursId: string | null): P
     if (chapitres && chapitres.length > 0) {
       const text = chapitres.map(c => `${c.titre}\n${c.contenu_texte}`).join('\n\n');
       console.log(`[FLOW 5] Extraction réussie depuis chapitres. Texte: ${text.length} caractères.`);
-      return { text };
+      return { text, wasTruncated: false };
     }
     console.log(`[FLOW 5 ERROR] Le cours ne contient aucun chapitre.`);
     return { error: "Le cours sélectionné ne contient aucun chapitre." };
@@ -67,7 +70,7 @@ export async function generateFlashcardsAction(documentId: string, documentName:
     return { error: "Non authentifié" };
   }
 
-  const { text, pdfBase64, error } = await fetchSourceContent(documentId, coursId);
+  const { text, pdfBase64, error, wasTruncated } = await fetchSourceContent(documentId, coursId);
   if (error) return { error };
 
   const schema = {
@@ -88,7 +91,7 @@ export async function generateFlashcardsAction(documentId: string, documentName:
       `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
       text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
       schema as Schema,
-      pdfBase64
+      wasTruncated ? undefined : pdfBase64 // Si tronqué, on force l'utilisation du texte limité à 30 pages
     );
 
     if (!Array.isArray(flashcardsJson)) throw new Error("Format JSON invalide");
@@ -115,7 +118,7 @@ export async function generateFlashcardsAction(documentId: string, documentName:
     revalidatePath('/app/bibliotheque');
     revalidatePath('/app/revisions');
     console.log(`[FLOW 8] Retour avec succès au Frontend.`);
-    return { success: true };
+    return { success: true, wasTruncated };
   } catch (error: any) {
     console.log(`[FLOW GLOBAL ERROR]`, error);
     return { error: error.message };
