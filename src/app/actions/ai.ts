@@ -351,6 +351,7 @@ export async function generateEvaluationAction(documentId: string, documentName:
 
     const { data, error: dbError } = await supabase.from('evaluations').insert([{
       type: type,
+      meta_type: type,
       titre: `Évaluation - ${documentName || 'Cours'}`,
       questions: questionsJson,
       score: null,
@@ -380,48 +381,6 @@ export async function generateEvaluationAction(documentId: string, documentName:
   }
 }
 
-// --- 3. ANALYSE DE RÉDACTION ---
-export async function analyzeRedactionAction(coursId: string, texte: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
-  if (!coursId) return { error: "Un cours doit être sélectionné pour analyser une rédaction." };
-
-  const { text: coursText, error } = await fetchSourceContent('', coursId);
-  if (error) return { error };
-
-  const schema = {
-    type: SchemaType.OBJECT,
-    properties: {
-      points_forts: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      points_faibles: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      axes_amelioration: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      note_globale: { type: SchemaType.STRING, description: "Note sur 20 avec courte appréciation" }
-    },
-    required: ["points_forts", "points_faibles", "axes_amelioration", "note_globale"]
-  };
-
-  try {
-    const feedbackJson = await generateJSON(
-      "Tu es un correcteur juridique strict. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion par rapport au cours cible.",
-      `COURS DE RÉFÉRENCE :\n${coursText || 'Non fourni'}\n\nRÉDACTION DE L'ÉTUDIANT :\n${texte}`,
-      schema as Schema
-    );
-
-    const { data, error: dbError } = await supabase.from('redactions').insert([{
-      titre: 'Analyse de rédaction',
-      type: 'dissertation',
-      texte,
-      rapport_analyse: feedbackJson,
-      user_id: user.id,
-      cours_id: coursId
-    }]).select().single();
-
-    if (dbError) throw dbError;
-
-    revalidatePath('/app/redaction');
-    return { success: true, redaction: data };
-  } catch (err: any) {
-    return { error: err.message };
-  }
-}
+// --- 3. ANALYSE DE RÉDACTION (utilisée par le module Rédaction via redaction.ts) ---
+// Note: cette fonction n'est plus utilisée directement.
+// L'analyse est gérée par sendRedactionForAnalysis dans redaction.ts.

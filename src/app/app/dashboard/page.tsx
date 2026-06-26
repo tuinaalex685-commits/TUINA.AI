@@ -12,41 +12,40 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  // Récupération des vraies données (Matières, Cours, Chapitres)
-  const [{ count: matieresCount }, { count: coursCount }, { count: chapitresCount }, { count: documentsCount }] = await Promise.all([
+  // Récupération des vraies données
+  const [
+    { count: matieresCount },
+    { count: coursCount },
+    { count: documentsCount },
+    { count: flashcardsCount },
+    { count: evaluationsCount },
+    { count: redactionsCount },
+    { data: objectifs }
+  ] = await Promise.all([
     supabase.from('matieres').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('cours').select('*', { count: 'exact', head: true }), // Pas de user_id direct
-    supabase.from('chapitres').select('*', { count: 'exact', head: true }),
+    supabase.from('cours').select('*', { count: 'exact', head: true }),
     supabase.from('documents').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('evaluations').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('redactions').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('objectifs').select('*').eq('user_id', user.id).limit(3)
   ]);
 
-  // Récupération des objectifs, flashcards, etc (Nécessite les nouvelles tables)
-  let objectifs = [];
-  let flashcardsCount = 0;
-  
-  try {
-    const objRes = await supabase.from('objectifs').select('*').eq('user_id', user.id).limit(3);
-    if (objRes.data) objectifs = objRes.data;
-
-    const flashRes = await supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('statut', 'validated');
-    if (flashRes.count) flashcardsCount = flashRes.count;
-  } catch (e) {
-    // Tables not created yet
-  }
-
   const stats = {
-    matieresCount,
-    coursCount,
-    chapitresCount,
-    documentsCount
+    matieresCount: matieresCount || 0,
+    coursCount: coursCount || 0,
+    documentsCount: documentsCount || 0,
+    evaluationsCount: evaluationsCount || 0,
+    redactionsCount: redactionsCount || 0,
   };
 
   return (
     <DashboardManager 
       user={user} 
       stats={stats} 
-      objectifs={objectifs} 
-      flashcardsCount={flashcardsCount} 
+      objectifs={objectifs || []} 
+      flashcardsCount={flashcardsCount || 0} 
     />
   );
 }
+

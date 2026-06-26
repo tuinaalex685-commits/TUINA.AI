@@ -20,12 +20,11 @@ export default function DashboardManager({
 }) {
   const router = useRouter();
 
-  // Écoute globale sur la base de données pour rafraîchir le dashboard en temps réel
   useEffect(() => {
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        router.refresh(); // Soft-refresh Next.js (récupère les nouvelles données serveur sans recharger la page)
+        router.refresh();
       })
       .subscribe();
 
@@ -34,7 +33,8 @@ export default function DashboardManager({
     };
   }, [router]);
 
-  const progression = (stats.chapitresCount || 0) > 0 ? 5 : 0;
+  const totalActivities = (stats.matieresCount || 0) + (stats.evaluationsCount || 0) + flashcardsCount + (stats.redactionsCount || 0);
+  const progression = totalActivities > 0 ? Math.min(100, Math.round(totalActivities * 2)) : 0;
 
   return (
     <div className={styles.dashboard}>
@@ -67,7 +67,7 @@ export default function DashboardManager({
               )}
               <text x="18" y="20.35" className={styles.percentage}>{progression}%</text>
             </svg>
-            <p className={styles.donutSubtitle}>Du programme maîtrisé</p>
+            <p className={styles.donutSubtitle}>Activité globale</p>
           </div>
         </Card>
 
@@ -84,10 +84,10 @@ export default function DashboardManager({
                   <div className={styles.objectiveInfo}>
                     <span className={styles.objectiveIcon}>🎯</span>
                     <div>
-                      <div className={styles.objectiveTitle}>{obj.titre}</div>
+                      <div className={styles.objectiveTitle}>{obj.titre || obj.type || 'Objectif'}</div>
                     </div>
                   </div>
-                  <span className={styles.objectiveProgress}>{obj.progression} / {obj.cible}</span>
+                  <span className={styles.objectiveProgress}>{obj.progression || 0} / {obj.cible || 1}</span>
                 </li>
               ))}
             </ul>
@@ -116,17 +116,20 @@ export default function DashboardManager({
           </div>
         </Card>
 
-        {/* Activité récente */}
+        {/* Statistiques Réelles */}
         <Card style={{ gridColumn: '1 / -1' }}>
           <h3 style={{ margin: '0 0 var(--spacing-standard) 0' }}>Statistiques Réelles</h3>
-          <div style={{ display: 'flex', gap: 'var(--spacing-large)' }}>
+          <div style={{ display: 'flex', gap: 'var(--spacing-large)', flexWrap: 'wrap' }}>
             <div><strong>Matières :</strong> {stats.matieresCount || 0}</div>
             <div><strong>Cours :</strong> {stats.coursCount || 0}</div>
-            <div><strong>Chapitres :</strong> {stats.chapitresCount || 0}</div>
             <div><strong>Documents PDF :</strong> {stats.documentsCount || 0}</div>
+            <div><strong>Flashcards :</strong> {flashcardsCount}</div>
+            <div><strong>Évaluations :</strong> {stats.evaluationsCount || 0}</div>
+            <div><strong>Rédactions :</strong> {stats.redactionsCount || 0}</div>
           </div>
         </Card>
       </div>
     </div>
   );
 }
+
