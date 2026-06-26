@@ -95,9 +95,24 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.flashcards (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   chapitre_id UUID REFERENCES public.chapitres(id) ON DELETE CASCADE,
+  cours_id UUID REFERENCES public.cours(id) ON DELETE CASCADE,
+  document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   question TEXT NOT NULL,
   reponse TEXT NOT NULL,
   statut ia_status DEFAULT 'draft',
+  box INTEGER DEFAULT 1,
+  next_review TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.historique_revisions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  flashcard_id UUID REFERENCES public.flashcards(id) ON DELETE CASCADE,
+  evaluation TEXT NOT NULL,
+  box_precedente INTEGER,
+  nouvelle_box INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
