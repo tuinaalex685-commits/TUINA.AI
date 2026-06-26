@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
@@ -31,7 +31,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
               setActiveRedaction(null);
             }
           } else if (payload.eventType === 'UPDATE') {
-            setRedactionsList(prev => prev.map(r => r.id === payload.new.id ? { ...r, ...payload.new, redaction_versions: r.redaction_versions } : r));
+            setRedactionsList(prev => prev.map(r => r.id === payload.new.id ? { ...r, ...payload.new } : r));
             if (activeRedaction?.id === payload.new.id) {
               setActiveRedaction((prev: any) => ({ ...prev, ...payload.new }));
             }
@@ -61,42 +61,132 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
   const [contenu, setContenu] = useState('');
   const [viewMode, setViewMode] = useState<'edition' | 'versions' | 'analyse'>('edition');
   const [selectedVersionText, setSelectedVersionText] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // --- AUTO-SAVE toutes les 15 secondes ---
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const contenuRef = useRef(contenu);
+  const activeRedactionRef = useRef(activeRedaction);
+  
+  useEffect(() => { contenuRef.current = contenu; }, [contenu]);
+  useEffect(() => { activeRedactionRef.current = activeRedaction; }, [activeRedaction]);
+
+  const doAutoSave = useCallback(async () => {
+    const red = activeRedactionRef.current;
+    const text = contenuRef.current;
+    if (!red || red.statut === 'analyse' || !text || text.trim().length === 0) return;
+    
+    setIsSaving(true);
+    await updateRedactionContent(red.id, text);
+    setLastSaved(new Date().toLocaleTimeString());
+    setIsSaving(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeRedaction && activeRedaction.statut !== 'analyse') {
+      autoSaveTimerRef.current = setInterval(doAutoSave, 15000);
+    }
+    return () => {
+      if (autoSaveTimerRef.current) clearInterval(autoSaveTimerRef.current);
+    };
+  }, [activeRedaction, doAutoSave]);
+
+  // --- CRÉATION ---
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!titre.trim()) {
+      alert("Veuillez saisir un titre ou un sujet.");
+      return;
+    }
     setLoading(true);
 
-    const res = await createRedaction(titre, type);
-    if (!res.error) {
+    try {
+      const res = await createRedaction(titre, type);
+      setLoading(false);
+
+      if (res.error) {
+        alert(`Erreur lors de la création : ${res.error}`);
+        return;
+      }
+
+      // Succès : fermer la modale, réinitialiser le formulaire
       setTitre('');
       setIsModalOpen(false);
+
+      // Auto-ouvrir la rédaction nouvellement créée dans l'éditeur
+      if (res.redaction) {
+        setActiveRedaction(res.redaction);
+        setContenu('');
+        setViewMode('edition');
+        setSelectedVersionText(null);
+        setLastSaved(null);
+      }
+
       router.refresh();
+    } catch (err: any) {
+      setLoading(false);
+      alert("Erreur système lors de la création : " + err.message);
     }
-    setLoading(false);
   };
 
+  // --- SAUVEGARDE MANUELLE ---
   const handleSaveDraft = async () => {
     if (!activeRedaction) return;
-    await updateRedactionContent(activeRedaction.id, contenu);
-    alert('Brouillon sauvegardé !');
-    router.refresh();
+    setIsSaving(true);
+    const res = await updateRedactionContent(activeRedaction.id, contenu);
+    setIsSaving(false);
+    if (res.error) {
+      alert("Erreur de sauvegarde : " + res.error);
+    } else {
+      setLastSaved(new Date().toLocaleTimeString());
+      alert('Brouillon sauvegardé !');
+    }
   };
 
+  // --- VERSION HISTORIQUE ---
   const handleSaveVersion = async () => {
     if (!activeRedaction) return;
-    await saveRedactionVersion(activeRedaction.id, contenu);
-    alert('Nouvelle version figée et sauvegardée dans l\'historique !');
-    router.refresh();
+    if (!contenu.trim()) {
+      alert("Impossible de créer une version vide.");
+      return;
+    }
+    const res = await saveRedactionVersion(activeRedaction.id, contenu);
+    if (res.error) {
+      alert("Erreur lors de la création de la version : " + res.error);
+    } else {
+      alert('Nouvelle version figée et sauvegardée dans l\'historique !');
+      router.refresh();
+    }
   };
 
+  // --- ANALYSE IA ---
   const handleSendForAnalysis = async () => {
     if (!activeRedaction) return;
-    if (!confirm("Voulez-vous envoyer cette rédaction pour analyse ? Vous ne pourrez plus la modifier.")) return;
+    if (!contenu.trim()) {
+      alert("Vous devez rédiger du contenu avant de demander une analyse.");
+      return;
+    }
+    if (!confirm("Voulez-vous envoyer cette rédaction pour analyse ? Le statut passera à 'Analysé'.")) return;
 
-    await updateRedactionContent(activeRedaction.id, contenu);
-    await sendRedactionForAnalysis(activeRedaction.id);
-    setActiveRedaction(null);
-    router.refresh();
+    setIsAnalyzing(true);
+    try {
+      await updateRedactionContent(activeRedaction.id, contenu);
+      const res = await sendRedactionForAnalysis(activeRedaction.id);
+      setIsAnalyzing(false);
+
+      if (res.error) {
+        alert("Erreur d'analyse IA : " + res.error);
+      } else {
+        alert("Analyse terminée ! Consultez le rapport IA.");
+        setViewMode('analyse');
+        router.refresh();
+      }
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      alert("Erreur système : " + err.message);
+    }
   };
 
   return (
@@ -111,7 +201,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-small)', overflowY: 'auto' }}>
           {redactionsList.length === 0 ? (
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', textAlign: 'center', marginTop: 'var(--spacing-large)' }}>
-              Aucune rédaction.
+              Aucune rédaction. Cliquez sur "+ Nouveau" pour commencer.
             </p>
           ) : (
             redactionsList.map(red => (
@@ -123,13 +213,14 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
                   setContenu(red.contenu || '');
                   setViewMode(red.statut === 'analyse' ? 'analyse' : 'edition');
                   setSelectedVersionText(null);
+                  setLastSaved(null);
                 }}
               >
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-main)' }}>{red.titre}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{red.type}</span>
                   <span style={{ fontSize: '12px', color: red.statut === 'analyse' ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                    {red.statut === 'analyse' ? 'Analysé' : 'Brouillon'}
+                    {red.statut === 'analyse' ? '✅ Analysé' : '📝 Brouillon'}
                   </span>
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
@@ -148,7 +239,11 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
             <header style={{ marginBottom: 'var(--spacing-standard)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h1 style={{ margin: '0 0 8px 0' }}>{activeRedaction.titre}</h1>
-                <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Type : {activeRedaction.type} | Statut : {activeRedaction.statut}</p>
+                <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                  Type : {activeRedaction.type} | Statut : {activeRedaction.statut}
+                  {lastSaved && <span style={{ marginLeft: '16px', color: 'var(--color-success)', fontSize: '12px' }}>💾 Sauvegardé à {lastSaved}</span>}
+                  {isSaving && <span style={{ marginLeft: '16px', color: 'var(--color-warning)', fontSize: '12px' }}>⏳ Sauvegarde...</span>}
+                </p>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {activeRedaction.statut !== 'analyse' && (
@@ -166,17 +261,19 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
                 <textarea
                   value={contenu}
                   onChange={(e) => setContenu(e.target.value)}
-                  style={{ flex: 1, padding: 'var(--spacing-standard)', borderRadius: '8px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-main)', color: 'var(--color-text-main)', fontSize: '15px', resize: 'none', outline: 'none' }}
+                  style={{ flex: 1, padding: 'var(--spacing-standard)', borderRadius: '8px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-main)', color: 'var(--color-text-main)', fontSize: '15px', resize: 'none', outline: 'none', minHeight: '400px' }}
                   placeholder="Rédigez votre devoir ici..."
                 />
                 <div style={{ display: 'flex', gap: 'var(--spacing-standard)', justifyContent: 'space-between' }}>
                   <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', alignSelf: 'center' }}>
-                    Le mode Mock IA génère un retour si aucune clé n'est fournie.
+                    Sauvegarde automatique toutes les 15 secondes. {contenu.length > 0 && `${contenu.split(/\s+/).filter(Boolean).length} mots`}
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <Button variant="secondary" onClick={handleSaveDraft}>Enregistrer le brouillon</Button>
+                    <Button variant="secondary" onClick={handleSaveDraft} disabled={isSaving}>Enregistrer le brouillon</Button>
                     <Button variant="secondary" onClick={handleSaveVersion}>Créer une version historique</Button>
-                    <Button onClick={handleSendForAnalysis} style={{ backgroundColor: '#10b981', color: 'white' }}>Demander analyse IA</Button>
+                    <Button onClick={handleSendForAnalysis} disabled={isAnalyzing} style={{ backgroundColor: '#10b981', color: 'white' }}>
+                      {isAnalyzing ? '⏳ Analyse en cours...' : '🔍 Demander analyse IA'}
+                    </Button>
                   </div>
                 </div>
               </div>

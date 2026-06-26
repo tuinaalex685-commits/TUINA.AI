@@ -10,7 +10,7 @@ export default async function RedactionPage() {
 
   const { data: redactions } = await supabase
     .from('redactions')
-    .select('*')
+    .select('*, redaction_versions(*)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 

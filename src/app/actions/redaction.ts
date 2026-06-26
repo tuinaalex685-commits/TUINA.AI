@@ -6,20 +6,32 @@ import { generateJSON } from '@/lib/gemini';
 import { SchemaType, Schema } from '@google/generative-ai';
 
 export async function createRedaction(titre: string, type: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  console.log(`[REDACTION] createRedaction appelée: titre="${titre}", type="${type}"`);
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) console.log(`[REDACTION ERROR] auth.getUser: ${authError.message}`);
+    if (!user) return { error: "Non authentifié" };
 
-  const { data, error } = await supabase
-    .from('redactions')
-    .insert([{ user_id: user.id, titre, type }])
-    .select()
-    .single();
+    console.log(`[REDACTION] Insertion dans la table redactions pour user ${user.id}...`);
+    const { data, error } = await supabase
+      .from('redactions')
+      .insert([{ user_id: user.id, titre, type }])
+      .select()
+      .single();
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/app/redaction');
-  return { success: true, redaction: data };
+    if (error) {
+      console.log(`[REDACTION ERROR] Erreur insertion: ${error.message} (Code: ${error.code})`);
+      return { error: error.message };
+    }
+    
+    console.log(`[REDACTION] Insertion réussie. ID: ${data.id}`);
+    revalidatePath('/app/redaction');
+    return { success: true, redaction: data };
+  } catch (err: any) {
+    console.log(`[REDACTION FATAL] ${err.message}\n${err.stack}`);
+    return { error: `Erreur serveur: ${err.message}` };
+  }
 }
 
 export async function updateRedactionContent(id: string, contenu: string) {
