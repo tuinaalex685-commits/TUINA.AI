@@ -1,0 +1,323 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/Card/Card';
+import { Button } from '@/components/ui/Button/Button';
+import { updateEvaluationScore } from '@/app/actions/student';
+import { generateEvaluationAction } from '@/app/actions/ai';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
+
+export default function EvaluationsManager({ initialQuiz, coursList }: { initialQuiz: any[], coursList: any[] }) {
+  const router = useRouter();
+
+  const [quizList, setQuizList] = useState<any[]>(initialQuiz);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-evaluations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'evaluations' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            router.refresh();
+          } else if (payload.eventType === 'DELETE') {
+            setQuizList(prev => prev.filter(q => q.id !== payload.old.id));
+          } else if (payload.eventType === 'UPDATE') {
+            setQuizList(prev => prev.map(q => q.id === payload.new.id ? { ...q, ...payload.new } : q));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [router]);
+
+  useEffect(() => {
+    setQuizList(initialQuiz);
+  }, [initialQuiz]);
+
+  // --- GÉNÉRATION D'ÉVALUATION ---
+  const [selectedCoursId, setSelectedCoursId] = useState('');
+  const [selectedType, setSelectedType] = useState<'qcm' | 'quiz' | 'vrai_faux' | 'juridique'>('qcm');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!selectedCoursId) {
+      alert("Veuillez sélectionner un cours avant de générer l'évaluation.");
+      return;
+    }
+    setIsGenerating(true);
+    let count = 10;
+    if (selectedType === 'qcm') count = 20; // max 20
+    else count = 15; // max 15 pour quiz, etc.
+
+    const coursName = coursList.find(c => c.id === selectedCoursId)?.titre || '';
+
+    // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
+    const res = await generateEvaluationAction('dummy', coursName, selectedCoursId, selectedType, count);
+    setIsGenerating(false);
+
+    if (res.error) {
+      alert(res.error);
+    } else {
+      alert("Évaluation générée avec succès !");
+      router.refresh();
+    }
+  };
+
+  // Grouping
+  const myQCM = quizList.filter(q => q.meta_type === 'qcm' || (q.type === 'qcm' && !q.meta_type));
+  const myQuiz = quizList.filter(q => q.meta_type === 'quiz' || (q.type === 'quiz' && !q.meta_type));
+  const myVraiFaux = quizList.filter(q => q.meta_type === 'vrai_faux');
+  const myJuridique = quizList.filter(q => q.meta_type === 'juridique');
+
+  // États pour la session
+  const [activeSession, setActiveSession] = useState<any>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [openAnswer, setOpenAnswer] = useState('');
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [score, setScore] = useState(0);
+  const [sessionFinished, setSessionFinished] = useState(false);
+  const [responses, setResponses] = useState<any[]>([]);
+
+  const startSession = (quiz: any) => {
+    if (!quiz.questions || quiz.questions.length === 0) {
+      alert("Ce quiz ne contient aucune question.");
+      return;
+    }
+    setActiveSession(quiz);
+    setCurrentIndex(0);
+    setScore(0);
+    setResponses([]);
+    setSessionFinished(false);
+    setShowCorrection(false);
+    setSelectedOption(null);
+    setOpenAnswer('');
+  };
+
+  const handleValidation = () => {
+    const question = activeSession.questions[currentIndex];
+    const type = activeSession.meta_type || activeSession.type;
+
+    let isCorrect = false;
+
+    if (type === 'qcm' || type === 'vrai_faux') {
+      if (selectedOption === null) return;
+      const correctText = question.options[question.correctAnswer];
+      isCorrect = selectedOption === correctText;
+    } else {
+      if (!openAnswer.trim()) return;
+      // Simulation simple pour les questions ouvertes (en vrai l'IA analyserait)
+      isCorrect = true; // on accorde le point pour la forme
+    }
+
+    if (isCorrect) setScore(prev => prev + 1);
+
+    setResponses(prev => [...prev, {
+      questionId: question.id,
+      userAnswer: (type === 'qcm' || type === 'vrai_faux') ? selectedOption : openAnswer,
+      isCorrect
+    }]);
+
+    setShowCorrection(true);
+  };
+
+  const handleNext = async () => {
+    setShowCorrection(false);
+    setSelectedOption(null);
+    setOpenAnswer('');
+
+    if (currentIndex < activeSession.questions.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      setSessionFinished(true);
+      const finalScore = responses.filter(r => r.isCorrect).length;
+      await updateEvaluationScore(activeSession.id, finalScore);
+      router.refresh();
+    }
+  };
+
+  const endSession = () => {
+    setActiveSession(null);
+    setSessionFinished(false);
+  };
+
+  // VUE DE SESSION TERMINÉE
+  if (sessionFinished && activeSession) {
+    const total = activeSession.questions.length;
+    const finalScore = responses.filter(r => r.isCorrect).length;
+    const successRate = Math.round((finalScore / total) * 100);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80vh', gap: 'var(--spacing-large)' }}>
+        <h1 style={{ fontSize: '32px', color: 'var(--color-text-main)' }}>Évaluation Terminée ! ??</h1>
+        <Card style={{ padding: 'var(--spacing-large)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)', minWidth: '400px' }}>
+          <h2 style={{ margin: 0, textAlign: 'center' }}>{activeSession.titre}</h2>
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{ fontSize: '64px', fontWeight: 'bold', color: successRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+              {finalScore} / {total}
+            </div>
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: '18px' }}>({successRate}%)</div>
+          </div>
+        </Card>
+        <Button onClick={endSession} style={{ padding: '12px 32px', fontSize: '16px' }}>Retour</Button>
+      </div>
+    );
+  }
+
+  // VUE DE SESSION ACTIVE
+  if (activeSession) {
+    const question = activeSession.questions[currentIndex];
+    const type = activeSession.meta_type || activeSession.type;
+    const isOptionsBased = type === 'qcm' || type === 'vrai_faux';
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '800px', margin: '0 auto', gap: 'var(--spacing-large)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+          <Button variant="secondary" onClick={() => setActiveSession(null)}>Quitter</Button>
+          <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>Question {currentIndex + 1} / {activeSession.questions.length}</span>
+          <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Score : {score}</span>
+        </div>
+
+        <Card style={{ padding: 'var(--spacing-large)' }}>
+          <h2 style={{ fontSize: '22px', marginBottom: 'var(--spacing-large)' }}>{question.question}</h2>
+
+          {isOptionsBased ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {(question.options || []).map((opt: string, idx: number) => {
+                const isSelected = selectedOption === opt;
+                let bgStyle = isSelected ? 'rgba(99, 102, 241, 0.1)' : 'var(--color-bg-secondary)';
+                let borderStyle = isSelected ? '2px solid var(--color-primary)' : '2px solid transparent';
+                const correctText = question.options[question.correctAnswer];
+
+                if (showCorrection) {
+                  if (opt === correctText) { bgStyle = 'rgba(16, 185, 129, 0.1)'; borderStyle = '2px solid #10b981'; }
+                  else if (isSelected && opt !== correctText) { bgStyle = 'rgba(239, 68, 68, 0.1)'; borderStyle = '2px solid #ef4444'; }
+                }
+
+                return (
+                  <div key={idx} onClick={() => !showCorrection && setSelectedOption(opt)} style={{ padding: '16px', borderRadius: '8px', backgroundColor: bgStyle, border: borderStyle, cursor: showCorrection ? 'default' : 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: isSelected ? '6px solid var(--color-primary)' : '2px solid var(--color-border)' }} />
+                    <span style={{ fontSize: '16px' }}>{opt}</span>
+                    {showCorrection && opt === correctText && <span style={{ marginLeft: 'auto' }}>?</span>}
+                    {showCorrection && isSelected && opt !== correctText && <span style={{ marginLeft: 'auto' }}>?</span>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <textarea value={openAnswer} onChange={e => setOpenAnswer(e.target.value)} disabled={showCorrection} placeholder="Rédigez votre réponse détaillée..." style={{ width: '100%', height: '150px', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-main)', color: 'var(--color-text-main)', fontSize: '16px', resize: 'vertical' }} />
+              {showCorrection && (
+                <div style={{ marginTop: '16px', padding: '16px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', color: '#10b981' }}>Éléments de réponse attendus :</h4>
+                  <p style={{ margin: 0 }}>{question.expectedAnswer}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--spacing-large)' }}>
+            {!showCorrection ? (
+              <Button onClick={handleValidation} disabled={isOptionsBased ? !selectedOption : !openAnswer.trim()} style={{ padding: '12px 24px', backgroundColor: '#f59e0b', color: 'white' }}>Valider</Button>
+            ) : (
+              <Button onClick={handleNext} style={{ padding: '12px 24px' }}>{currentIndex < activeSession.questions.length - 1 ? 'Question suivante ??' : 'Terminer ??'}</Button>
+            )}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Composant Helper pour rendre les listes de quiz
+  const renderQuizGrid = (title: string, list: any[]) => {
+    if (list.length === 0) return null;
+    return (
+      <section>
+        <h2 style={{ fontSize: '20px', marginBottom: 'var(--spacing-standard)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' }}>{title}</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--spacing-standard)' }}>
+          {list.map(quiz => (
+            <Card key={quiz.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: '0 0 var(--spacing-small)', color: 'var(--color-text-main)' }}>{quiz.titre}</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                  <span>?? Généré le {new Date(quiz.created_at).toLocaleDateString()}</span>
+                  <span>? {quiz.questions?.length || 0} Questions</span>
+                </div>
+              </div>
+              <Button style={{ marginTop: 'var(--spacing-standard)', width: '100%', backgroundColor: '#6366f1' }} onClick={() => startSession(quiz)}>
+                ? Lancer
+              </Button>
+            </Card>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  // VUE PAR DÉFAUT (Liste)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
+      <header>
+        <h1 style={{ margin: 0, color: 'var(--color-text-main)' }}>Vos Évaluations</h1>
+        <p style={{ margin: 0, color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-small)' }}>
+          Testez vos connaissances avec des QCM, Quiz, Vrai/Faux et Cas juridiques générés par l'IA.
+        </p>
+      </header>
+
+      <Card style={{ padding: 'var(--spacing-large)', border: '2px solid var(--color-primary)' }}>
+        <h2 style={{ margin: '0 0 var(--spacing-standard)', fontSize: '18px' }}>Générer une nouvelle évaluation</h2>
+        <div style={{ display: 'flex', gap: 'var(--spacing-standard)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '250px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Source du cours (Obligatoire)</label>
+            <select
+              value={selectedCoursId}
+              onChange={e => setSelectedCoursId(e.target.value)}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+            >
+              <option value="">-- Sélectionnez un cours --</option>
+              {coursList.map(c => <option key={c.id} value={c.id}>{c.titre}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Type d'évaluation</label>
+            <select
+              value={selectedType}
+              onChange={e => setSelectedType(e.target.value as any)}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+            >
+              <option value="qcm">QCM (Max 20)</option>
+              <option value="quiz">Questions Ouvertes (Max 15)</option>
+              <option value="vrai_faux">Vrai ou Faux (Max 15)</option>
+              <option value="juridique">Cas Pratiques Juridiques (Max 15)</option>
+            </select>
+          </div>
+          <Button onClick={handleGenerate} disabled={isGenerating || !selectedCoursId} style={{ padding: '12px 24px', backgroundColor: '#10b981' }}>
+            {isGenerating ? 'Génération IA en cours...' : '? Générer l\'évaluation'}
+          </Button>
+        </div>
+      </Card>
+
+      {quizList.length === 0 ? (
+        <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+          <span style={{ fontSize: '48px', marginBottom: 'var(--spacing-small)' }}>?</span>
+          <h3>Aucun quiz disponible.</h3>
+          <p>Utilisez le formulaire ci-dessus pour générer votre première évaluation à partir d'un cours.</p>
+        </Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
+          {renderQuizGrid("Mes QCM (Choix Multiples)", myQCM)}
+          {renderQuizGrid("Mes Quiz (Questions Ouvertes)", myQuiz)}
+          {renderQuizGrid("Mes Vrai/Faux", myVraiFaux)}
+          {renderQuizGrid("Mes Cas Juridiques", myJuridique)}
+        </div>
+      )}
+    </div>
+  );
+}
+

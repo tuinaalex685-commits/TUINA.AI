@@ -1,0 +1,85 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-section);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-standard);
+}
+
+.description {
+  color: var(--color-text-secondary);
+  max-width: 600px;
+  margin: 0;
+}
+
+.filters {
+  display: flex;
+  gap: var(--spacing-standard);
+  align-items: center;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 400px;
+}
+
+.select {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  font-family: var(--font-inter);
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+  outline: none;
+}
+
+.tableContainer {
+  background-color: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th, .table td {
+  padding: var(--spacing-standard);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.table th {
+  background-color: var(--color-bg-secondary);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.docName {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.date {
+  color: var(--color-text-secondary);
+}
+
+.actionBtn {
+  padding: 6px 12px;
+  font-size: 13px;
+}

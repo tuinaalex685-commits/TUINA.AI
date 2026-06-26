@@ -1,0 +1,42 @@
+.adminContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-secondary);
+}
+
+.header {
+  height: 64px;
+  background-color: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-section);
+  flex-shrink: 0;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.switchLink {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-small) var(--spacing-standard);
+  border-radius: var(--radius-button);
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  transition: background-color 150ms ease;
+}
+
+.switchLink:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.mainContent {
+  flex: 1;
+  padding: var(--spacing-large);
+  overflow-y: auto;
+}

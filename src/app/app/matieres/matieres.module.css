@@ -1,0 +1,92 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-section);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-standard);
+}
+
+.description {
+  color: var(--color-text-secondary);
+  max-width: 600px;
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-standard);
+}
+
+.matiereCard {
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-small);
+}
+
+.cardHeader h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.cardDesc {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  flex: 1;
+  margin-bottom: var(--spacing-standard);
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-standard);
+}
+
+.progressText {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-main);
+}
+
+/* Empty State */
+.emptyState {
+  border: 1px dashed var(--color-border);
+  background-color: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.emptyState:hover {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-accent);
+}
+
+.emptyContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-small);
+  color: var(--color-text-secondary);
+}
+
+.emptyIcon {
+  font-size: 32px;
+  font-weight: 300;
+}

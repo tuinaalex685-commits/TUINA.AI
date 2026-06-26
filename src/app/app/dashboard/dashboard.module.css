@@ -1,0 +1,178 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-section);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-micro);
+}
+
+.welcome {
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--spacing-standard);
+}
+
+.progressCard {
+  grid-column: span 5;
+  display: flex;
+  flex-direction: column;
+}
+
+.objectivesCard {
+  grid-column: span 7;
+}
+
+.revisionsCard {
+  grid-column: span 12;
+}
+
+.progressHeader, .objectivesHeader, .revisionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-standard);
+}
+
+.progressHeader h3, .objectivesHeader h3, .revisionsHeader h3 {
+  margin: 0;
+}
+
+.link {
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Donut Chart Styles */
+.donutContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--spacing-standard) 0;
+}
+
+.circularChart {
+  display: block;
+  margin: 0 auto;
+  max-width: 140px;
+  max-height: 140px;
+}
+
+.circleBg {
+  fill: none;
+  stroke: var(--color-bg-secondary);
+  stroke-width: 3.8;
+}
+
+.circle {
+  fill: none;
+  stroke-width: 3.8;
+  stroke-linecap: round;
+  stroke: var(--color-accent);
+  /* Animation would go here */
+}
+
+.percentage {
+  fill: var(--color-text-main);
+  font-family: var(--font-inter);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.donutSubtitle {
+  margin-top: var(--spacing-standard);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Objectives List */
+.objectivesList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+}
+
+.objectiveItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-standard);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-button);
+}
+
+.objectiveInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-standard);
+}
+
+.objectiveIcon {
+  font-size: 20px;
+}
+
+.objectiveTitle {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.objectiveMeta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.objectiveProgress {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+/* Revisions */
+.revisionsContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+}
+
+.startSessionButton {
+  margin-top: var(--spacing-small);
+  background-color: var(--color-accent);
+  color: #FFF;
+  padding: 12px;
+  border-radius: var(--radius-button);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.startSessionButton:hover {
+  background-color: #1a51c4;
+}
+
+/* Responsiveness */
+@media (max-width: 1024px) {
+  .progressCard, .objectivesCard {
+    grid-column: span 12;
+  }
+}
