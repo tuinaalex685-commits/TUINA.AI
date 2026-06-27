@@ -172,7 +172,13 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
     setIsAnalyzing(true);
     try {
-      await updateRedactionContent(activeRedaction.id, contenu);
+      const saveRes = await updateRedactionContent(activeRedaction.id, contenu);
+      if (saveRes.error) {
+        setIsAnalyzing(false);
+        alert("Erreur de sauvegarde avant analyse : " + saveRes.error);
+        return;
+      }
+      
       const res = await sendRedactionForAnalysis(activeRedaction.id);
       setIsAnalyzing(false);
 
