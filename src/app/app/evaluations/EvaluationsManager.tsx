@@ -252,7 +252,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
       return (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <h2>Erreur de lecture du quiz</h2>
-          <p>Les questions n'ont pas pu être chargées correctement.</p>
+          <p>Les questions n&apos;ont pas pu être chargées correctement.</p>
           <Button onClick={endSession}>Retour</Button>
         </div>
       );
