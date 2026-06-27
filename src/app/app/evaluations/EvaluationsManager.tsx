@@ -254,7 +254,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     return (
       <section>
         <h2 style={{ fontSize: '20px', marginBottom: 'var(--spacing-standard)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' }}>{title}</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--spacing-standard)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 'var(--spacing-standard)' }}>
           {list.map(quiz => (
             <Card key={quiz.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
