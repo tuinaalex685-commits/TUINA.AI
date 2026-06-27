@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node -e \"const fs = require('fs'); const path = 'node_modules/pdf-parse/index.js'; if(fs.existsSync(path)) { let data = fs.readFileSync(path, 'utf8'); data = data.replace('let isDebugMode = !module.parent;', 'let isDebugMode = false;'); fs.writeFileSync(path, data); }\""
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

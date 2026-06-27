@@ -22,11 +22,19 @@ export async function POST(req: Request) {
     let text = "";
     let instruction = "";
 
-    if (documentId !== 'dummy') {
-      const { data: docData } = await supabase.from('documents').select('texte').eq('id', documentId).single();
-      if (docData && docData.texte) {
-        text = docData.texte;
+    try {
+      if (documentId && documentId !== 'dummy') {
+        const { data: docData, error: docError } = await supabase.from('documents').select('texte').eq('id', documentId).single();
+        if (docError) throw docError;
+        if (docData && docData.texte) {
+          text = docData.texte;
+        } else {
+          throw new Error("Contenu introuvable dans la BDD");
+        }
       }
+    } catch (dbErr: any) {
+      console.error("[EVALUATE API] Erreur récupération document:", dbErr);
+      return NextResponse.json({ error: "DATA_UNAVAILABLE" }, { status: 404 });
     }
 
     if (type === 'qcm') {
