@@ -260,6 +260,9 @@ export async function generateEvaluationAction(documentId: string, documentName:
     logs.push(msg);
   };
 
+  const serverActionStartTime = Date.now();
+  debugLog(`[PERF] --------------------------------------------------`);
+  debugLog(`[PERF] Heure de début de la Server Action : ${new Date(serverActionStartTime).toISOString()}`);
   debugLog(`[ACTION EVAL] Début generateEvaluationAction (${count} questions, type: ${type})`);
   
   try {
@@ -328,6 +331,8 @@ export async function generateEvaluationAction(documentId: string, documentName:
     };
 
     debugLog(`[ACTION EVAL] Appel generateJSON (Gemini/Mock)...`);
+    const preGeminiTime = Date.now();
+    debugLog(`[PERF] Heure juste avant l'appel à Gemini : ${new Date(preGeminiTime).toISOString()}`);
     let questionsJson;
     try {
       questionsJson = await generateJSON(
@@ -336,8 +341,14 @@ export async function generateEvaluationAction(documentId: string, documentName:
         schema as Schema,
         wasTruncated ? undefined : pdfBase64 // Si tronqué, on force l'utilisation du texte
       );
-      debugLog(`[ACTION EVAL] generateJSON terminé avec succès.`);
+      const postGeminiTime = Date.now();
+      debugLog(`[PERF] Heure de retour de Gemini : ${new Date(postGeminiTime).toISOString()}`);
+      debugLog(`[PERF] Temps exact passé à attendre Gemini : ${postGeminiTime - preGeminiTime} ms`);
+      debugLog(`[ACTION EVAL] generateJSON terminé avec succès. Résultat brut (début): ${JSON.stringify(questionsJson).substring(0, 150)}...`);
     } catch (aiError: any) {
+      const errorTime = Date.now();
+      debugLog(`[PERF] Heure de l'erreur Gemini : ${new Date(errorTime).toISOString()}`);
+      debugLog(`[PERF] Temps exact passé avant erreur : ${errorTime - preGeminiTime} ms`);
       debugLog(`[ACTION EVAL ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
       return { error: `Erreur IA: ${aiError.message}`, logs };
     }
@@ -349,6 +360,7 @@ export async function generateEvaluationAction(documentId: string, documentName:
 
     debugLog(`[ACTION EVAL] Préparation de l'insertion de l'évaluation...`);
 
+    const preInsertTime = Date.now();
     const { data, error: dbError } = await supabase.from('evaluations').insert([{
       type: type,
       meta_type: type,
@@ -359,11 +371,14 @@ export async function generateEvaluationAction(documentId: string, documentName:
       cours_id: coursId,
       document_id: documentId !== 'dummy' ? documentId : null
     }]).select().single();
+    const postInsertTime = Date.now();
+    debugLog(`[PERF] Temps d'insertion Supabase : ${postInsertTime - preInsertTime} ms`);
 
     if (dbError) {
       debugLog(`[ACTION EVAL ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
       return { error: `Erreur BDD: ${dbError.message}`, logs };
     }
+    debugLog(`[ACTION EVAL] Insertion réussie. ID généré: ${data?.id}`);
 
     debugLog(`[ACTION EVAL] Insertion réussie. Appel revalidatePath...`);
     try {
@@ -374,8 +389,12 @@ export async function generateEvaluationAction(documentId: string, documentName:
     }
 
     debugLog(`[ACTION EVAL] Fin de l'action serveur avec succès.`);
+    const endTime = Date.now();
+    debugLog(`[PERF] Temps total d'exécution de la Server Action : ${endTime - serverActionStartTime} ms`);
     return { success: true, evaluation: data, wasTruncated, logs };
   } catch (globalError: any) {
+    const errorTime = Date.now();
+    debugLog(`[PERF] Temps total d'exécution avant FATAL ERROR : ${errorTime - serverActionStartTime} ms`);
     debugLog(`[ACTION EVAL FATAL] Exception non interceptée: ${globalError.message}\n${globalError.stack}`);
     return { error: `Erreur Serveur Fatale: ${globalError.message}`, logs, fatal: true };
   }

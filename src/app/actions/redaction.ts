@@ -71,6 +71,10 @@ export async function saveRedactionVersion(redactionId: string, contenu: string)
 }
 
 export async function sendRedactionForAnalysis(id: string) {
+  const serverActionStartTime = Date.now();
+  console.log(`[PERF] --------------------------------------------------`);
+  console.log(`[PERF] Heure de début de la Server Action (Redaction) : ${new Date(serverActionStartTime).toISOString()}`);
+  
   const supabase = await createClient();
   
   // Récupérer la rédaction
@@ -97,22 +101,41 @@ export async function sendRedactionForAnalysis(id: string) {
   };
 
   try {
+    const preGeminiTime = Date.now();
+    console.log(`[PERF] Heure juste avant l'appel à Gemini : ${new Date(preGeminiTime).toISOString()}`);
+    
     const feedbackJson = await generateJSON(
       "Tu es un correcteur juridique strict. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.",
       `TYPE DE DEVOIR : ${redaction.type}\n\nRÉDACTION DE L'ÉTUDIANT :\n${redaction.contenu}`,
       schema as Schema
     );
 
+    const postGeminiTime = Date.now();
+    console.log(`[PERF] Heure de retour de Gemini : ${new Date(postGeminiTime).toISOString()}`);
+    console.log(`[PERF] Temps exact passé à attendre Gemini : ${postGeminiTime - preGeminiTime} ms`);
+    console.log(`[ACTION REDACTION] generateJSON terminé avec succès. Résultat: ${JSON.stringify(feedbackJson).substring(0, 150)}...`);
+
+    const preInsertTime = Date.now();
     const { error: updateError } = await supabase
       .from('redactions')
       .update({ statut: 'analyse', rapport_analyse: feedbackJson })
       .eq('id', id);
+    const postInsertTime = Date.now();
+    console.log(`[PERF] Temps de mise à jour Supabase : ${postInsertTime - preInsertTime} ms`);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error(`[ACTION REDACTION] Erreur update Supabase: ${updateError.message}`, updateError);
+      throw updateError;
+    }
 
     revalidatePath('/app/redaction');
+    const endTime = Date.now();
+    console.log(`[PERF] Temps total d'exécution de la Server Action : ${endTime - serverActionStartTime} ms`);
     return { success: true };
   } catch (err: any) {
+    const errorTime = Date.now();
+    console.log(`[PERF] Temps total d'exécution avant FATAL ERROR : ${errorTime - serverActionStartTime} ms`);
+    console.error(`[ACTION REDACTION FATAL] Erreur: ${err.message}`, err.stack);
     return { error: err.message };
   }
 }
