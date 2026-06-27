@@ -100,6 +100,16 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
 
         questionsJson = JSON.parse(cleanedText.trim());
+        // Si le JSON est un objet au lieu d'un tableau (ex: { questions: [...] })
+        if (questionsJson && typeof questionsJson === 'object' && !Array.isArray(questionsJson)) {
+          if (Array.isArray(questionsJson.questions)) {
+            questionsJson = questionsJson.questions;
+          } else if (Array.isArray(questionsJson.quiz)) {
+            questionsJson = questionsJson.quiz;
+          } else {
+            questionsJson = [questionsJson];
+          }
+        }
       } catch (parseError) {
         throw new Error(`Le JSON généré est invalide: ${parseError}\nTexte reçu: ${fullText.substring(0, 200)}...`);
       }
@@ -234,7 +244,20 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
   // VUE DE SESSION ACTIVE
   if (activeSession) {
-    const question = activeSession.questions[currentIndex];
+    // Sécurisation anti-crash au cas où le tableau est mal formaté
+    const questionsList = Array.isArray(activeSession.questions) ? activeSession.questions : [];
+    const question = questionsList[currentIndex];
+    
+    if (!question) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <h2>Erreur de lecture du quiz</h2>
+          <p>Les questions n'ont pas pu être chargées correctement.</p>
+          <Button onClick={endSession}>Retour</Button>
+        </div>
+      );
+    }
+
     const type = activeSession.meta_type || activeSession.type;
     const isOptionsBased = type === 'qcm' || type === 'vrai_faux';
 
@@ -242,12 +265,12 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
       <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '800px', margin: '0 auto', gap: 'var(--spacing-large)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
           <Button variant="secondary" onClick={() => setActiveSession(null)}>Quitter</Button>
-          <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>Question {currentIndex + 1} / {activeSession.questions.length}</span>
+          <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>Question {currentIndex + 1} / {questionsList.length}</span>
           <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>Score : {score}</span>
         </div>
 
         <Card style={{ padding: 'var(--spacing-large)' }}>
-          <h2 style={{ fontSize: '22px', marginBottom: 'var(--spacing-large)' }}>{question.question}</h2>
+          <h2 style={{ fontSize: '22px', marginBottom: 'var(--spacing-large)' }}>{question.question || "Question sans titre"}</h2>
 
           {isOptionsBased ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -255,10 +278,10 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
                 const isSelected = selectedOption === opt;
                 let bgStyle = isSelected ? 'rgba(99, 102, 241, 0.1)' : 'var(--color-bg-secondary)';
                 let borderStyle = isSelected ? '2px solid var(--color-primary)' : '2px solid transparent';
-                const correctText = question.options[question.correctAnswer];
+                const correctText = question.options && question.correctAnswer !== undefined ? question.options[question.correctAnswer] : undefined;
 
                 if (showCorrection) {
-                  if (opt === correctText) { bgStyle = 'rgba(16, 185, 129, 0.1)'; borderStyle = '2px solid #10b981'; }
+                  if (correctText && opt === correctText) { bgStyle = 'rgba(16, 185, 129, 0.1)'; borderStyle = '2px solid #10b981'; }
                   else if (isSelected && opt !== correctText) { bgStyle = 'rgba(239, 68, 68, 0.1)'; borderStyle = '2px solid #ef4444'; }
                 }
 
