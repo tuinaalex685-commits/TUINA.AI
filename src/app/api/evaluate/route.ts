@@ -50,11 +50,14 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}\n\nIMPORTANT: Tu DOIS générer un JSON valide (un tableau d'objets). Ne rajoute aucun texte avant ou après.
-Format attendu :
+    const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}\n\nIMPORTANT: Tu DOIS générer un JSON valide contenant un tableau d'objets. Ne rajoute aucun texte avant ou après le JSON.
+Tu DOIS utiliser EXACTEMENT ces noms de propriétés pour chaque objet du tableau :
+- "question" : le texte de la question, de l'affirmation ou du cas pratique
+${type === 'qcm' || type === 'vrai_faux' ? '- "options" : un tableau de chaînes de caractères (les choix de réponses)\n- "correctAnswer" : un nombre entier représentant l\'index de la bonne réponse (commençant à 0)\n- "explication" : l\'explication de la réponse' : '- "expectedAnswer" : la réponse ou les éléments de correction attendus'}
+
+Exemple de format attendu :
 [
   {
-    "id": 1,
     "question": "...",
     ${type === 'qcm' || type === 'vrai_faux' ? '"options": ["...", "..."],\n    "correctAnswer": 0,\n    "explication": "..."' : '"expectedAnswer": "..."'}
   }
