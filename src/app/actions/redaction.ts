@@ -16,7 +16,7 @@ export async function createRedaction(titre: string, type: string) {
     console.log(`[REDACTION] Insertion dans la table redactions pour user ${user.id}...`);
     const { data, error } = await supabase
       .from('redactions')
-      .insert([{ user_id: user.id, titre, type }])
+      .insert([{ user_id: user.id, titre, type, sujet: titre }])
       .select()
       .single();
 
