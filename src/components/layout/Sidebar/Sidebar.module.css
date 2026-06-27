@@ -70,17 +70,25 @@
 
   .navItem {
     flex-direction: column;
-    padding: var(--spacing-small);
+    padding: var(--spacing-small) 4px;
     color: var(--color-text-secondary);
     font-size: 10px;
     flex: 1;
     text-align: center;
+    overflow: hidden;
   }
 
   .icon {
     margin-right: 0;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     font-size: 20px;
+  }
+
+  .label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
   }
 
   .navItem:hover {

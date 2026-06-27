@@ -1,7 +1,8 @@
 .appContainer {
   display: flex;
-  height: 100vh;
-  width: 100vw;
+  height: 100vh; /* Fallback */
+  height: 100dvh;
+  width: 100%;
   overflow: hidden;
   background-color: var(--color-bg-secondary);
 }
@@ -17,6 +18,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100%;
 }
 
 .header {
@@ -28,6 +30,7 @@
 .mainContent {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--spacing-large);
 }
 
@@ -38,25 +41,26 @@
   }
 
   .sidebar {
-    /* Cache la sidebar en mobile pour la remplacer par une bottom nav via le composant Sidebar lui-même */
     width: 100%;
     height: auto;
     border-right: none;
-    order: 3; /* En bas */
+    order: 3;
     border-top: 1px solid var(--color-border);
     background-color: var(--color-bg-main);
+    z-index: 50; /* Stay above content */
   }
 
   .mainWrapper {
-    order: 2; /* Au milieu */
-    padding-bottom: 0; /* Si bottom nav fixe, padding ici */
+    order: 2;
+    padding-bottom: 0;
   }
 
   .header {
-    order: 1; /* En haut */
+    order: 1;
   }
 
   .mainContent {
     padding: var(--spacing-standard);
   }
 }
+
