@@ -168,10 +168,10 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     const successRate = Math.round((finalScore / total) * 100);
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80vh', gap: 'var(--spacing-large)' }}>
-        <h1 style={{ fontSize: '32px', color: 'var(--color-text-main)' }}>Évaluation Terminée ! ??</h1>
-        <Card style={{ padding: 'var(--spacing-large)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)', minWidth: '400px' }}>
-          <h2 style={{ margin: 0, textAlign: 'center' }}>{activeSession.titre}</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: 'var(--spacing-standard)', gap: 'var(--spacing-large)', width: '100%' }}>
+        <h1 style={{ fontSize: 'clamp(24px, 5vw, 32px)', color: 'var(--color-text-main)', textAlign: 'center', margin: 0 }}>Évaluation Terminée ! 🎉</h1>
+        <Card style={{ padding: 'var(--spacing-large)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)', width: '100%', maxWidth: '400px', boxSizing: 'border-box' }}>
+          <h2 style={{ margin: 0, textAlign: 'center', fontSize: '18px' }}>{activeSession.titre}</h2>
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <div style={{ fontSize: '64px', fontWeight: 'bold', color: successRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)' }}>
               {finalScore} / {total}

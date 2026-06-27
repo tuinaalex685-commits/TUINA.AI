@@ -63,17 +63,28 @@
 
   .nav {
     flex-direction: row;
-    justify-content: space-around;
+    justify-content: flex-start;
     padding: var(--spacing-micro) 0;
     gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    /* Hide scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .nav::-webkit-scrollbar {
+    display: none;
   }
 
   .navItem {
     flex-direction: column;
-    padding: var(--spacing-small) 4px;
+    padding: var(--spacing-small) 8px;
     color: var(--color-text-secondary);
-    font-size: 10px;
-    flex: 1;
+    font-size: 11px;
+    flex: 0 0 auto;
+    min-width: 72px;
     text-align: center;
     overflow: hidden;
   }
@@ -99,10 +110,5 @@
   .navItem.active {
     background-color: transparent;
     color: var(--color-accent);
-  }
-  
-  /* Hide some items on mobile to keep 5 max */
-  .nav > *:nth-child(n+6) {
-    display: none;
   }
 }
