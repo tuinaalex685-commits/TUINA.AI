@@ -400,6 +400,31 @@ export async function generateEvaluationAction(documentId: string, documentName:
   }
 }
 
+export async function saveEvaluationAction(data: any) {
+  const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData?.user) return { error: "Non autorisé" };
+
+  const { error: dbError, data: savedData } = await supabase.from('evaluations').insert([{
+    type: data.type,
+    meta_type: data.meta_type,
+    titre: data.titre,
+    questions: data.questions,
+    score: null,
+    user_id: userData.user.id,
+    cours_id: data.cours_id,
+    document_id: data.document_id !== 'dummy' ? data.document_id : null
+  }]).select().single();
+
+  if (dbError) {
+    console.error("DB Save Error:", dbError);
+    return { error: dbError.message };
+  }
+
+  revalidatePath('/app/evaluations');
+  return { success: true, evaluation: savedData };
+}
+
 // --- 3. ANALYSE DE RÉDACTION (utilisée par le module Rédaction via redaction.ts) ---
 // Note: cette fonction n'est plus utilisée directement.
 // L'analyse est gérée par sendRedactionForAnalysis dans redaction.ts.

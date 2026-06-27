@@ -139,3 +139,19 @@ export async function sendRedactionForAnalysis(id: string) {
     return { error: err.message };
   }
 }
+
+export async function updateRedactionStatusAction(id: string, rapport_analyse: any) {
+  const supabase = await createClient();
+  const { error: updateError } = await supabase
+    .from('redactions')
+    .update({ statut: 'analyse', rapport_analyse })
+    .eq('id', id);
+
+  if (updateError) {
+    console.error("Erreur updateRedactionStatusAction:", updateError);
+    return { error: updateError.message };
+  }
+
+  revalidatePath('/app/redaction');
+  return { success: true };
+}

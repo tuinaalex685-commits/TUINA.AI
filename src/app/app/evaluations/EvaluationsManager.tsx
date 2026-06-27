@@ -59,27 +59,75 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
     try {
       // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
-      const res = await generateEvaluationAction('dummy', coursName, selectedCoursId, selectedType, count);
+      const response = await fetch('/api/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: 'dummy',
+          coursName,
+          coursId: selectedCoursId,
+          type: selectedType,
+          count
+        })
+      });
+
+      if (!response.body) throw new Error("Pas de flux de réponse");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let fullText = "";
+
+      // Lecture du stream
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          fullText += decoder.decode(value, { stream: true });
+        }
+      }
+      
+      // On s'assure d'avoir tout décodé
+      fullText += decoder.decode();
+
+      // Tentative de parsing
+      let questionsJson;
+      try {
+        // Nettoyage au cas où Gemini renvoie des backticks markdown (ex: ```json ... ```)
+        let cleanedText = fullText.trim();
+        if (cleanedText.startsWith('```json')) cleanedText = cleanedText.slice(7);
+        if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
+        if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
+
+        questionsJson = JSON.parse(cleanedText.trim());
+      } catch (parseError) {
+        throw new Error(`Le JSON généré est invalide: ${parseError}\nTexte reçu: ${fullText.substring(0, 200)}...`);
+      }
+
+      // Insertion en base via la nouvelle action rapide
+      const { saveEvaluationAction } = await import('@/app/actions/ai');
+      const saveRes = await saveEvaluationAction({
+        type: selectedType,
+        meta_type: selectedType,
+        titre: `Évaluation - ${coursName || 'Cours'}`,
+        questions: questionsJson,
+        cours_id: selectedCoursId,
+        document_id: 'dummy'
+      });
+
       setIsGenerating(false);
 
-      const serverLogs = res.logs ? `\n\n--- LOGS SERVEUR ---\n${res.logs.join('\n')}` : '';
-
-      if (res.error) {
-        console.error(`[EVAL ERROR] Backend a retourné une erreur :`, res.error);
-        alert(`Erreur: ${res.error}${serverLogs}`);
+      if (saveRes.error) {
+        console.error(`[EVAL ERROR] Erreur sauvegarde BDD :`, saveRes.error);
+        alert(`Erreur de sauvegarde: ${saveRes.error}`);
       } else {
-        console.log(`[EVAL SUCCESS] Succès retourné par le backend.`);
-        if (res.wasTruncated) {
-          alert(`Évaluation générée !\n\nInformation : Le ou les PDF associés à ce cours dépassaient 30 pages. L'analyse s'est limitée aux 30 premières pages pour optimiser le traitement.${serverLogs}`);
-        } else {
-          alert(`Évaluation générée avec succès !${serverLogs}`);
-        }
+        alert(`Évaluation générée avec succès via Streaming !`);
         router.refresh();
       }
     } catch (err: any) {
       console.error(`[EVAL FATAL ERROR] Erreur inattendue :`, err);
       setIsGenerating(false);
-      alert("Erreur système critique ou Timeout de Vercel (délai > 10s dépassé sans réponse du serveur). Détail: " + err.message);
+      alert("Erreur système lors de la génération. Détail: " + err.message);
     }
   };
 
