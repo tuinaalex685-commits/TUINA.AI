@@ -68,15 +68,17 @@ export default async function ProgressionPage() {
               const progress = Math.min(100, Math.round(((obj.progression || 0) / (obj.cible || 1)) * 100));
               const done = (obj.progression || 0) >= (obj.cible || 1);
               return (
-                <div key={obj.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '14px', flex: 1, textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--color-success)' : 'var(--color-text-main)' }}>
+                <div key={obj.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '14px', flex: '1 1 200px', textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--color-success)' : 'var(--color-text-main)' }}>
                     {obj.titre || obj.type || 'Objectif'}
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', minWidth: '60px', textAlign: 'right' }}>
-                    {obj.progression || 0}/{obj.cible || 1}
-                  </span>
-                  <div style={{ width: '120px', height: '8px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${progress}%`, backgroundColor: done ? 'var(--color-success)' : 'var(--color-primary)', transition: 'width 0.3s' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 100%', justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', minWidth: '60px', textAlign: 'right' }}>
+                      {obj.progression || 0}/{obj.cible || 1}
+                    </span>
+                    <div style={{ width: '120px', height: '8px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progress}%`, backgroundColor: done ? 'var(--color-success)' : 'var(--color-primary)', transition: 'width 0.3s' }} />
+                    </div>
                   </div>
                 </div>
               );

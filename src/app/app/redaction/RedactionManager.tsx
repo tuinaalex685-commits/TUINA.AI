@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal/Modal';
 import { createRedaction, updateRedactionContent, sendRedactionForAnalysis, saveRedactionVersion } from '@/app/actions/redaction';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import styles from './redaction.module.css';
 
 export default function RedactionManager({ initialRedactions }: { initialRedactions: any[] }) {
   const router = useRouter();
@@ -196,9 +197,9 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
   };
 
   return (
-    <div style={{ display: 'flex', gap: 'var(--spacing-large)', height: 'calc(100vh - 100px)' }}>
+    <div className={styles.container}>
       {/* Sidebar Historique */}
-      <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)', borderRight: '1px solid var(--color-border)', paddingRight: 'var(--spacing-standard)' }}>
+      <div className={styles.sidebar}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Vos Rédactions</h2>
           <Button onClick={() => setIsModalOpen(true)} style={{ padding: '6px 12px', fontSize: '13px' }}>+ Nouveau</Button>
@@ -239,7 +240,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
       </div>
 
       {/* Éditeur Principal */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className={styles.editorMain}>
         {activeRedaction ? (
           <>
             <header style={{ marginBottom: 'var(--spacing-standard)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -286,8 +287,8 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
             )}
 
             {viewMode === 'versions' && (
-              <div style={{ flex: 1, display: 'flex', gap: 'var(--spacing-standard)' }}>
-                <Card style={{ width: '250px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto' }}>
+              <div className={styles.versionContainer}>
+                <Card className={styles.versionSidebar}>
                   <h3 style={{ margin: '0 0 8px 0' }}>Historique ({activeRedaction.redaction_versions?.length || 0})</h3>
                   {activeRedaction.redaction_versions?.map((v: any, index: number) => (
                     <div 
