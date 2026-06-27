@@ -42,37 +42,15 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // Build the JSON schema depending on type
-    let schemaProps: any = {};
-    if (type === 'qcm' || type === 'vrai_faux') {
-      schemaProps = {
-        question: { type: Type.STRING },
-        options: { type: Type.ARRAY, items: { type: Type.STRING } },
-        correctAnswer: { type: Type.INTEGER, description: "Index de la bonne réponse" },
-        explication: { type: Type.STRING }
-      };
-    } else if (type === 'juridique') {
-      schemaProps = {
-        question: { type: Type.STRING, description: "Le cas pratique court" },
-        expectedAnswer: { type: Type.STRING, description: "La solution juridique attendue avec fondement" }
-      };
-    } else {
-      schemaProps = {
-        question: { type: Type.STRING },
-        expectedAnswer: { type: Type.STRING, description: "Les mots clés ou l'idée principale attendue" }
-      };
-    }
-
-    const schema = {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: { id: { type: Type.INTEGER }, ...schemaProps },
-        required: ["id", "question", type === 'qcm' || type === 'vrai_faux' ? "options" : "expectedAnswer"]
-      }
-    };
-
-    const systemInstruction = "Tu es un examinateur en droit exigeant. " + instruction;
+    const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}\n\nIMPORTANT: Tu DOIS générer un JSON valide (un tableau d'objets). Ne rajoute aucun texte avant ou après.
+Format attendu :
+[
+  {
+    "id": 1,
+    "question": "...",
+    ${type === 'qcm' || type === 'vrai_faux' ? '"options": ["...", "..."],\n    "correctAnswer": 0,\n    "explication": "..."' : '"expectedAnswer": "..."'}
+  }
+]`;
     const prompt = text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.";
 
     const stream = await ai.models.generateContentStream({
@@ -81,7 +59,6 @@ export async function POST(req: Request) {
       config: {
         systemInstruction,
         responseMimeType: 'application/json',
-        responseSchema: schema,
       }
     });
 

@@ -34,24 +34,20 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const schema = {
-      type: Type.OBJECT,
-      properties: {
-        points_forts: { type: Type.ARRAY, items: { type: Type.STRING } },
-        points_faibles: { type: Type.ARRAY, items: { type: Type.STRING } },
-        axes_amelioration: { type: Type.ARRAY, items: { type: Type.STRING } },
-        note_globale: { type: Type.STRING, description: "Note sur 20 avec courte appréciation" }
-      },
-      required: ["points_forts", "points_faibles", "axes_amelioration", "note_globale"]
-    };
-
     const stream = await ai.models.generateContentStream({
       model: 'gemini-1.5-flash',
       contents: `TYPE DE DEVOIR : ${redaction.type}\n\nRÉDACTION DE L'ÉTUDIANT :\n${redaction.contenu}`,
       config: {
-        systemInstruction: "Tu es un correcteur juridique strict. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.",
+        systemInstruction: `Tu es un correcteur strict. Analyse la rédaction.
+IMPORTANT: Tu DOIS générer un JSON valide (un objet). Ne rajoute aucun texte avant ou après.
+Format attendu:
+{
+  "points_forts": ["..."],
+  "points_faibles": ["..."],
+  "axes_amelioration": ["..."],
+  "note_globale": "12/20 - Assez bien"
+}`,
         responseMimeType: 'application/json',
-        responseSchema: schema,
       }
     });
 
