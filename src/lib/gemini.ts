@@ -108,7 +108,7 @@ export async function generateJSON(systemInstruction: string, prompt: string, sc
   
   // Modèle recommandé pour le traitement texte/pdf
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-3.5-flash",
     systemInstruction,
     generationConfig: {
       responseMimeType: "application/json",
