@@ -65,6 +65,7 @@ export function DocumentUploader({ chapitreId, matiereId, coursId, onUploadCompl
         taille: file.size,
         chapitre_id: chapitreId || null,
         matiere_id: matiereId || null,
+        cours_id: coursId || null,
         user_id: user.id
       };
       console.log("2. Payload d'insertion (table documents):", payload);
