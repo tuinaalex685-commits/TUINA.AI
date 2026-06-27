@@ -244,8 +244,16 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
   // VUE DE SESSION ACTIVE
   if (activeSession) {
-    // Sécurisation anti-crash au cas où le tableau est mal formaté
-    const questionsList = Array.isArray(activeSession.questions) ? activeSession.questions : [];
+    // Sécurisation anti-crash au cas où le tableau est mal formaté dans la BDD
+    let questionsList: any[] = [];
+    if (Array.isArray(activeSession.questions)) {
+      questionsList = activeSession.questions;
+    } else if (activeSession.questions && typeof activeSession.questions === 'object') {
+      if (Array.isArray(activeSession.questions.questions)) questionsList = activeSession.questions.questions;
+      else if (Array.isArray(activeSession.questions.quiz)) questionsList = activeSession.questions.quiz;
+      else questionsList = [activeSession.questions];
+    }
+    
     const question = questionsList[currentIndex];
     
     if (!question) {
