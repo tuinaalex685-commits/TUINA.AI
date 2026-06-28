@@ -186,35 +186,13 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         body: JSON.stringify({ id: activeRedaction.id })
       });
 
-      if (!response.body) throw new Error("Pas de flux de réponse");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let fullText = "";
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          fullText += decoder.decode(value, { stream: true });
-        }
-      }
-      fullText += decoder.decode();
-
       let feedbackJson;
       try {
-        let cleanedText = fullText.trim();
-        if (cleanedText.startsWith('```json')) cleanedText = cleanedText.slice(7);
-        else if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
-        if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
-
-        feedbackJson = JSON.parse(cleanedText.trim());
+        feedbackJson = await response.json();
         
         if (feedbackJson.error) {
           throw new Error(feedbackJson.error);
         }
-        
       } catch (parseError: any) {
         setIsAnalyzing(false);
         alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
@@ -230,9 +208,12 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         alert("Erreur d'enregistrement de l'analyse : " + res.error);
       } else {
         alert("Analyse terminée ! Consultez le rapport IA.");
+        // UPDATE LOCAL STATE SO IT DISPLAYS IMMEDIATELY
+        setActiveRedaction({ ...activeRedaction, rapport_analyse: feedbackJson, statut: 'analysé' });
         setViewMode('analyse');
         router.refresh();
       }
+
     } catch (err: any) {
       setIsAnalyzing(false);
       alert("Erreur système lors de l'analyse : " + err.message);

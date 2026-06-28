@@ -41,7 +41,9 @@ export async function POST(req: Request) {
     const systemInstruction = `Tu es un correcteur strict. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.`;
     const prompt = `TYPE DE DEVOIR : ${redaction.type}\n\nRÉDACTION DE L'ÉTUDIANT :\n${redaction.contenu}`;
 
-    return await streamStructuredJSON(systemInstruction, prompt, schema);
+    const { generateStructuredJSON } = await import('@/lib/gemini');
+    const result = await generateStructuredJSON(systemInstruction, prompt, schema);
+    return NextResponse.json(result);
 
   } catch (err: any) {
     console.error("Redaction Route Error:", err);
