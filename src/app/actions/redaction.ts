@@ -3,8 +3,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { generateJSON } from '@/lib/gemini';
-import { SchemaType, Schema } from '@google/generative-ai';
+import { generateStructuredJSON } from '@/lib/gemini';
+import { Type } from '@google/genai';
 
 export async function createRedaction(titre: string, type: string) {
   console.log(`[REDACTION] createRedaction appelée: titre="${titre}", type="${type}"`);
@@ -90,12 +90,12 @@ export async function sendRedactionForAnalysis(id: string) {
 
   // Schema attendu par Gemini / Mock
   const schema = {
-    type: SchemaType.OBJECT,
+    type: Type.OBJECT,
     properties: {
-      points_forts: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      points_faibles: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      axes_amelioration: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      note_globale: { type: SchemaType.STRING, description: "Note sur 20 avec courte appréciation" }
+      points_forts: { type: Type.ARRAY, items: { type: Type.STRING } },
+      points_faibles: { type: Type.ARRAY, items: { type: Type.STRING } },
+      axes_amelioration: { type: Type.ARRAY, items: { type: Type.STRING } },
+      note_globale: { type: Type.STRING, description: "Note sur 20 avec courte appréciation" }
     },
     required: ["points_forts", "points_faibles", "axes_amelioration", "note_globale"]
   };
@@ -104,10 +104,10 @@ export async function sendRedactionForAnalysis(id: string) {
     const preGeminiTime = Date.now();
     console.log(`[PERF] Heure juste avant l'appel à Gemini : ${new Date(preGeminiTime).toISOString()}`);
     
-    const feedbackJson = await generateJSON(
+    const feedbackJson = await generateStructuredJSON(
       "Tu es un correcteur juridique strict. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.",
       `TYPE DE DEVOIR : ${redaction.type}\n\nRÉDACTION DE L'ÉTUDIANT :\n${redaction.contenu}`,
-      schema as Schema
+      schema
     );
 
     const postGeminiTime = Date.now();

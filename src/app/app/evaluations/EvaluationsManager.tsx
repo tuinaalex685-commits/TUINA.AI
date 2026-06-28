@@ -93,13 +93,17 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
       // Tentative de parsing
       let questionsJson;
       try {
-        // Nettoyage au cas où Gemini renvoie des backticks markdown (ex: ```json ... ```)
         let cleanedText = fullText.trim();
         if (cleanedText.startsWith('```json')) cleanedText = cleanedText.slice(7);
-        if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
+        else if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
         if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
-
+        
         questionsJson = JSON.parse(cleanedText.trim());
+        
+        if (questionsJson.error) {
+          throw new Error(questionsJson.error);
+        }
+
         // Si le JSON est un objet au lieu d'un tableau (ex: { questions: [...] })
         if (questionsJson && typeof questionsJson === 'object' && !Array.isArray(questionsJson)) {
           if (Array.isArray(questionsJson.questions)) {
@@ -110,8 +114,10 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
             questionsJson = [questionsJson];
           }
         }
-      } catch (parseError) {
-        throw new Error(`Le JSON généré est invalide: ${parseError}\nTexte reçu: ${fullText.substring(0, 200)}...`);
+      } catch (parseError: any) {
+        setIsGenerating(false);
+        alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
+        return;
       }
 
       // Insertion en base via la nouvelle action rapide

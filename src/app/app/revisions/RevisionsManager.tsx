@@ -41,13 +41,16 @@ export default function RevisionsManager({
     setIsLoadingCards(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      let query = supabase.from('flashcards').select('*').eq('user_id', user?.id).eq('statut', 'validated');
+      // On récupère uniquement les flashcards dont la date de prochaine révision est passée ou égale à maintenant
+      let query = supabase.from('flashcards')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('statut', 'validated')
+        .lte('next_review', new Date().toISOString());
 
       if (selectedSourceType === 'cours') {
         query = query.eq('cours_id', selectedSourceId);
       } else if (selectedSourceType === 'document') {
-        // Fallback since document_id doesn't exist yet in the table structure shown, we filter it best effort
-        // Once DB is fully synced, this will fetch properly.
         query = query.eq('document_id', selectedSourceId);
       }
 
@@ -55,7 +58,7 @@ export default function RevisionsManager({
       if (error) {
          console.error("[FLOW 8 ERROR] Erreur lors de la récupération :", error);
       } else if (data) {
-         console.log(`[FLOW 9] Frontend a récupéré ${data.length} flashcards depuis Supabase. Mise à jour de l'état.`);
+         console.log(`[FLOW 9] Frontend a récupéré ${data.length} flashcards prêtes à réviser. Mise à jour de l'état.`);
          setFlashcards(data);
       }
     } catch (err) {

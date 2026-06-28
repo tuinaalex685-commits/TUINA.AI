@@ -1,9 +1,8 @@
 "use server";
-
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { generateJSON } from '@/lib/gemini';
-import { SchemaType, Schema } from '@google/generative-ai';
+import { generateStructuredJSON } from '@/lib/gemini';
+import { Type } from '@google/genai';
 const pdfParse = require('pdf-parse');
 
 // --- UTILITAIRE : Extraction du contenu source ---
@@ -147,24 +146,24 @@ export async function generateFlashcardsAction(documentId: string, documentName:
     }
 
     const schema = {
-      type: SchemaType.ARRAY,
+      type: Type.ARRAY,
       items: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          question: { type: SchemaType.STRING, description: "Question courte et directe" },
-          reponse: { type: SchemaType.STRING, description: "Réponse précise et concise" }
+          question: { type: Type.STRING, description: "Question courte et directe" },
+          reponse: { type: Type.STRING, description: "Réponse précise et concise" }
         },
         required: ["question", "reponse"]
       }
     };
 
-    debugLog(`[ACTION] Appel generateJSON (Gemini/Mock)...`);
+    debugLog(`[ACTION] Appel generateStructuredJSON...`);
     let flashcardsJson;
     try {
-      flashcardsJson = await generateJSON(
+      flashcardsJson = await generateStructuredJSON(
         `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
         text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
-        schema as Schema,
+        schema,
         wasTruncated ? undefined : pdfBase64
       );
       debugLog(`[ACTION] generateJSON terminé avec succès.`);
@@ -252,153 +251,7 @@ export async function updateFlashcardReview(flashcardId: string, evaluation: 'ma
   return { success: true };
 }
 
-// --- 2. GÉNÉRATION D'ÉVALUATIONS ---
-export async function generateEvaluationAction(documentId: string, documentName: string, coursId: string, type: 'quiz' | 'qcm' | 'vrai_faux' | 'juridique', count: number) {
-  const logs: string[] = [];
-  const debugLog = (msg: string) => {
-    console.log(msg);
-    logs.push(msg);
-  };
 
-  const serverActionStartTime = Date.now();
-  debugLog(`[PERF] --------------------------------------------------`);
-  debugLog(`[PERF] Heure de début de la Server Action : ${new Date(serverActionStartTime).toISOString()}`);
-  debugLog(`[ACTION EVAL] Début generateEvaluationAction (${count} questions, type: ${type})`);
-  
-  try {
-    debugLog(`[ACTION EVAL] Initialisation Supabase...`);
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError) debugLog(`[ACTION EVAL ERROR] auth.getUser: ${authError.message}`);
-
-    if (!user) {
-      debugLog(`[ACTION EVAL ERROR] Non authentifié.`);
-      return { error: "Non authentifié", logs };
-    }
-    debugLog(`[ACTION EVAL] User identifié: ${user.id}`);
-
-    if (type === 'qcm' && count > 20) return { error: "Limite de 20 questions pour un QCM.", logs };
-    if (type !== 'qcm' && count > 15) return { error: "Limite de 15 questions pour ce type d'évaluation.", logs };
-    if (!coursId) return { error: "Un cours doit être sélectionné.", logs };
-
-    const { text, pdfBase64, error, wasTruncated } = await fetchSourceContent(documentId, coursId, debugLog);
-    if (error) {
-      debugLog(`[ACTION EVAL ERROR] Erreur retournée par fetchSourceContent: ${error}`);
-      return { error, logs };
-    }
-
-    let schemaTypeProps: any = {};
-    let instruction = "";
-
-    if (type === 'qcm') {
-      instruction = `Génère ${count} questions à choix multiples (4 options, 1 seule bonne réponse).`;
-      schemaTypeProps = {
-        question: { type: SchemaType.STRING },
-        options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-        correctAnswer: { type: SchemaType.NUMBER, description: "Index de la bonne réponse (0 à 3)" },
-        explication: { type: SchemaType.STRING }
-      };
-    } else if (type === 'vrai_faux') {
-      instruction = `Génère ${count} affirmations. L'étudiant devra répondre Vrai ou Faux.`;
-      schemaTypeProps = {
-        question: { type: SchemaType.STRING },
-        options: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-        correctAnswer: { type: SchemaType.NUMBER, description: "Index (0 pour Vrai, 1 pour Faux)" },
-        explication: { type: SchemaType.STRING }
-      };
-    } else if (type === 'juridique') {
-      instruction = `Génère ${count} petits cas pratiques juridiques.`;
-      schemaTypeProps = {
-        question: { type: SchemaType.STRING, description: "Le cas pratique court" },
-        expectedAnswer: { type: SchemaType.STRING, description: "La solution juridique attendue avec fondement" }
-      };
-    } else {
-      instruction = `Génère ${count} questions ouvertes.`;
-      schemaTypeProps = {
-        question: { type: SchemaType.STRING },
-        expectedAnswer: { type: SchemaType.STRING, description: "Les mots clés ou l'idée principale attendue" }
-      };
-    }
-
-    const schema = {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: { id: { type: SchemaType.NUMBER }, ...schemaTypeProps },
-        required: ["id", "question", type === 'qcm' || type === 'vrai_faux' ? "options" : "expectedAnswer"]
-      }
-    };
-
-    debugLog(`[ACTION EVAL] Appel generateJSON (Gemini/Mock)...`);
-    const preGeminiTime = Date.now();
-    debugLog(`[PERF] Heure juste avant l'appel à Gemini : ${new Date(preGeminiTime).toISOString()}`);
-    let questionsJson;
-    try {
-      questionsJson = await generateJSON(
-        "Tu es un examinateur en droit exigeant. " + instruction,
-        text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.",
-        schema as Schema,
-        wasTruncated ? undefined : pdfBase64 // Si tronqué, on force l'utilisation du texte
-      );
-      const postGeminiTime = Date.now();
-      debugLog(`[PERF] Heure de retour de Gemini : ${new Date(postGeminiTime).toISOString()}`);
-      debugLog(`[PERF] Temps exact passé à attendre Gemini : ${postGeminiTime - preGeminiTime} ms`);
-      debugLog(`[ACTION EVAL] generateJSON terminé avec succès. Résultat brut (début): ${JSON.stringify(questionsJson).substring(0, 150)}...`);
-    } catch (aiError: any) {
-      const errorTime = Date.now();
-      debugLog(`[PERF] Heure de l'erreur Gemini : ${new Date(errorTime).toISOString()}`);
-      debugLog(`[PERF] Temps exact passé avant erreur : ${errorTime - preGeminiTime} ms`);
-      debugLog(`[ACTION EVAL ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
-      return { error: `Erreur IA: ${aiError.message}`, logs };
-    }
-
-    if (!Array.isArray(questionsJson)) {
-      debugLog(`[ACTION EVAL ERROR] Format JSON invalide retourné par IA.`);
-      return { error: "L'IA n'a pas retourné un tableau valide", logs };
-    }
-
-    debugLog(`[ACTION EVAL] Préparation de l'insertion de l'évaluation...`);
-
-    const preInsertTime = Date.now();
-    const { data, error: dbError } = await supabase.from('evaluations').insert([{
-      type: type,
-      meta_type: type,
-      titre: `Évaluation - ${documentName || 'Cours'}`,
-      questions: questionsJson,
-      score: null,
-      user_id: user.id,
-      cours_id: coursId,
-      document_id: documentId !== 'dummy' ? documentId : null
-    }]).select().single();
-    const postInsertTime = Date.now();
-    debugLog(`[PERF] Temps d'insertion Supabase : ${postInsertTime - preInsertTime} ms`);
-
-    if (dbError) {
-      debugLog(`[ACTION EVAL ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
-      return { error: `Erreur BDD: ${dbError.message}`, logs };
-    }
-    debugLog(`[ACTION EVAL] Insertion réussie. ID généré: ${data?.id}`);
-
-    debugLog(`[ACTION EVAL] Insertion réussie. Appel revalidatePath...`);
-    try {
-      revalidatePath('/app/evaluations');
-      debugLog(`[ACTION EVAL] revalidatePath OK.`);
-    } catch (revError: any) {
-      debugLog(`[ACTION EVAL ERROR] revalidatePath a échoué: ${revError.message}`);
-    }
-
-    debugLog(`[ACTION EVAL] Fin de l'action serveur avec succès.`);
-    const endTime = Date.now();
-    debugLog(`[PERF] Temps total d'exécution de la Server Action : ${endTime - serverActionStartTime} ms`);
-    return { success: true, evaluation: data, wasTruncated, logs };
-  } catch (globalError: any) {
-    const errorTime = Date.now();
-    debugLog(`[PERF] Temps total d'exécution avant FATAL ERROR : ${errorTime - serverActionStartTime} ms`);
-    debugLog(`[ACTION EVAL FATAL] Exception non interceptée: ${globalError.message}\n${globalError.stack}`);
-    return { error: `Erreur Serveur Fatale: ${globalError.message}`, logs, fatal: true };
-  }
-}
 
 export async function saveEvaluationAction(data: any) {
   const supabase = await createClient();

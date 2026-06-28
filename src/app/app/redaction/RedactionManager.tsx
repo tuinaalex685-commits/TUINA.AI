@@ -206,12 +206,19 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
       try {
         let cleanedText = fullText.trim();
         if (cleanedText.startsWith('```json')) cleanedText = cleanedText.slice(7);
-        if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
+        else if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
         if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
 
         feedbackJson = JSON.parse(cleanedText.trim());
-      } catch (parseError) {
-        throw new Error(`Le JSON généré est invalide: ${parseError}\nTexte reçu: ${fullText.substring(0, 200)}...`);
+        
+        if (feedbackJson.error) {
+          throw new Error(feedbackJson.error);
+        }
+        
+      } catch (parseError: any) {
+        setIsAnalyzing(false);
+        alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
+        return;
       }
 
       const { updateRedactionStatusAction } = await import('@/app/actions/redaction');
