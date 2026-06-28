@@ -371,6 +371,57 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
                         </ul>
                       </div>
                       <p><strong>Note estimée :</strong> {activeRedaction.rapport_analyse.note_globale}</p>
+                      
+                      {activeRedaction.rapport_analyse.proposition && (
+                        <div style={{ marginTop: 'var(--spacing-large)', paddingTop: 'var(--spacing-large)', borderTop: '2px dashed var(--color-border)' }}>
+                          <h3 style={{ color: 'var(--color-primary)', marginBottom: 'var(--spacing-standard)' }}>Proposition du Correcteur</h3>
+                          <div style={{ padding: 'var(--spacing-standard)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '8px' }}>
+                            {activeRedaction.type === 'Dissertation' && (
+                              <>
+                                <div><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Introduction modèle :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.introduction}</p></div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Plan détaillé :</h4>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px' }}>
+                                    {activeRedaction.rapport_analyse.proposition.plan_detaille?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                                  </ul>
+                                </div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Conclusion synthétique :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.conclusion}</p></div>
+                              </>
+                            )}
+                            {activeRedaction.type === 'Commentaire d\'arrêt' && (
+                              <>
+                                <div><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Introduction adaptée :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.introduction}</p></div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Méthode d'analyse :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.methode_analyse}</p></div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Plan détaillé :</h4>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px' }}>
+                                    {activeRedaction.rapport_analyse.proposition.plan_detaille?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                                  </ul>
+                                </div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Conclusion :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.conclusion_synthetique}</p></div>
+                              </>
+                            )}
+                            {activeRedaction.type === 'Cas pratique' && (
+                              <>
+                                <div><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Qualification des faits :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.qualification_faits}</p></div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Problèmes juridiques :</h4>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px' }}>
+                                    {activeRedaction.rapport_analyse.proposition.problemes_juridiques?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                                  </ul>
+                                </div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Règles applicables :</h4>
+                                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px' }}>
+                                    {activeRedaction.rapport_analyse.proposition.regles_applicables?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                                  </ul>
+                                </div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Application au cas :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.application_cas}</p></div>
+                                <div style={{ marginTop: '16px' }}><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Conclusion juridique :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.conclusion_juridique}</p></div>
+                              </>
+                            )}
+                            {activeRedaction.type !== 'Dissertation' && activeRedaction.type !== 'Commentaire d\'arrêt' && activeRedaction.type !== 'Cas pratique' && (
+                               <div><h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-main)' }}>Piste de correction :</h4><p style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>{activeRedaction.rapport_analyse.proposition.correction_globale}</p></div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p>Aucun rapport disponible. (Erreur de génération)</p>
