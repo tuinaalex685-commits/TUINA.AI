@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { updateEvaluationScore } from '@/app/actions/student';
-import { generateEvaluationAction } from '@/app/actions/ai';
+
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
