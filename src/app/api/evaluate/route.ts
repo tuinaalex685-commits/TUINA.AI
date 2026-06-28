@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}`;
     const prompt = text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.";
 
-    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfBase64);
+    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfBase64, req.signal);
 
   } catch (err: any) {
     console.error("Evaluate Route Error:", err);

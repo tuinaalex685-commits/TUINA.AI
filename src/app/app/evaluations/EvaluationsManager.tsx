@@ -44,6 +44,16 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
   const [selectedCoursId, setSelectedCoursId] = useState('');
   const [selectedType, setSelectedType] = useState<'qcm' | 'quiz' | 'vrai_faux' | 'juridique'>('qcm');
   const [isGenerating, setIsGenerating] = useState(false);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Cleanup on unmount to prevent memory leaks in Vercel
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleGenerate = async () => {
     if (!selectedCoursId) {
@@ -58,10 +68,17 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     const coursName = coursList.find(c => c.id === selectedCoursId)?.titre || '';
 
     try {
+      // Memory leak prevention: cancel previous request if still running
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
       const response = await fetch('/api/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           documentId: 'dummy',
           coursName,
@@ -116,6 +133,10 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         }
       } catch (parseError: any) {
         setIsGenerating(false);
+        if (parseError.name === 'AbortError') {
+           console.log("Génération annulée par l'utilisateur.");
+           return;
+        }
         alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
         return;
       }
@@ -141,9 +162,14 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         router.refresh();
       }
     } catch (err: any) {
-      console.error(`[EVAL FATAL ERROR] Erreur inattendue :`, err);
+      if (err.name === 'AbortError') {
+        console.log("Génération annulée par l'utilisateur.");
+      } else {
+        alert("Erreur: " + err.message);
+      }
+    } finally {
       setIsGenerating(false);
-      alert("Erreur système lors de la génération. Détail: " + err.message);
+      abortControllerRef.current = null;
     }
   };
 

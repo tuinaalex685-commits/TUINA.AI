@@ -98,7 +98,7 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
 /**
  * 2. STREAMING DE JSON (Pour les API Routes comme QCM et Rédaction)
  */
-export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string) {
+export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: streamStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
@@ -133,6 +133,11 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
         try {
           let chunkCount = 0;
           for await (const chunk of stream) {
+            // Memory leak prevention: if the client aborted the request, stop reading from the stream
+            if (signal?.aborted) {
+              console.log(`[IA_STREAM] Client aborted request. Breaking stream loop.`);
+              break;
+            }
             if (chunk.text) {
               controller.enqueue(chunk.text);
               chunkCount++;
