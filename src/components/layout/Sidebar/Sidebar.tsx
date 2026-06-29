@@ -32,6 +32,7 @@ export function Sidebar({ className }: { className?: string }) {
             <Link 
               key={item.path} 
               href={item.path}
+              prefetch={true}
               className={`${styles.navItem} ${isActive ? styles.active : ''}`}
             >
               <span className={styles.icon}>{item.icon}</span>

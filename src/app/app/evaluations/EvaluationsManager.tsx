@@ -173,11 +173,15 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     }
   };
 
-  // Grouping
-  const myQCM = quizList.filter(q => q.meta_type === 'qcm' || (q.type === 'qcm' && !q.meta_type));
-  const myQuiz = quizList.filter(q => q.meta_type === 'quiz' || (q.type === 'quiz' && !q.meta_type));
-  const myVraiFaux = quizList.filter(q => q.meta_type === 'vrai_faux');
-  const myJuridique = quizList.filter(q => q.meta_type === 'juridique');
+  // Grouping (Optimisation React avec useMemo)
+  const { myQCM, myQuiz, myVraiFaux, myJuridique } = React.useMemo(() => {
+    return {
+      myQCM: quizList.filter(q => q.meta_type === 'qcm' || (q.type === 'qcm' && !q.meta_type)),
+      myQuiz: quizList.filter(q => q.meta_type === 'quiz' || (q.type === 'quiz' && !q.meta_type)),
+      myVraiFaux: quizList.filter(q => q.meta_type === 'vrai_faux'),
+      myJuridique: quizList.filter(q => q.meta_type === 'juridique')
+    };
+  }, [quizList]);
 
   // États pour la session
   const [activeSession, setActiveSession] = useState<any>(null);

@@ -53,44 +53,55 @@ export async function POST(req: Request) {
     };
     
     let propositionSchema: any = {};
-    let systemInstruction = `Tu es un correcteur strict en droit. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.`;
+    let systemInstruction = `Tu es un correcteur expert et bienveillant en droit. Analyse la rédaction de l'étudiant en évaluant l'introduction, la structure, le raisonnement et la conclusion.
+    ⚠️ RÈGLE ABSOLUE : Tu ne dois JAMAIS rédiger le développement complet à la place de l'étudiant. Ton rôle est purement pédagogique. Fournis uniquement des méthodes, des plans détaillés, ou des exemples partiels.`;
 
     // Personnalisation selon le type
     if (redaction.type === 'Dissertation') {
-      systemInstruction += ` En plus de l'analyse, fournis une 'proposition' contenant un exemple d'introduction complète, un plan détaillé (uniquement les titres I, A, B, etc. sans rédiger le développement), et une conclusion synthétique. Ne rédige SURTOUT PAS le développement complet.`;
+      systemInstruction += ` Fournis une 'proposition' contenant un exemple d'introduction complète, un plan détaillé (uniquement les titres I, A, B, etc. SANS RÉDIGER LE DÉVELOPPEMENT), et une conclusion synthétique. NE RÉDIGE AUCUN DÉVELOPPEMENT.`;
       propositionSchema = {
         type: Type.OBJECT,
         properties: {
           introduction: { type: Type.STRING, description: "Exemple d'introduction modèle" },
-          plan_detaille: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Titres du plan (ex: I. Titre, A. Sous-titre)" },
+          plan_detaille: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Titres du plan uniquement (ex: I. Titre, A. Sous-titre)" },
           conclusion: { type: Type.STRING, description: "Exemple de conclusion synthétique" }
         },
         required: ["introduction", "plan_detaille", "conclusion"]
       };
     } else if (redaction.type === 'Commentaire d\'arrêt') {
-      systemInstruction += ` En plus de l'analyse, fournis une 'proposition' contenant un exemple d'introduction adaptée, une méthode d'analyse rapide, un plan détaillé du commentaire, et une conclusion. Ne rédige SURTOUT PAS le développement complet.`;
+      systemInstruction += ` Fournis une 'proposition' contenant un exemple d'introduction, une méthode d'analyse rapide, un plan détaillé du commentaire, et une conclusion. NE RÉDIGE AUCUN DÉVELOPPEMENT INTÉRIEUR.`;
       propositionSchema = {
         type: Type.OBJECT,
         properties: {
           introduction: { type: Type.STRING, description: "Exemple d'introduction adaptée" },
           methode_analyse: { type: Type.STRING, description: "Méthode d'analyse recommandée" },
-          plan_detaille: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Plan détaillé du commentaire" },
+          plan_detaille: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Plan détaillé sans rédaction interne" },
           conclusion_synthetique: { type: Type.STRING, description: "Conclusion synthétique" }
         },
         required: ["introduction", "methode_analyse", "plan_detaille", "conclusion_synthetique"]
       };
     } else if (redaction.type === 'Cas pratique') {
-      systemInstruction += ` En plus de l'analyse, fournis une 'proposition' montrant la démarche attendue (syllogisme) : qualification des faits, problèmes juridiques, règles applicables, application, et conclusion. Ne rédige pas entièrement tout le cas, montre la méthode.`;
+      systemInstruction += ` Fournis une 'proposition' montrant la démarche attendue (syllogisme) : méthode de résolution et raisonnement attendu. Ne résous pas l'intégralité du cas pratique pour lui, montre la méthode.`;
       propositionSchema = {
         type: Type.OBJECT,
         properties: {
-          qualification_faits: { type: Type.STRING, description: "Qualification juridique des faits" },
-          problemes_juridiques: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Problèmes de droit soulevés" },
+          qualification_faits: { type: Type.STRING, description: "Méthode de qualification" },
+          problemes_juridiques: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Comment identifier les problèmes" },
           regles_applicables: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Règles de droit pertinentes" },
-          application_cas: { type: Type.STRING, description: "Application des règles aux faits" },
-          conclusion_juridique: { type: Type.STRING, description: "Conclusion du cas pratique" }
+          application_cas: { type: Type.STRING, description: "Méthode d'application au cas" },
+          conclusion_juridique: { type: Type.STRING, description: "Raisonnement de conclusion" }
         },
         required: ["qualification_faits", "problemes_juridiques", "regles_applicables", "application_cas", "conclusion_juridique"]
+      };
+    } else if (redaction.type === 'Anglais juridique') {
+      systemInstruction += ` Fournis une correction expliquée et une proposition améliorée sans refaire l'intégralité du texte. Focus sur le vocabulaire et la grammaire juridique anglophone.`;
+      propositionSchema = {
+        type: Type.OBJECT,
+        properties: {
+          correction_expliquee: { type: Type.STRING, description: "Explication des fautes majeures" },
+          proposition_amelioree: { type: Type.STRING, description: "Proposition partielle améliorée" }
+        },
+        required: ["correction_expliquee", "proposition_amelioree"]
       };
     } else {
       // Cas générique

@@ -13,11 +13,16 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
 
     if (documentId && documentId !== 'dummy') {
       debugLog(`[FETCH] Recherche du document PDF dans Supabase...`);
-      const { data: document, error: docError } = await supabase.from('documents').select('url_fichier').eq('id', documentId).single();
+      const { data: document, error: docError } = await supabase.from('documents').select('url_fichier, extracted_text').eq('id', documentId).single();
       if (docError) debugLog(`[FETCH ERROR] Erreur Supabase documents: ${docError.message}`);
       
+      if (document?.extracted_text) {
+        debugLog(`[FETCH] Texte extrait trouvé en cache. Évitement du téléchargement.`);
+        return { text: document.extracted_text, wasTruncated: false };
+      }
+      
       if (document?.url_fichier) {
-        debugLog(`[FETCH] Document trouvé, URL: ${document.url_fichier}. Téléchargement...`);
+        debugLog(`[FETCH] Document trouvé sans cache, URL: ${document.url_fichier}. Téléchargement...`);
         try {
           const response = await fetch(document.url_fichier);
           if (!response.ok) throw new Error(`Fetch failed with status ${response.status}`);
@@ -37,6 +42,10 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
             extractedText = pdfData.text;
             wasTruncated = pdfData.numpages > 30;
             debugLog(`[FETCH] Extraction réussie. Texte: ${extractedText.length} char. Tronqué: ${wasTruncated}`);
+            
+            // Mise en cache
+            await supabase.from('documents').update({ extracted_text: extractedText }).eq('id', documentId);
+            debugLog(`[FETCH] Texte mis en cache dans Supabase.`);
           } catch (err: any) {
             debugLog(`[FETCH ERROR] Erreur pdf-parse fatale : ${err.message || err}`);
             throw err; // On relance pour voir le vrai crash
@@ -64,7 +73,7 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
 
       // NOUVEAU: Récupérer les documents PDF associés au cours
       debugLog(`[FETCH] Recherche des documents (PDF) liés au cours ${coursId}...`);
-      const { data: documents, error: docsError } = await supabase.from('documents').select('url_fichier').eq('cours_id', coursId);
+      const { data: documents, error: docsError } = await supabase.from('documents').select('id, url_fichier, extracted_text').eq('cours_id', coursId);
       if (docsError) debugLog(`[FETCH ERROR] Erreur Supabase documents: ${docsError.message}`);
 
       let wasTruncated = false;
@@ -73,7 +82,10 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
       if (documents && documents.length > 0) {
         debugLog(`[FETCH] ${documents.length} document(s) trouvé(s) pour ce cours.`);
         for (const doc of documents) {
-          if (doc.url_fichier) {
+          if (doc.extracted_text) {
+             debugLog(`[FETCH] Texte extrait trouvé en cache pour le doc ${doc.id}`);
+             text += `\n\n[Contenu PDF attaché]\n${doc.extracted_text}`;
+          } else if (doc.url_fichier) {
             debugLog(`[FETCH] Téléchargement du PDF associé : ${doc.url_fichier}...`);
             try {
               const response = await fetch(doc.url_fichier);
@@ -88,6 +100,8 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
               debugLog(`[FETCH] Extraction du texte du PDF lié...`);
               const pdfData = await pdfParse(buffer, { max: 30 });
               text += `\n\n[Contenu PDF attaché]\n${pdfData.text}`;
+              
+              await supabase.from('documents').update({ extracted_text: pdfData.text }).eq('id', doc.id);
               
               if (pdfData.numpages > 30) {
                 wasTruncated = true;
