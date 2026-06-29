@@ -1,6 +1,6 @@
 import React from 'react';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 
 import { createClient } from '@/lib/supabase/server';
