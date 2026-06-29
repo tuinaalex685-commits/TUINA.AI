@@ -155,3 +155,21 @@ export async function updateRedactionStatusAction(id: string, rapport_analyse: a
   revalidatePath('/app/redaction');
   return { success: true };
 }
+
+export async function getDailyRedactionUsage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+  
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const { count } = await supabase
+    .from('redactions')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('statut', 'analyse')
+    .gte('created_at', startOfDay.toISOString());
+    
+  return count || 0;
+}

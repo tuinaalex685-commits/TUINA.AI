@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { Modal } from '@/components/ui/Modal/Modal';
-import { createRedaction, updateRedactionContent, sendRedactionForAnalysis, saveRedactionVersion } from '@/app/actions/redaction';
+import { createRedaction, updateRedactionContent, saveRedactionVersion, getDailyRedactionUsage } from '@/app/actions/redaction';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import styles from './redaction.module.css';
@@ -15,6 +15,11 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
   const [redactionsList, setRedactionsList] = useState<any[]>(initialRedactions);
   const [activeRedaction, setActiveRedaction] = useState<any>(null);
+  const [dailyUsage, setDailyUsage] = useState<number>(0);
+  
+  useEffect(() => {
+    getDailyRedactionUsage().then(setDailyUsage);
+  }, []);
   
   // Realtime subscription
   useEffect(() => {
@@ -169,7 +174,18 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
       alert("Vous devez rédiger du contenu avant de demander une analyse.");
       return;
     }
-    if (!confirm("Voulez-vous envoyer cette rédaction pour analyse ? Le statut passera à 'Analysé'.")) return;
+    if (contenu.length > 10000) {
+      alert("Votre texte dépasse la limite autorisée de 10 000 caractères.");
+      return;
+    }
+    
+    const remaining = Math.max(0, 3 - dailyUsage);
+    if (remaining <= 0) {
+      alert("Vous avez atteint votre limite de 3 générations pour aujourd'hui.");
+      return;
+    }
+
+    if (!confirm(`Il vous reste ${remaining} générations pour aujourd'hui. Voulez-vous utiliser une génération pour ce texte ?`)) return;
 
     setIsAnalyzing(true);
     try {
@@ -211,6 +227,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         // UPDATE LOCAL STATE SO IT DISPLAYS IMMEDIATELY
         setActiveRedaction({ ...activeRedaction, rapport_analyse: feedbackJson, statut: 'analysé' });
         setViewMode('analyse');
+        setDailyUsage(prev => prev + 1);
         router.refresh();
       }
 
@@ -292,12 +309,16 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
                 <textarea
                   value={contenu}
                   onChange={(e) => setContenu(e.target.value)}
+                  maxLength={10000}
                   style={{ flex: 1, padding: 'var(--spacing-standard)', borderRadius: '8px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-main)', color: 'var(--color-text-main)', fontSize: '15px', resize: 'none', outline: 'none', minHeight: '400px' }}
                   placeholder="Rédigez votre devoir ici..."
                 />
                 <div style={{ display: 'flex', gap: 'var(--spacing-standard)', justifyContent: 'space-between' }}>
                   <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', alignSelf: 'center' }}>
-                    Sauvegarde automatique toutes les 15 secondes. {contenu.length > 0 && `${contenu.split(/\s+/).filter(Boolean).length} mots`}
+                    <span style={{ fontWeight: 'bold', color: contenu.length >= 10000 ? 'var(--color-warning)' : 'inherit' }}>
+                      {contenu.length} / 10000 caractères
+                    </span>
+                    {' • '}Sauvegarde automatique toutes les 15 secondes. {contenu.length > 0 && `${contenu.split(/\s+/).filter(Boolean).length} mots`}
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <Button variant="secondary" onClick={handleSaveDraft} disabled={isSaving}>Enregistrer le brouillon</Button>

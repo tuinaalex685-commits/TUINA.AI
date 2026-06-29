@@ -27,6 +27,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Rédaction introuvable ou vide." }, { status: 404 });
     }
 
+    if (redaction.contenu.length > 10000) {
+      return NextResponse.json({ error: "Le texte dépasse la limite autorisée de 10 000 caractères." }, { status: 400 });
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from('redactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', redaction.user_id)
+      .eq('statut', 'analyse')
+      .gte('created_at', startOfDay.toISOString());
+
+    if ((count || 0) >= 3) {
+      return NextResponse.json({ error: "Vous avez atteint votre limite de 3 générations pour aujourd'hui." }, { status: 429 });
+    }
+
     // Schéma de base commun
     const baseProperties: any = {
       points_forts: { type: Type.ARRAY, items: { type: Type.STRING } },
