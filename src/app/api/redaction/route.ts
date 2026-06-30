@@ -10,13 +10,22 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { id } = body;
 
-    if (!id) return NextResponse.json({ error: "ID de rédaction manquant." }, { status: 400 });
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ error: "ID de rédaction manquant ou invalide." }, { status: 400 });
+    }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(supabaseUrl!, supabaseKey!);
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
 
+    // 1. Authentification
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      console.warn(`[SECURITY] Tentative d'accès non autorisé à l'API de rédaction (ID: ${id})`);
+      return NextResponse.json({ error: "Non autorisé. Veuillez vous connecter." }, { status: 401 });
+    }
+    const user = authData.user;
+
+    // 2. Ownership & RLS (Automatique grâce au client serveur)
     const { data: redaction, error: fetchError } = await supabase
       .from('redactions')
       .select('*')
@@ -41,8 +50,11 @@ export async function POST(req: Request) {
       .gte('created_at', startOfDay.toISOString());
 
     if ((count || 0) >= 3) {
+      console.warn(`[RATE LIMIT] Utilisateur ${user.id} a dépassé sa limite de rédactions.`);
       return NextResponse.json({ error: "Vous avez atteint votre limite de 3 générations pour aujourd'hui." }, { status: 429 });
     }
+    
+    console.log(`[API REDACTION] Analyse acceptée pour la rédaction ${id} (User: ${user.id})`);
 
     // Schéma de base commun
     const baseProperties: any = {
