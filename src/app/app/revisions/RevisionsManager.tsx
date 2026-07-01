@@ -117,7 +117,7 @@ export default function RevisionsManager({
       } else {
         console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
         if (res.wasTruncated) {
-          alert(`Flashcards générées !\n\nInformation : Seules les 30 premières pages du PDF ont été analysées pour optimiser les performances de traitement.${serverLogs}`);
+          alert(`Flashcards générées !\n\nInformation : Seules les 50 premières pages du PDF ont été analysées pour optimiser les performances de traitement.${serverLogs}`);
         } else {
           alert(`Flashcards générées avec succès !${serverLogs}`);
         }

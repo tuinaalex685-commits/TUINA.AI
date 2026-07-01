@@ -37,10 +37,10 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
           let wasTruncated = false;
           try {
             debugLog(`[FETCH] Appel de pdfParse...`);
-            const pdfData = await pdfParse(buffer, { max: 30 });
+            const pdfData = await pdfParse(buffer, { max: 50 });
             debugLog(`[FETCH] pdfParse terminé.`);
             extractedText = pdfData.text;
-            wasTruncated = pdfData.numpages > 30;
+            wasTruncated = pdfData.numpages > 50;
             debugLog(`[FETCH] Extraction réussie. Texte: ${extractedText.length} char. Tronqué: ${wasTruncated}`);
             
             // Mise en cache
@@ -98,14 +98,14 @@ async function fetchSourceContent(documentId: string, coursId: string | null, de
               }
               
               debugLog(`[FETCH] Extraction du texte du PDF lié...`);
-              const pdfData = await pdfParse(buffer, { max: 30 });
+              const pdfData = await pdfParse(buffer, { max: 50 });
               text += `\n\n[Contenu PDF attaché]\n${pdfData.text}`;
               
               await supabase.from('documents').update({ extracted_text: pdfData.text }).eq('id', doc.id);
               
-              if (pdfData.numpages > 30) {
+              if (pdfData.numpages > 50) {
                 wasTruncated = true;
-                debugLog(`[FETCH] Le PDF associé dépassait 30 pages. Il a été tronqué.`);
+                debugLog(`[FETCH] Le PDF associé dépassait 50 pages. Il a été tronqué.`);
               }
             } catch (err: any) {
               debugLog(`[FETCH ERROR] Impossible de lire un PDF associé : ${err.message || err}`);
