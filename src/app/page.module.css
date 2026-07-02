@@ -221,46 +221,41 @@
 }
 
 .card {
-  background: linear-gradient(145deg, rgba(37, 99, 235, 0.15) 0%, rgba(124, 58, 237, 0.1) 100%); /* Dégradé bleu vibrant vers violet */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(96, 165, 250, 0.3); /* Bordure bleue bien visible */
+  background: #ffffff; /* Fond purement blanc */
   border-radius: 24px;
   padding: 40px 32px;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 10px 30px rgba(255, 255, 255, 0.05); /* Légère ombre blanche */
 }
 
 .card:hover {
   transform: translateY(-8px);
-  background: linear-gradient(145deg, rgba(37, 99, 235, 0.25) 0%, rgba(124, 58, 237, 0.2) 100%);
-  border-color: rgba(167, 139, 250, 0.8); /* Bordure violette lumineuse au survol */
-  box-shadow: 0 15px 50px rgba(124, 58, 237, 0.3); /* Fort glow violet */
+  box-shadow: 0 15px 40px rgba(255, 255, 255, 0.15); /* Glow blanc au survol */
 }
 
 .cardIcon {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); /* Fond vibrant plein */
+  background: #f3f4f6; /* Gris très clair pour le fond de l'icône */
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  color: #ffffff; /* Icône blanche pour contraster */
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+  color: #2563eb; /* Icône bleue bien visible */
 }
 
 .card h3 {
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 12px;
+  color: #111827; /* Texte très sombre (noir/gris) */
 }
 
 .card p {
-  color: #9ca3af;
+  color: #4b5563; /* Gris foncé pour le texte */
   line-height: 1.6;
 }
 
