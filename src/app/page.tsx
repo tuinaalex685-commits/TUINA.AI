@@ -84,12 +84,12 @@ export default function Home() {
           variants={staggerContainer}
         >
           <motion.span variants={fadeUp} className={styles.sectionTag}>L&apos;histoire</motion.span>
-          <motion.h2 variants={fadeUp}>Créé par un étudiant, pour les étudiants.</motion.h2>
+          <motion.h2 variants={fadeUp}>Créé par TUINA ZOUBIESSE ALEX ULRICH et ses collaborateurs.</motion.h2>
           <motion.p variants={fadeUp}>
             Tuina.ai est née d&apos;un besoin réel : le manque d&apos;organisation, la difficulté à synthétiser des centaines de pages de cours et l&apos;absence d&apos;accompagnement personnalisé. 
           </motion.p>
           <motion.p variants={fadeUp}>
-            Ce n&apos;est pas un énième outil gadget. C&apos;est la plateforme que j&apos;aurais rêvé avoir en première année pour structurer mes révisions, m&apos;entraîner et réussir mes examens de droit.
+            Conçue pour les étudiants en droit, cette plateforme est celle que nous aurions rêvé avoir en première année pour structurer nos révisions, nous entraîner et réussir nos examens.
           </motion.p>
         </motion.section>
 
