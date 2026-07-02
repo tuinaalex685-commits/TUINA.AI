@@ -66,16 +66,19 @@ export default function Home() {
           
           <motion.h1 variants={fadeUp} className={styles.title}>
             <span className={styles.mainBrand}>TUINA.AI</span><br />
-            L&apos;IA qui accompagne <span>réellement</span> les étudiants en droit.
+            L&apos;IA au service de votre <span>réussite</span>
           </motion.h1>
           
           <motion.p variants={fadeUp} className={styles.subtitle}>
-            Plus qu&apos;une simple IA, Tuina.ai est une plateforme complète pour organiser, réviser et exceller dans vos études juridiques.
+            Étudiez le droit autrement.
           </motion.p>
           
-          <motion.div variants={fadeUp}>
+          <motion.div variants={fadeUp} className={styles.buttonGroup}>
             <Link href="/login" className={styles.primaryBtn}>
-              Commencer mon apprentissage <ArrowRight size={20} />
+              Commencer maintenant <ArrowRight size={20} />
+            </Link>
+            <Link href="#features" className={styles.secondaryBtn}>
+              Découvrir Tuina.ai
             </Link>
           </motion.div>
         </motion.section>
