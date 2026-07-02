@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { motion, Variants } from "framer-motion";
+import { motion, Variants, useScroll, useTransform } from "framer-motion";
 import { 
   BookOpen, 
   Layout, 
@@ -36,10 +36,22 @@ const staggerContainer: Variants = {
 };
 
 export default function Home() {
+  const { scrollYProgress } = useScroll();
+  
+  // Parallax effects for floating icons
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, -300]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, 200]);
+  const y3 = useTransform(scrollYProgress, [0, 1], [0, -150]);
+  const y4 = useTransform(scrollYProgress, [0, 1], [0, 400]);
+  const y5 = useTransform(scrollYProgress, [0, 1], [0, -250]);
+
+  // Fade out hero image as you scroll down
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [0.9, 0.1]);
+
   return (
     <div className={styles.container}>
       {/* Hero Background Image */}
-      <div className={styles.heroImage} />
+      <motion.div className={styles.heroImage} style={{ opacity: heroOpacity }} />
 
       {/* Background elements */}
       <div className={styles.background}>
@@ -47,20 +59,20 @@ export default function Home() {
         <div className={`${styles.glow} ${styles.glow2}`} />
         <div className={`${styles.glow} ${styles.glow3}`} />
         
-        {/* Floating Legal Icons */}
-        <motion.div className={styles.floatingIcon} style={{ top: "15%", left: "5%" }} animate={{ y: [0, -30, 0], rotate: [0, 5, 0] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}>
+        {/* Floating Legal Icons with Parallax */}
+        <motion.div className={styles.floatingIcon} style={{ top: "15%", left: "5%", y: y1 }} animate={{ rotate: [0, 5, 0] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}>
           <Scale size={120} />
         </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "45%", right: "8%" }} animate={{ y: [0, 40, 0], rotate: [0, -10, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}>
+        <motion.div className={styles.floatingIcon} style={{ top: "45%", right: "8%", y: y2 }} animate={{ rotate: [0, -10, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}>
           <Gavel size={150} />
         </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "70%", left: "10%" }} animate={{ y: [0, -40, 0], rotate: [0, 8, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}>
+        <motion.div className={styles.floatingIcon} style={{ top: "70%", left: "10%", y: y3 }} animate={{ rotate: [0, 8, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}>
           <Landmark size={180} />
         </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "30%", right: "20%" }} animate={{ y: [0, -25, 0], rotate: [0, -5, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
+        <motion.div className={styles.floatingIcon} style={{ top: "30%", right: "20%", y: y4 }} animate={{ rotate: [0, -5, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
           <Book size={90} />
         </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ bottom: "10%", right: "30%" }} animate={{ y: [0, 35, 0], rotate: [0, 6, 0] }} transition={{ duration: 22, repeat: Infinity, ease: "easeInOut", delay: 3 }}>
+        <motion.div className={styles.floatingIcon} style={{ bottom: "10%", right: "30%", y: y5 }} animate={{ rotate: [0, 6, 0] }} transition={{ duration: 22, repeat: Infinity, ease: "easeInOut", delay: 3 }}>
           <FileText size={140} />
         </motion.div>
       </div>
