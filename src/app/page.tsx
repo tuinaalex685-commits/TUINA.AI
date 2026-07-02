@@ -33,6 +33,9 @@ const staggerContainer: Variants = {
 export default function Home() {
   return (
     <div className={styles.container}>
+      {/* Hero Background Image */}
+      <div className={styles.heroImage} />
+
       {/* Background elements */}
       <div className={styles.background}>
         <div className={`${styles.glow} ${styles.glow1}`} />
