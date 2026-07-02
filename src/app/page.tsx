@@ -8,7 +8,10 @@ import {
   Layout, 
   BrainCircuit, 
   CheckSquare, 
-  ArrowRight
+  ArrowRight,
+  Sparkles,
+  Edit3,
+  TrendingUp
 } from "lucide-react";
 import styles from "./page.module.css";
 
