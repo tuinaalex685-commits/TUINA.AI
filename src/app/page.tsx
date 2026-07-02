@@ -40,6 +40,7 @@ export default function Home() {
       <div className={styles.background}>
         <div className={`${styles.glow} ${styles.glow1}`} />
         <div className={`${styles.glow} ${styles.glow2}`} />
+        <div className={`${styles.glow} ${styles.glow3}`} />
       </div>
 
       <div className={styles.content}>
