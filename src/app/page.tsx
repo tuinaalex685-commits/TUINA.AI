@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { 
   BookOpen, 
   Layout, 
@@ -15,12 +15,12 @@ import {
 } from "lucide-react";
 import styles from "./page.module.css";
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
 };
 
-const staggerContainer = {
+const staggerContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -57,15 +57,15 @@ export default function Home() {
         >
           <motion.div variants={fadeUp} className={styles.badge}>
             <Sparkles size={16} />
-            <span>La nouvelle façon d'étudier le droit</span>
+            <span>La nouvelle façon d&apos;étudier le droit</span>
           </motion.div>
           
           <motion.h1 variants={fadeUp} className={styles.title}>
-            L'IA qui accompagne <span>réellement</span> les étudiants en droit.
+            L&apos;IA qui accompagne <span>réellement</span> les étudiants en droit.
           </motion.h1>
           
           <motion.p variants={fadeUp} className={styles.subtitle}>
-            Plus qu'une simple IA, Tuina.ai est une plateforme complète pour organiser, réviser et exceller dans vos études juridiques.
+            Plus qu&apos;une simple IA, Tuina.ai est une plateforme complète pour organiser, réviser et exceller dans vos études juridiques.
           </motion.p>
           
           <motion.div variants={fadeUp}>
@@ -83,13 +83,13 @@ export default function Home() {
           viewport={{ once: true, margin: "-100px" }}
           variants={staggerContainer}
         >
-          <motion.span variants={fadeUp} className={styles.sectionTag}>L'histoire</motion.span>
+          <motion.span variants={fadeUp} className={styles.sectionTag}>L&apos;histoire</motion.span>
           <motion.h2 variants={fadeUp}>Créé par un étudiant, pour les étudiants.</motion.h2>
           <motion.p variants={fadeUp}>
-            Tuina.ai est née d'un besoin réel : le manque d'organisation, la difficulté à synthétiser des centaines de pages de cours et l'absence d'accompagnement personnalisé. 
+            Tuina.ai est née d&apos;un besoin réel : le manque d&apos;organisation, la difficulté à synthétiser des centaines de pages de cours et l&apos;absence d&apos;accompagnement personnalisé. 
           </motion.p>
           <motion.p variants={fadeUp}>
-            Ce n'est pas un énième outil gadget. C'est la plateforme que j'aurais rêvé avoir en première année pour structurer mes révisions, m'entraîner et réussir mes examens de droit.
+            Ce n&apos;est pas un énième outil gadget. C&apos;est la plateforme que j&apos;aurais rêvé avoir en première année pour structurer mes révisions, m&apos;entraîner et réussir mes examens de droit.
           </motion.p>
         </motion.section>
 
@@ -104,8 +104,8 @@ export default function Home() {
           >
             <motion.span variants={fadeUp} className={styles.sectionTag}>Fonctionnalités</motion.span>
             <motion.h2 variants={fadeUp}>Tout ce dont vous avez besoin.</motion.h2>
-            <motion.p variants={fadeUp} className={styles.subtitle} style={{ margin: '0 auto' }}>
-              Une suite d'outils intelligents pour maximiser votre efficacité.
+            <motion.p variants={fadeUp} className={styles.subtitle} style={{ margin: "0 auto" }}>
+              Une suite d&apos;outils intelligents pour maximiser votre efficacité.
             </motion.p>
           </motion.div>
 
@@ -119,7 +119,7 @@ export default function Home() {
             <motion.div variants={fadeUp} className={styles.card}>
               <div className={styles.cardIcon}><BookOpen size={28} /></div>
               <h3>Bibliothèque intelligente</h3>
-              <p>Importez vos PDF de cours. L'IA les analyse, les organise et vous aide à en extraire l'essentiel instantanément.</p>
+              <p>Importez vos PDF de cours. L&apos;IA les analyse, les organise et vous aide à en extraire l&apos;essentiel instantanément.</p>
             </motion.div>
 
             <motion.div variants={fadeUp} className={styles.card}>
@@ -143,13 +143,13 @@ export default function Home() {
             <motion.div variants={fadeUp} className={styles.card}>
               <div className={styles.cardIcon}><Edit3 size={28} /></div>
               <h3>Rédaction juridique</h3>
-              <p>Soumettez vos dissertations et commentaires d'arrêt pour une correction intelligente et une analyse détaillée.</p>
+              <p>Soumettez vos dissertations et commentaires d&apos;arrêt pour une correction intelligente et une analyse détaillée.</p>
             </motion.div>
 
             <motion.div variants={fadeUp} className={styles.card}>
               <div className={styles.cardIcon}><TrendingUp size={28} /></div>
               <h3>Suivi de progression</h3>
-              <p>Visualisez vos points forts et vos faiblesses. Suivez votre évolution tout au long de l'année universitaire.</p>
+              <p>Visualisez vos points forts et vos faiblesses. Suivez votre évolution tout au long de l&apos;année universitaire.</p>
             </motion.div>
           </motion.div>
         </section>
@@ -162,12 +162,12 @@ export default function Home() {
           viewport={{ once: true, margin: "-100px" }}
           variants={staggerContainer}
         >
-          <motion.h2 variants={fadeUp}>L'IA ne vous remplace pas.<br/>Elle vous élève.</motion.h2>
+          <motion.h2 variants={fadeUp}>L&apos;IA ne vous remplace pas.<br/>Elle vous élève.</motion.h2>
           <motion.p variants={fadeUp}>
             Tuina.ai ne fait pas le travail à votre place. Elle combine organisation, révision, entraînement et correction pour faire de vous un meilleur juriste.
           </motion.p>
           <motion.div variants={fadeUp}>
-            <Link href="/login" className={styles.primaryBtn} style={{ padding: '20px 48px', fontSize: '20px' }}>
+            <Link href="/login" className={styles.primaryBtn} style={{ padding: "20px 48px", fontSize: "20px" }}>
               Accéder à la plateforme
             </Link>
           </motion.div>
