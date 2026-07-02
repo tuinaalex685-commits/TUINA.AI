@@ -64,7 +64,7 @@ export default function Home() {
           </motion.div>
           
           <motion.h1 variants={fadeUp} className={styles.title}>
-            <span className={styles.mainBrand}>TUINA.AI</span>
+            <span className={styles.mainBrand}>TUINA.AI</span><br />
             L&apos;IA qui accompagne <span>réellement</span> les étudiants en droit.
           </motion.h1>
           
