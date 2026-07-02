@@ -48,6 +48,9 @@ export default function Home() {
   // Fade out hero image as you scroll down
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [0.9, 0.1]);
 
+  // Fade in footer image as you scroll down
+  const footerOpacity = useTransform(scrollYProgress, [0.6, 1], [0, 0.8]);
+
   return (
     <div className={styles.container}>
       {/* Hero Background Image */}
@@ -59,22 +62,8 @@ export default function Home() {
         <div className={`${styles.glow} ${styles.glow2}`} />
         <div className={`${styles.glow} ${styles.glow3}`} />
         
-        {/* Floating Legal Icons with Parallax */}
-        <motion.div className={styles.floatingIcon} style={{ top: "15%", left: "5%", y: y1 }} animate={{ rotate: [0, 5, 0] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}>
-          <Scale size={120} />
-        </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "45%", right: "8%", y: y2 }} animate={{ rotate: [0, -10, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}>
-          <Gavel size={150} />
-        </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "70%", left: "10%", y: y3 }} animate={{ rotate: [0, 8, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}>
-          <Landmark size={180} />
-        </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ top: "30%", right: "20%", y: y4 }} animate={{ rotate: [0, -5, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
-          <Book size={90} />
-        </motion.div>
-        <motion.div className={styles.floatingIcon} style={{ bottom: "10%", right: "30%", y: y5 }} animate={{ rotate: [0, 6, 0] }} transition={{ duration: 22, repeat: Infinity, ease: "easeInOut", delay: 3 }}>
-          <FileText size={140} />
-        </motion.div>
+        {/* Majestic Law Book Background for the bottom section */}
+        <motion.div className={styles.footerImage} style={{ opacity: footerOpacity }} />
       </div>
 
       <div className={styles.content}>
