@@ -14,14 +14,32 @@
   left: 0;
   width: 100%;
   height: 100vh;
-  /* Assombrissement plus dramatique pour faire ressortir le texte blanc */
-  background-image: linear-gradient(to bottom, rgba(10, 11, 16, 0.5) 0%, rgba(10, 11, 16, 0.5) 70%, rgba(10, 11, 16, 1) 100%), url('/hero-bg.png');
+  background-image: linear-gradient(to bottom, rgba(10, 11, 16, 0.4) 0%, rgba(10, 11, 16, 0.6) 70%, rgba(10, 11, 16, 1) 100%), url('/hero-bg-jeunes.png');
   background-size: cover;
   background-position: center 20%;
   z-index: 0;
-  opacity: 1; /* Pleine visibilité */
   pointer-events: none;
   animation: kenBurns 30s ease-in-out infinite alternate;
+}
+
+/* Dynamic shifting overlay for the hero section */
+.heroOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: linear-gradient(45deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 50%, rgba(59,130,246,0.15) 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  pointer-events: none;
+  z-index: 1; /* Above image, below text */
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 @keyframes kenBurns {
@@ -148,11 +166,27 @@
   font-weight: 900;
   letter-spacing: -2px;
   text-transform: uppercase;
-  background: linear-gradient(180deg, #ffffff 0%, #a5b4fc 100%);
+  /* Dynamic shimmering gradient */
+  background: linear-gradient(
+    270deg, 
+    #ffffff 0%, 
+    #a5b4fc 25%, 
+    #c084fc 50%, 
+    #a5b4fc 75%, 
+    #ffffff 100%
+  );
+  background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 8px;
-  filter: drop-shadow(0 0 20px rgba(165, 180, 252, 0.5)); /* Aura lumineuse */
+  filter: drop-shadow(0 0 20px rgba(165, 180, 252, 0.5));
+  animation: shine 5s linear infinite;
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
 }
 
 .title span:not(.mainBrand) {

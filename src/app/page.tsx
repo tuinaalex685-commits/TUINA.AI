@@ -33,8 +33,9 @@ const staggerContainer: Variants = {
 export default function Home() {
   return (
     <div className={styles.container}>
-      {/* Hero Background Image */}
+      {/* Hero Background Image & Dynamic Overlay */}
       <motion.div className={styles.heroImage} />
+      <div className={styles.heroOverlay} />
 
       {/* Background elements (empty now to remove the blurry glows) */}
       <div className={styles.background}>
