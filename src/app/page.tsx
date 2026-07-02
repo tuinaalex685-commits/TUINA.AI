@@ -64,6 +64,7 @@ export default function Home() {
           </motion.div>
           
           <motion.h1 variants={fadeUp} className={styles.title}>
+            <span className={styles.mainBrand}>TUINA.AI</span>
             L&apos;IA qui accompagne <span>réellement</span> les étudiants en droit.
           </motion.h1>
           
@@ -165,7 +166,13 @@ export default function Home() {
           viewport={{ once: true, margin: "-100px" }}
           variants={staggerContainer}
         >
-          <motion.h2 variants={fadeUp}>L&apos;IA ne vous remplace pas.<br/>Elle vous élève.</motion.h2>
+          <motion.h2 
+            className={styles.title}
+            variants={fadeUp}
+          >
+            L&apos;IA ne vous remplace pas.<br />
+            <span>Elle vous élève.</span>
+          </motion.h2>
           <motion.p variants={fadeUp}>
             Tuina.ai ne fait pas le travail à votre place. Elle combine organisation, révision, entraînement et correction pour faire de vous un meilleur juriste.
           </motion.p>
