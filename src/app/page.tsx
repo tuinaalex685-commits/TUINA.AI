@@ -8,15 +8,7 @@ import {
   Layout, 
   BrainCircuit, 
   CheckSquare, 
-  Edit3, 
-  TrendingUp, 
-  Sparkles,
-  ArrowRight,
-  Scale,
-  Gavel,
-  Landmark,
-  FileText,
-  Book
+  ArrowRight
 } from "lucide-react";
 import styles from "./page.module.css";
 
@@ -36,34 +28,15 @@ const staggerContainer: Variants = {
 };
 
 export default function Home() {
-  const { scrollYProgress } = useScroll();
-  
-  // Parallax effects for floating icons
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, -300]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [0, 200]);
-  const y3 = useTransform(scrollYProgress, [0, 1], [0, -150]);
-  const y4 = useTransform(scrollYProgress, [0, 1], [0, 400]);
-  const y5 = useTransform(scrollYProgress, [0, 1], [0, -250]);
-
-  // Fade out hero image as you scroll down
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [0.9, 0.1]);
-
-  // Fade in footer image as you scroll down
-  const footerOpacity = useTransform(scrollYProgress, [0.6, 1], [0, 0.8]);
-
   return (
     <div className={styles.container}>
       {/* Hero Background Image */}
-      <motion.div className={styles.heroImage} style={{ opacity: heroOpacity }} />
+      <motion.div className={styles.heroImage} />
 
-      {/* Background elements */}
+      {/* Background elements (empty now to remove the blurry glows) */}
       <div className={styles.background}>
-        <div className={`${styles.glow} ${styles.glow1}`} />
-        <div className={`${styles.glow} ${styles.glow2}`} />
-        <div className={`${styles.glow} ${styles.glow3}`} />
-        
         {/* Majestic Law Book Background for the bottom section */}
-        <motion.div className={styles.footerImage} style={{ opacity: footerOpacity }} />
+        <motion.div className={styles.footerImage} />
       </div>
 
       <div className={styles.content}>

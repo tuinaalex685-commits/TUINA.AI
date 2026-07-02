@@ -14,13 +14,14 @@
   left: 0;
   width: 100%;
   height: 100vh;
-  /* Dégradé moins sombre en haut, plus opaque */
-  background-image: linear-gradient(to bottom, rgba(10, 11, 16, 0.1) 0%, rgba(10, 11, 16, 0.4) 50%, rgba(10, 11, 16, 1) 100%), url('/hero-bg.png');
+  /* Un voile très léger pour que le texte reste lisible, mais l'image est très claire */
+  background-image: linear-gradient(to bottom, rgba(10, 11, 16, 0.1) 0%, rgba(10, 11, 16, 0.3) 70%, rgba(10, 11, 16, 1) 100%), url('/hero-bg.png');
   background-size: cover;
   background-position: center 20%;
   z-index: 0;
+  opacity: 1; /* Pleine visibilité */
   pointer-events: none;
-  animation: kenBurns 30s ease-in-out infinite alternate; /* Effet de mouvement subtil */
+  animation: kenBurns 30s ease-in-out infinite alternate;
 }
 
 @keyframes kenBurns {
@@ -40,45 +41,7 @@
   pointer-events: none;
 }
 
-.glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.7; /* Increased opacity for more light */
-  animation: pulse 10s infinite alternate;
-}
-
-.glow1 {
-  top: -10%;
-  left: -10%;
-  width: 60vw;
-  height: 60vw;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.6) 0%, rgba(0,0,0,0) 70%); /* Brighter blue */
-}
-
-.glow2 {
-  bottom: -20%;
-  right: -10%;
-  width: 70vw;
-  height: 70vw;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.5) 0%, rgba(0,0,0,0) 70%); /* Brighter purple */
-  animation-delay: -5s;
-}
-
-/* Middle glow to brighten the center sections */
-.glow3 {
-  top: 40%;
-  left: 20%;
-  width: 80vw;
-  height: 80vw;
-  background: radial-gradient(circle, rgba(45, 107, 228, 0.3) 0%, rgba(0,0,0,0) 60%);
-  animation-delay: -2s;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(1.15); opacity: 0.8; }
-}
+/* Removed all glow classes to keep a clean, professional, non-blurry background */
 
 /* Footer Background Image (Majestic Law Book) */
 .footerImage {
@@ -87,11 +50,12 @@
   left: 0;
   width: 100%;
   height: 100vh;
-  /* Fade from black at the top to the image at the bottom */
-  background-image: linear-gradient(to top, rgba(10, 11, 16, 0.1) 0%, rgba(10, 11, 16, 0.8) 50%, rgba(10, 11, 16, 1) 100%), url('/footer-bg.png');
+  /* Un voile très léger pour que le texte reste lisible, mais l'image est très claire */
+  background-image: linear-gradient(to top, rgba(10, 11, 16, 0.1) 0%, rgba(10, 11, 16, 0.3) 70%, rgba(10, 11, 16, 1) 100%), url('/footer-bg.png');
   background-size: cover;
   background-position: center bottom;
   z-index: 0;
+  opacity: 1; /* Pleine visibilité */
   pointer-events: none;
 }
 
