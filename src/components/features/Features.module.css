@@ -68,9 +68,9 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: rgba(0, 112, 243, 0.1); /* Blue tint */
-  border: 1px solid rgba(0, 112, 243, 0.2);
-  box-shadow: 0 0 20px rgba(0, 112, 243, 0.1);
+  background: rgba(0, 0, 0, 0.8); /* Fond noir sombre */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -80,10 +80,10 @@
 }
 
 .card:hover .iconWrapper {
-  background: rgba(0, 112, 243, 0.2);
+  background: #000000;
   border-color: rgba(0, 112, 243, 0.4);
   color: #3291FF;
-  box-shadow: 0 0 30px rgba(0, 112, 243, 0.3);
+  box-shadow: 0 0 20px rgba(0, 112, 243, 0.2);
 }
 
 .cardTitle {
