@@ -183,6 +183,7 @@ export async function POST(req: NextRequest) {
 
       let generatedData: any = null;
       let retryCount = 0;
+      let lastGenError: any = null;
       
       while (retryCount < 2 && !generatedData) {
         try {
@@ -196,14 +197,15 @@ export async function POST(req: NextRequest) {
             }
           });
           generatedData = JSON.parse(aiResponse.text || "{}");
-        } catch (genError) {
+        } catch (genError: any) {
           console.error("Gemini Generation Error (Retry):", genError);
+          lastGenError = genError;
           retryCount++;
         }
       }
 
       if (!generatedData || !generatedData.sections) {
-        throw new Error("Impossible de générer un JSON valide après plusieurs tentatives.");
+        throw new Error("Impossible de générer un JSON valide après plusieurs tentatives. Erreur interne Gemini: " + (lastGenError?.message || String(lastGenError)));
       }
 
       // 6. Sauvegarder en DB (Couche 1)
