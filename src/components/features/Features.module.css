@@ -14,29 +14,29 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  opacity: 0.35; /* Légère opacité pour créer de la profondeur sans saturer */
+  opacity: 0.6; /* Plus opaque pour qu'on voit bien le bleu */
 }
 
 .glowCyan, .glowAzure, .glowWhite {
   position: absolute;
   border-radius: 50%;
-  filter: blur(120px);
+  filter: blur(100px);
   animation: floatLight 25s infinite alternate ease-in-out;
 }
 
 .glowCyan {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(100, 240, 255, 0.4), transparent 70%);
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(0, 180, 255, 0.6), transparent 70%); /* Bleu plus vif */
   top: 5%;
   left: 15%;
   animation-delay: 0s;
 }
 
 .glowAzure {
-  width: 800px;
-  height: 800px;
-  background: radial-gradient(circle, rgba(0, 150, 255, 0.35), transparent 70%);
+  width: 900px;
+  height: 900px;
+  background: radial-gradient(circle, rgba(0, 112, 243, 0.6), transparent 70%); /* Vrai bleu azur Vercel */
   bottom: 5%;
   right: 10%;
   animation-delay: -8s;
@@ -45,7 +45,7 @@
 .glowWhite {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.5), transparent 70%);
+  background: radial-gradient(circle, rgba(0, 200, 255, 0.4), transparent 70%); /* Cyan clair au lieu de blanc pur */
   top: 40%;
   left: 50%;
   transform: translate(-50%, -50%);
