@@ -26,10 +26,26 @@ export default function EtudeEngine({
   const [showFeedback, setShowFeedback] = useState(false);
   const [remediation, setRemediation] = useState<string | null>(null);
 
+  // Nouveaux états pour le cas pratique interactif
+  const [userPratiqueAnswer, setUserPratiqueAnswer] = useState("");
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [pratiqueFeedback, setPratiqueFeedback] = useState<{correct: boolean, explication: string} | null>(null);
+  const [dynamicCas, setDynamicCas] = useState<any>(null); // Pour stocker un nouveau cas généré par l'IA
+
+  // Mettre à jour l'étape ou le thème réinitialise les états dynamiques
+  useEffect(() => {
+    setDynamicCas(null);
+    setUserPratiqueAnswer("");
+    setPratiqueFeedback(null);
+  }, [currentThemeIdx, step]);
+
   // Helper to get current objects
   const currentSection = sections?.[currentSectionIdx];
   const sectionThemes = themes?.filter((t: any) => t.section_id === currentSection?.id)?.sort((a:any, b:any) => a.ordre - b.ordre);
   const currentTheme = sectionThemes?.[currentThemeIdx];
+
+  // Helper pour obtenir le cas actif (celui de base, ou celui généré par l'IA)
+  const activeCas = dynamicCas || (currentTheme?.cas_pratique_fond);
 
   useEffect(() => {
     if (!coursId) {
@@ -69,6 +85,47 @@ export default function EtudeEngine({
           data: payloadData 
         })
       }).catch(console.error);
+    }
+  };
+
+  const submitPratiqueEvaluation = async () => {
+    if (!userPratiqueAnswer.trim() || !activeCas) return;
+    setIsEvaluating(true);
+    setPratiqueFeedback(null);
+
+    try {
+      const res = await fetch('/api/etude/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          themeTitre: currentTheme?.titre,
+          themeExplication: currentTheme?.explication,
+          situation: activeCas.situation,
+          question: activeCas.question,
+          expectedAnswer: activeCas.reponse_attendue_ou_choix,
+          userAnswer: userPratiqueAnswer
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur lors de l'évaluation");
+
+      setPratiqueFeedback({ correct: data.correct, explication: data.explication });
+
+      if (data.correct) {
+        saveProgress('update_theme', { fond_valide: true });
+      } else {
+        saveProgress('update_theme', { increments: { tentative_fond: 1 } });
+        if (data.nouveau_cas) {
+          // On garde le nouveau cas en mémoire, l'utilisateur cliquera sur "Réessayer avec un nouveau cas" pour l'afficher
+          setDynamicCas(data.nouveau_cas);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPratiqueFeedback({ correct: false, explication: "Une erreur est survenue lors de l'évaluation. Veuillez réessayer." });
+    } finally {
+      setIsEvaluating(false);
     }
   };
 
@@ -258,36 +315,63 @@ export default function EtudeEngine({
       )}
 
       {/* CAS PRATIQUE (Fond) */}
-      {step === 'cas_pratique' && currentTheme && (
+      {step === 'cas_pratique' && currentTheme && activeCas && (
         <div className={styles.card}>
           <span className={`${styles.tag} ${styles.tagCasPratique}`}>Mise en Situation (Pratique)</span>
           <p className={styles.content} style={{ fontStyle: 'italic', background: 'var(--color-bg-secondary)', padding: 16, borderRadius: 8 }}>
-            {currentTheme.cas_pratique_fond.situation}
+            {activeCas.situation}
           </p>
-          <h2 className={styles.title} style={{ fontSize: 22 }}>{currentTheme.cas_pratique_fond.question}</h2>
+          <h2 className={styles.title} style={{ fontSize: 22 }}>{activeCas.question}</h2>
           
-          {/* S'il n'y a pas de choix générés, on affiche une réponse attendue ou on simule des choix. Pour le MVP, on suppose que l'IA peut fournir des choix via reponse_attendue_ou_choix si adapté. */}
-          <div className={styles.feedbackBox}>
-            <p className={styles.feedbackTitle}>Réponse attendue par l&apos;IA :</p>
-            <p className={styles.content}>{currentTheme.cas_pratique_fond.reponse_attendue_ou_choix}</p>
-            <p style={{marginBottom: 16, fontSize: 14, color: 'var(--color-text-secondary)'}}>Avez-vous répondu correctement dans votre tête ou sur brouillon ?</p>
-            <div style={{display: 'flex', gap: 12}}>
-              <button className={styles.primaryBtn} style={{background: '#00C864', color: '#fff'}} onClick={() => {
-                saveProgress('update_theme', { fond_valide: true });
-                handleNextStep();
-              }}>Oui, j&apos;avais bon !</button>
-              <button className={styles.primaryBtn} style={{background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)'}} onClick={() => {
-                setRemediation(currentTheme.remediation_fond?.[0]?.reexplication || "Lisez bien l'application.");
-                saveProgress('update_theme', { increments: { tentative_fond: 1 } });
-              }}>Non, j&apos;ai fait erreur</button>
+          {!pratiqueFeedback && (
+            <div style={{ marginTop: 20 }}>
+              <textarea 
+                value={userPratiqueAnswer}
+                onChange={(e) => setUserPratiqueAnswer(e.target.value)}
+                placeholder="Rédigez votre réponse ici (l'IA évaluera votre compréhension)..."
+                disabled={isEvaluating}
+                style={{ 
+                  width: '100%', minHeight: 120, padding: 16, 
+                  borderRadius: 8, border: '1px solid var(--color-border)', 
+                  background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)',
+                  fontSize: 16, fontFamily: 'inherit', resize: 'vertical'
+                }}
+              />
+              <button 
+                className={styles.primaryBtn} 
+                style={{ marginTop: 16, opacity: (!userPratiqueAnswer.trim() || isEvaluating) ? 0.5 : 1 }}
+                disabled={!userPratiqueAnswer.trim() || isEvaluating}
+                onClick={submitPratiqueEvaluation}
+              >
+                {isEvaluating ? "L'IA analyse votre réponse..." : "Soumettre à l'IA"}
+              </button>
             </div>
-            
-            {remediation && (
-              <div style={{marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)'}}>
-                <p className={styles.content}>{remediation}</p>
-              </div>
-            )}
-          </div>
+          )}
+
+          {pratiqueFeedback && (
+            <div className={styles.feedbackBox} style={{ marginTop: 24 }}>
+              <p className={styles.feedbackTitle} style={{ color: pratiqueFeedback.correct ? '#00C864' : '#FF3232' }}>
+                {pratiqueFeedback.correct ? "Excellent ! L'IA valide." : "Pas tout à fait correct..."}
+              </p>
+              <p className={styles.content}>{pratiqueFeedback.explication}</p>
+              
+              {pratiqueFeedback.correct ? (
+                <button className={styles.primaryBtn} style={{ marginTop: 16 }} onClick={handleNextStep}>
+                  Continuer
+                </button>
+              ) : (
+                <button className={styles.primaryBtn} style={{ marginTop: 16, background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => {
+                  setUserPratiqueAnswer("");
+                  setPratiqueFeedback(null);
+                  // Si l'IA a généré un nouveau cas, il est déjà dans dynamicCas (grâce à useEffect ou au setState dans submitPratiqueEvaluation)
+                }}>
+                  {dynamicCas && dynamicCas.situation !== currentTheme.cas_pratique_fond.situation 
+                    ? "Réessayer avec un nouveau cas" 
+                    : "Réessayer cette question"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
