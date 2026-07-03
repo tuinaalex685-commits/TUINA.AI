@@ -56,11 +56,6 @@ export default function EtudeEngine({
     }
   };
 
-  const handleNextStep = async () => {
-    setRemediation(null);
-    setSelectedAnswer(null);
-    setShowFeedback(false);
-
   const saveProgress = (action: string, payloadData: any) => {
     if (coursId) {
       fetch('/api/etude/progress', {
