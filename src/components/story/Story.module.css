@@ -1,9 +1,57 @@
 .storySection {
   background-color: var(--bg-dark);
-  padding: 120px 24px;
+  padding: 160px 24px;
   display: flex;
   justify-content: center;
   border-top: 1px solid var(--border-light);
+  position: relative;
+  overflow: hidden;
+}
+
+.animatedBg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: url('/hero-bg-jeunes.png');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.15;
+  mask-image: linear-gradient(to bottom, black 10%, transparent 90%);
+  -webkit-mask-image: linear-gradient(to bottom, black 10%, transparent 90%);
+}
+
+.orb1, .orb2 {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: floatOrb 20s infinite alternate ease-in-out;
+}
+
+.orb1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.4), transparent 60%);
+  top: -200px;
+  left: -200px;
+  animation-delay: 0s;
+}
+
+.orb2 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 112, 243, 0.4), transparent 60%);
+  bottom: -150px;
+  right: -150px;
+  animation-delay: -10s;
+}
+
+@keyframes floatOrb {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(100px, 50px) scale(1.1); }
+  100% { transform: translate(-50px, 100px) scale(0.9); }
 }
 
 .container {
@@ -13,6 +61,8 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  position: relative;
+  z-index: 10;
 }
 
 .lineIndicator {

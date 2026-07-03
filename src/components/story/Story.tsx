@@ -12,6 +12,12 @@ const fadeUp: Variants = {
 export default function Story() {
   return (
     <section className={styles.storySection}>
+      {/* Animated Background & Bridge Image */}
+      <div className={styles.animatedBg}>
+        <div className={styles.orb1} />
+        <div className={styles.orb2} />
+      </div>
+
       <motion.div 
         className={styles.container}
         initial="hidden"
