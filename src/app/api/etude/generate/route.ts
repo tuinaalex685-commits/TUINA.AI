@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const maxDuration = 60; // Autoriser jusqu'à 60 secondes d'exécution sur Vercel
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
