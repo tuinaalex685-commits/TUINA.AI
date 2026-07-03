@@ -40,16 +40,77 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
     .in('section_id', sectionIds)
     .order('ordre', { ascending: true });
 
-  // Fetch user progression to resume (Couche 2)
-  // For the MVP, we pass the data to EtudeEngine which will manage state.
-  // In a full implementation, we'd find exactly the last unfinished theme.
+  // 9. Progression persistante : récupérer l'état exact (Couche 2)
+  const { data: progSections } = await supabase
+    .from('etude_progression_sections')
+    .select('*')
+    .eq('user_id', user.id)
+    .in('section_id', sectionIds);
+
+  const { data: progThemes } = await supabase
+    .from('etude_progression_themes')
+    .select('*')
+    .eq('user_id', user.id)
+    .in('theme_id', themes?.map(t => t.id) || []);
+
+  // Compute resume point
+  let startSectionIdx = 0;
+  let startThemeIdx = 0;
+  let startStep = 'synthese';
+
+  if (progSections && progSections.length > 0) {
+    // Find the furthest section that is not fully completed
+    for (let i = 0; i < (sections?.length || 0); i++) {
+      const pSec = progSections.find(p => p.section_id === sections[i].id);
+      if (!pSec || pSec.etat === 'non_commencee') {
+        startSectionIdx = i;
+        startStep = 'synthese';
+        break;
+      }
+      
+      if (pSec.etat !== 'cloture_reussie') {
+        startSectionIdx = i;
+        startStep = pSec.etat; // e.g. 'synthese_vue', 'themes_en_cours'
+        
+        // Find which theme in this section
+        const secThemes = themes?.filter(t => t.section_id === sections[i].id) || [];
+        for (let j = 0; j < secThemes.length; j++) {
+          const pTheme = progThemes?.find(p => p.theme_id === secThemes[j].id);
+          if (!pTheme || (!pTheme.forme_validee && !pTheme.fond_valide)) {
+            startThemeIdx = j;
+            startStep = 'explication';
+            break;
+          } else if (pTheme.forme_validee && !pTheme.fond_valide) {
+            startThemeIdx = j;
+            startStep = 'cas_pratique';
+            break;
+          } else if (pTheme.forme_validee && pTheme.fond_valide && j === secThemes.length - 1) {
+            // all themes valid -> go to cloture
+            startStep = 'cloture';
+          }
+        }
+        break;
+      }
+      
+      // If we reach the last section and it's successful, we show fin_cours
+      if (i === (sections?.length || 0) - 1 && pSec.etat === 'cloture_reussie') {
+        startSectionIdx = i;
+        startStep = 'fin_cours';
+      }
+    }
+  }
 
   return (
     <EtudeEngine 
       pdfId={params.pdfId} 
       coursId={cours.id} 
       sections={sections} 
-      themes={themes} 
+      themes={themes}
+      initialState={{
+        sectionIdx: startSectionIdx,
+        themeIdx: startThemeIdx,
+        step: startStep === 'synthese_vue' ? 'explication' : startStep === 'themes_en_cours' ? 'explication' : startStep
+      }}
     />
   );
 }

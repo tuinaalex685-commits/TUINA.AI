@@ -17,9 +17,10 @@ export default function EtudeEngine({
   
   // State Machine logic simplified for the MVP
   // states: 'synthese' | 'explication' | 'question_forme' | 'cas_pratique' | 'cloture'
-  const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
-  const [currentThemeIdx, setCurrentThemeIdx] = useState(0);
-  const [step, setStep] = useState('synthese');
+  const [currentSectionIdx, setCurrentSectionIdx] = useState(initialState?.sectionIdx || 0);
+  const [currentThemeIdx, setCurrentThemeIdx] = useState(initialState?.themeIdx || 0);
+  const [currentClotureIdx, setCurrentClotureIdx] = useState(0);
+  const [step, setStep] = useState(initialState?.step || 'synthese');
   
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -75,13 +76,28 @@ export default function EtudeEngine({
         setStep('cloture');
       }
     } else if (step === 'cloture') {
+      if (currentClotureIdx < (currentSection?.questions_cloture?.length || 0)) {
+        setCurrentClotureIdx(currentClotureIdx + 1);
+        return; // we stay in cloture step until all questions are done
+      }
       // Section finished
       if (currentSectionIdx < sections.length - 1) {
         setCurrentSectionIdx(currentSectionIdx + 1);
         setCurrentThemeIdx(0);
+        setCurrentClotureIdx(0);
         setStep('synthese');
       } else {
-        router.push('/app/etude');
+        setStep('fin_cours');
+        
+        // Mettre à jour le statut du cours entier à "termine"
+        if (coursId) {
+          fetch('/api/etude/progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start_cours', coursId, data: { statut: 'termine' } })
+          }).catch(console.error);
+        }
+        return;
       }
     }
     
@@ -117,7 +133,7 @@ export default function EtudeEngine({
         remediationText = currentTheme.remediation_fond[0].reexplication;
       }
     } else if (step === 'cloture') {
-      isCorrect = answer === currentSection.questions_cloture[0]?.reponse_correcte;
+      isCorrect = answer === currentSection.questions_cloture[currentClotureIdx]?.reponse_correcte;
     }
 
     setShowFeedback(true);
@@ -273,13 +289,87 @@ export default function EtudeEngine({
         </div>
       )}
 
-      {/* CLOTURE */}
-      {step === 'cloture' && (
+      {/* CLOTURE DE SECTION */}
+      {step === 'cloture' && currentSection && currentSection.questions_cloture && (
         <div className={styles.card}>
-          <span className={`${styles.tag} ${styles.tagSynthese}`}>Fin de la section</span>
-          <h2 className={styles.title}>Bravo, section validée !</h2>
-          <p className={styles.content}>Vous maîtrisez désormais tous les concepts de cette partie.</p>
-          <button className={styles.primaryBtn} onClick={handleNextStep}>Continuer</button>
+          <span className={`${styles.tag} ${styles.tagSynthese}`}>Validation Finale (Section)</span>
+          
+          {currentClotureIdx < currentSection.questions_cloture.length ? (
+            <>
+              <h2 className={styles.title}>{currentSection.questions_cloture[currentClotureIdx].question}</h2>
+              
+              <div className={styles.optionsGrid}>
+                {currentSection.questions_cloture[currentClotureIdx].choix.map((choix: string, i: number) => {
+                  const isSelected = selectedAnswer === choix;
+                  const isCorrect = choix === currentSection.questions_cloture[currentClotureIdx].reponse_correcte;
+                  let btnClass = styles.optionBtn;
+                  
+                  if (showFeedback) {
+                    if (isCorrect) btnClass += ` ${styles.correct}`;
+                    else if (isSelected) btnClass += ` ${styles.incorrect}`;
+                  } else if (isSelected) {
+                    btnClass += ` ${styles.selected}`;
+                  }
+
+                  return (
+                    <button 
+                      key={i} 
+                      disabled={showFeedback}
+                      className={btnClass}
+                      onClick={() => handleAnswer(choix)}
+                    >
+                      {choix}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {showFeedback && (
+                <div className={styles.feedbackBox}>
+                  {selectedAnswer === currentSection.questions_cloture[currentClotureIdx].reponse_correcte ? (
+                    <>
+                      <p className={styles.feedbackTitle} style={{color: '#00C864'}}>Correct !</p>
+                      <button className={styles.primaryBtn} onClick={handleNextStep}>Question suivante</button>
+                    </>
+                  ) : (
+                    <>
+                      <p className={styles.feedbackTitle} style={{color: '#FF3232'}}>Incorrect</p>
+                      <p className={styles.content} style={{marginBottom: 16}}>Relisez bien la question et réessayez pour valider la section.</p>
+                      <button className={styles.primaryBtn} onClick={() => {setShowFeedback(false); setSelectedAnswer(null);}}>Réessayer</button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h2 className={styles.title}>Bravo, section validée ! 🎉</h2>
+              <p className={styles.content}>Vous maîtrisez désormais tous les concepts de cette partie.</p>
+              <button className={styles.primaryBtn} onClick={handleNextStep}>Continuer vers la suite</button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* FIN DE COURS */}
+      {step === 'fin_cours' && (
+        <div className={styles.card} style={{ textAlign: 'center' }}>
+          <span style={{ fontSize: '64px', display: 'block', marginBottom: '24px' }}>🏆</span>
+          <h2 className={styles.title}>Cours terminé avec succès !</h2>
+          <p className={styles.content}>Vous avez parcouru et validé l'intégralité de ce document.</p>
+          
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '32px' }}>
+            <button className={styles.primaryBtn} onClick={() => router.push('/app/revisions')} style={{ background: '#7C5CFF' }}>
+              Aller aux Révisions (Flashcards)
+            </button>
+            <button className={styles.primaryBtn} onClick={() => router.push('/app/evaluations')} style={{ background: '#0070F3' }}>
+              Passer une Évaluation
+            </button>
+          </div>
+          
+          <button style={{ marginTop: '24px', background: 'transparent', border: 'none', color: 'var(--color-text-secondary)', textDecoration: 'underline', cursor: 'pointer' }} onClick={() => router.push('/app/etude')}>
+            Retour à la liste des cours
+          </button>
         </div>
       )}
 
