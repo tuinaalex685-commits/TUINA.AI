@@ -11,13 +11,13 @@ const fadeUp: Variants = {
 };
 
 const features = [
-  { icon: <BookOpen size={20} />, title: "Bibliothèque intelligente", desc: "Importez vos PDF de cours. L'IA les analyse, les organise et vous aide à en extraire l'essentiel instantanément." },
-  { icon: <Calendar size={20} />, title: "Organisation", desc: "Créez vos matières et organisez votre semestre." },
-  { icon: <Zap size={20} />, title: "Révisions intelligentes", desc: "Flashcards générées automatiquement avec répétition espacée." },
-  { icon: <Target size={20} />, title: "Évaluations IA", desc: "Génération automatique de QCM et Quiz sur mesure." },
-  { icon: <PenTool size={20} />, title: "Rédaction juridique", desc: "Correction intelligente de vos dissertations et commentaires d'arrêt." },
-  { icon: <TrendingUp size={20} />, title: "Progression", desc: "Suivi de la progression et de vos statistiques d'apprentissage." },
-  { icon: <Compass size={20} />, title: "Étude guidée", desc: "Un tuteur IA proactif pour vous accompagner (Bientôt).", isNew: true },
+  { icon: <BookOpen size={20} />, title: "Bibliothèque augmentée", desc: "Chargez vos PDF de cours. L'IA les décortique et vous sort l'essentiel en quelques secondes." },
+  { icon: <Calendar size={20} />, title: "Organisation au top", desc: "Créez vos matières et planifiez votre semestre sans prise de tête." },
+  { icon: <Zap size={20} />, title: "Révisions optimisées", desc: "Des flashcards générées automatiquement avec un algorithme de répétition pour ne rien oublier." },
+  { icon: <Target size={20} />, title: "Entraînement ciblé", desc: "Testez-vous avec des QCM et des quiz générés sur mesure par l'IA." },
+  { icon: <PenTool size={20} />, title: "Aide à la rédaction", desc: "Faites corriger intelligemment vos dissertations et commentaires d'arrêt pour viser l'excellence." },
+  { icon: <TrendingUp size={20} />, title: "Suivi en direct", desc: "Visualisez votre progression et vos stats pour rester motivé tout au long de l'année." },
+  { icon: <Compass size={20} />, title: "Votre tuteur IA", desc: "Un coach virtuel proactif pour vous guider pas à pas (Bientôt disponible).", isNew: true },
 ];
 
 export default function Features() {

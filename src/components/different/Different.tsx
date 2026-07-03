@@ -23,15 +23,15 @@ export default function Different() {
           <div className={styles.glowBg} />
           
           <motion.h2 variants={fadeUp} className={styles.title}>
-            Pourquoi Tuina.ai est différente ?
+            Pourquoi Tuina.ai change la donne ?
           </motion.h2>
           
           <motion.p variants={fadeUp} className={styles.subtitle}>
-            Tuina.ai ne vous remplace pas. Elle vous élève.
+            On ne fait pas le travail à votre place. On vous rend meilleur.
           </motion.p>
           
           <motion.p variants={fadeUp} className={styles.desc}>
-            Contrairement aux intelligences artificielles génériques, notre plateforme combine l&apos;organisation, la révision, l&apos;entraînement, la correction et un suivi personnalisé dans un seul écosystème conçu spécifiquement pour le droit.
+            Oubliez les IA génériques qui recrachent du texte sans comprendre votre besoin. Tuina.ai rassemble l&apos;organisation, l&apos;entraînement et la correction dans un seul endroit, pensé à 100% pour la rigueur des études de droit.
           </motion.p>
         </motion.div>
       </div>

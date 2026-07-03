@@ -21,12 +21,12 @@ export default function Finale() {
         variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
       >
         <motion.h2 variants={fadeUp} className={styles.title}>
-          Prêt à exceller ?
+          Prêt à majorer cette année ?
         </motion.h2>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
           <Link href="/login" className={styles.hugeBtn}>
-            Accéder à la plateforme
+            Créer mon compte
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="5" y1="12" x2="19" y2="12"></line>
               <polyline points="12 5 19 12 12 19"></polyline>

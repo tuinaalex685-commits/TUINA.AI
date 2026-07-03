@@ -61,16 +61,15 @@ export default function Hero() {
       >
         <motion.div variants={fadeUp} className={styles.badge}>
           <span className={styles.badgeDot} />
-          Tuina.ai est maintenant disponible
+          Tuina.ai est en ligne !
         </motion.div>
 
         <motion.h1 variants={fadeUp} className={styles.title}>
-          L&apos;IA qui accompagne <span>réellement</span><br />
-          les étudiants en droit.
+          L&apos;IA conçue pour vous faire <span>réussir</span> en droit.
         </motion.h1>
         
         <motion.p variants={fadeUp} className={styles.subtitle}>
-          Tuina.ai n&apos;est pas seulement une IA. C&apos;est une plateforme complète conçue pour organiser, réviser et exceller dans vos études universitaires.
+          Bien plus qu&apos;un simple outil, Tuina.ai est votre copilote quotidien pour organiser votre semestre, réviser intelligemment et cartonner à vos examens sans y passer vos nuits.
         </motion.p>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>

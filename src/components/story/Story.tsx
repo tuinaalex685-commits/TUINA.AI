@@ -28,15 +28,15 @@ export default function Story() {
         <motion.div variants={fadeUp} className={styles.lineIndicator} />
         
         <motion.h2 variants={fadeUp} className={styles.title}>
-          Créé par un étudiant, <span>pour les étudiants.</span>
+          Pensé par un étudiant, <span>pour les étudiants.</span>
         </motion.h2>
         
         <motion.div variants={fadeUp} className={styles.content}>
           <p>
-            Tuina.ai est née d&apos;un constat simple : les études de droit sont exigeantes et la quantité d&apos;informations à assimiler est colossale. Face au manque d&apos;organisation, à la difficulté de réviser des centaines de PDF de cours et à l&apos;absence d&apos;accompagnement personnalisé, il fallait une solution.
+            On le sait tous : les études de droit, c&apos;est dense. Entre la montagne de PDF à lire, les arrêts à ficher et l&apos;organisation qui finit souvent par lâcher en cours d&apos;année, on a vite fait de se sentir noyé sans un bon accompagnement.
           </p>
           <p>
-            Conçue par <strong>Tuina Zoubiesse Alex Ulrich</strong>, étudiant en droit, et ses collaborateurs, cette plateforme est exactement l&apos;outil que nous aurions rêvé avoir en première année pour structurer nos révisions et réussir nos examens.
+            C&apos;est de ce constat qu&apos;est née Tuina.ai. Créée par <strong>Tuina Zoubiesse Alex Ulrich</strong> (lui-même étudiant en droit) et son équipe, c&apos;est très exactement l&apos;outil qu&apos;on aurait tous rêvé d&apos;avoir en première année pour y voir clair et avancer sereinement.
           </p>
         </motion.div>
       </motion.div>
