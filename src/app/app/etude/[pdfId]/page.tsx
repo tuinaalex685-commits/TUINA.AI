@@ -7,7 +7,9 @@ export const metadata = {
   title: 'Étude en cours | Tuina.ai',
 };
 
-export default async function EtudeCoursePage({ params }: { params: { pdfId: string } }) {
+export default async function EtudeCoursePage({ params }: { params: Promise<{ pdfId: string }> }) {
+  const { pdfId } = await params;
+  
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -17,12 +19,12 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
   const { data: cours } = await supabase
     .from('etude_cours')
     .select('*')
-    .eq('pdf_id', params.pdfId)
+    .eq('pdf_id', pdfId)
     .single();
 
   if (!cours || cours.statut_generation !== 'pret') {
     // Pass generating flag
-    return <EtudeEngine pdfId={params.pdfId} isGenerating={true} />;
+    return <EtudeEngine pdfId={pdfId} isGenerating={true} />;
   }
 
   // Fetch all sections
@@ -103,7 +105,7 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
 
   return (
     <EtudeEngine 
-      pdfId={params.pdfId} 
+      pdfId={pdfId} 
       coursId={cours.id} 
       sections={sections} 
       themes={themes}
