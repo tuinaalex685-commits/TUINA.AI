@@ -60,8 +60,9 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
 
   if (progSections && progSections.length > 0) {
     // Find the furthest section that is not fully completed
-    for (let i = 0; i < (sections?.length || 0); i++) {
-      const pSec = progSections.find(p => p.section_id === sections[i].id);
+    const safeSections = sections || [];
+    for (let i = 0; i < safeSections.length; i++) {
+      const pSec = progSections.find(p => p.section_id === safeSections[i].id);
       if (!pSec || pSec.etat === 'non_commencee') {
         startSectionIdx = i;
         startStep = 'synthese';
@@ -73,7 +74,7 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
         startStep = pSec.etat; // e.g. 'synthese_vue', 'themes_en_cours'
         
         // Find which theme in this section
-        const secThemes = themes?.filter(t => t.section_id === sections[i].id) || [];
+        const secThemes = themes?.filter(t => t.section_id === safeSections[i].id) || [];
         for (let j = 0; j < secThemes.length; j++) {
           const pTheme = progThemes?.find(p => p.theme_id === secThemes[j].id);
           if (!pTheme || (!pTheme.forme_validee && !pTheme.fond_valide)) {
@@ -93,7 +94,7 @@ export default async function EtudeCoursePage({ params }: { params: { pdfId: str
       }
       
       // If we reach the last section and it's successful, we show fin_cours
-      if (i === (sections?.length || 0) - 1 && pSec.etat === 'cloture_reussie') {
+      if (i === safeSections.length - 1 && pSec.etat === 'cloture_reussie') {
         startSectionIdx = i;
         startStep = 'fin_cours';
       }
