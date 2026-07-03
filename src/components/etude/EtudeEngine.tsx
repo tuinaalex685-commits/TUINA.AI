@@ -61,7 +61,29 @@ export default function EtudeEngine({
     setSelectedAnswer(null);
     setShowFeedback(false);
 
+  const saveProgress = (action: string, payloadData: any) => {
+    if (coursId) {
+      fetch('/api/etude/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action, 
+          coursId, 
+          sectionId: currentSection?.id, 
+          themeId: currentTheme?.id,
+          data: payloadData 
+        })
+      }).catch(console.error);
+    }
+  };
+
+  const handleNextStep = async () => {
+    setRemediation(null);
+    setSelectedAnswer(null);
+    setShowFeedback(false);
+
     if (step === 'synthese') {
+      saveProgress('update_section', { etat: 'themes_en_cours' });
       setStep('explication');
     } else if (step === 'explication') {
       setStep('question_forme');
@@ -78,40 +100,22 @@ export default function EtudeEngine({
     } else if (step === 'cloture') {
       if (currentClotureIdx < (currentSection?.questions_cloture?.length || 0)) {
         setCurrentClotureIdx(currentClotureIdx + 1);
-        return; // we stay in cloture step until all questions are done
+        return; 
       }
-      // Section finished
+      // Section completed
+      saveProgress('update_section', { etat: 'cloture_reussie' });
+      setStep('fin_section');
+    } else if (step === 'fin_section') {
       if (currentSectionIdx < sections.length - 1) {
         setCurrentSectionIdx(currentSectionIdx + 1);
         setCurrentThemeIdx(0);
         setCurrentClotureIdx(0);
         setStep('synthese');
+        saveProgress('update_section', { etat: 'synthese_vue' }); // Optionnel, mais sécurise la reprise
       } else {
         setStep('fin_cours');
-        
-        // Mettre à jour le statut du cours entier à "termine"
-        if (coursId) {
-          fetch('/api/etude/progress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'start_cours', coursId, data: { statut: 'termine' } })
-          }).catch(console.error);
-        }
-        return;
+        saveProgress('start_cours', { statut: 'termine' });
       }
-    }
-    
-    // Save progress async
-    if (coursId) {
-      fetch('/api/etude/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'update_section', 
-          sectionId: currentSection?.id, 
-          data: { etat: step } 
-        })
-      }).catch(console.error);
     }
   };
 
@@ -141,21 +145,18 @@ export default function EtudeEngine({
     if (!isCorrect) {
       setRemediation(remediationText || "Ce n'est pas la bonne réponse. Relisez attentivement le concept.");
       
-      // Update progress with attempt increment
-      fetch('/api/etude/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'update_theme', 
-          themeId: currentTheme?.id, 
-          data: { 
-            increments: { 
-              tentative_forme: step === 'question_forme' ? 1 : 0,
-              tentative_fond: step === 'cas_pratique' ? 1 : 0
-            } 
-          } 
-        })
-      }).catch(console.error);
+      saveProgress('update_theme', { 
+        increments: { 
+          tentative_forme: step === 'question_forme' ? 1 : 0,
+          tentative_fond: step === 'cas_pratique' ? 1 : 0
+        } 
+      });
+    } else {
+      // Si correct
+      if (step === 'question_forme') saveProgress('update_theme', { forme_validee: true });
+      if (step === 'cloture') {
+        // Optionnel : enregistrer la progression de la cloture, mais ici la section entière sera validée à la fin
+      }
     }
   };
 
@@ -276,8 +277,14 @@ export default function EtudeEngine({
             <p className={styles.content}>{currentTheme.cas_pratique_fond.reponse_attendue_ou_choix}</p>
             <p style={{marginBottom: 16, fontSize: 14, color: 'var(--color-text-secondary)'}}>Avez-vous répondu correctement dans votre tête ou sur brouillon ?</p>
             <div style={{display: 'flex', gap: 12}}>
-              <button className={styles.primaryBtn} style={{background: '#00C864', color: '#fff'}} onClick={handleNextStep}>Oui, j&apos;avais bon !</button>
-              <button className={styles.primaryBtn} style={{background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)'}} onClick={() => setRemediation(currentTheme.remediation_fond?.[0]?.reexplication || "Lisez bien l'application.")}>Non, j&apos;ai fait erreur</button>
+              <button className={styles.primaryBtn} style={{background: '#00C864', color: '#fff'}} onClick={() => {
+                saveProgress('update_theme', { fond_valide: true });
+                handleNextStep();
+              }}>Oui, j&apos;avais bon !</button>
+              <button className={styles.primaryBtn} style={{background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)'}} onClick={() => {
+                setRemediation(currentTheme.remediation_fond?.[0]?.reexplication || "Lisez bien l'application.");
+                saveProgress('update_theme', { increments: { tentative_fond: 1 } });
+              }}>Non, j&apos;ai fait erreur</button>
             </div>
             
             {remediation && (
@@ -348,6 +355,25 @@ export default function EtudeEngine({
               <button className={styles.primaryBtn} onClick={handleNextStep}>Continuer vers la suite</button>
             </>
           )}
+        </div>
+      )}
+
+      {/* FIN DE SECTION (Transition) */}
+      {step === 'fin_section' && currentSection && (
+        <div className={styles.card}>
+          <span className={`${styles.tag} ${styles.tagSynthese}`} style={{background: '#00C864', color: '#fff'}}>Section Validée !</span>
+          <h2 className={styles.title}>Bravo, vous avez maîtrisé cette section.</h2>
+          <p className={styles.content}>
+            Vous venez de consolider vos connaissances sur le thème : <strong>{currentSection.titre}</strong>.
+          </p>
+          <div className={styles.feedbackBox}>
+            <p className={styles.feedbackTitle}>Synthèse :</p>
+            <p className={styles.content}>{currentSection.synthese}</p>
+          </div>
+          
+          <button className={styles.primaryBtn} onClick={handleNextStep}>
+            {currentSectionIdx < sections.length - 1 ? "Passer à la section suivante" : "Terminer le cours"}
+          </button>
         </div>
       )}
 
