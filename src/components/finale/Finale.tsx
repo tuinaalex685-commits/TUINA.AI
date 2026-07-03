@@ -25,13 +25,18 @@ export default function Finale() {
         </motion.h2>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
-          <Link href="/login" className={styles.hugeBtn}>
-            Créer mon compte
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
-          </Link>
+          <div className={styles.actionGroup}>
+            <Link href="/login" className={styles.hugeBtn}>
+              Créer mon compte
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </Link>
+            <p className={styles.accessCodeNotice}>
+              <span className={styles.lockIcon}>🔒</span> Un code d&apos;accès est requis pour rejoindre la plateforme.
+            </p>
+          </div>
         </motion.div>
       </motion.div>
     </section>

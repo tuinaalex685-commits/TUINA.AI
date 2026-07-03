@@ -32,7 +32,7 @@ export default function Home() {
         <div className={styles.footerContent}>
           <p className={styles.copyright}>© {new Date().getFullYear()} Tuina.ai. Tous droits réservés.</p>
           <div className={styles.footerInfo}>
-            <span>Fait avec passion au Burkina Faso 🇧🇫</span>
+            <span style={{ fontSize: '18px' }}>🇧🇫</span>
             <span className={styles.separator}>•</span>
             <a href="tel:+22657138126" className={styles.contactLink}>Contact : +226 57 13 81 26</a>
           </div>
