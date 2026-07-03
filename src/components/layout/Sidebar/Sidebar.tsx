@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard', path: '/app/dashboard', icon: '📊' },
   { label: 'Objectifs', path: '/app/objectifs', icon: '🎯' },
   { label: 'Matières', path: '/app/matieres', icon: '📚' },
+  { label: 'Étude Guidée', path: '/app/etude', icon: '📖' },
   { label: 'Bibliothèque', path: '/app/bibliotheque', icon: '📁' },
   { label: 'Révisions', path: '/app/revisions', icon: '🧠' },
   { label: 'Évaluations', path: '/app/evaluations', icon: '📝' },

@@ -1,0 +1,177 @@
+.engineContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.loaderContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: 24px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(0, 112, 243, 0.2);
+  border-top-color: #0070f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  color: var(--text-muted);
+  font-size: 16px;
+  text-align: center;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 40px;
+  margin-bottom: 24px;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 24px;
+}
+
+.tagSynthese { background: rgba(124, 92, 255, 0.1); color: #7C5CFF; }
+.tagExplication { background: rgba(0, 112, 243, 0.1); color: #3291FF; }
+.tagQuestion { background: rgba(255, 165, 0, 0.1); color: #FFA500; }
+.tagCasPratique { background: rgba(0, 200, 100, 0.1); color: #00C864; }
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 24px;
+}
+
+.content {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  white-space: pre-wrap;
+}
+
+.optionsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.optionBtn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-light);
+  padding: 16px;
+  border-radius: 12px;
+  color: var(--text-main);
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.optionBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.optionBtn.selected {
+  background: rgba(0, 112, 243, 0.1);
+  border-color: #0070F3;
+}
+
+.optionBtn.correct {
+  background: rgba(0, 200, 100, 0.1);
+  border-color: #00C864;
+  color: #00C864;
+}
+
+.optionBtn.incorrect {
+  background: rgba(255, 50, 50, 0.1);
+  border-color: #FF3232;
+  color: #FF3232;
+}
+
+.primaryBtn {
+  background: var(--text-main);
+  color: var(--bg-dark);
+  border: none;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  width: 100%;
+}
+
+.primaryBtn:hover {
+  opacity: 0.9;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedbackBox {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  animation: slideUp 0.3s ease-out;
+}
+
+.feedbackTitle {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-main);
+}
+
+.remediationBtn {
+  margin-top: 16px;
+  background: rgba(124, 92, 255, 0.1);
+  color: #7C5CFF;
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.remediationBtn:hover {
+  background: rgba(124, 92, 255, 0.2);
+}

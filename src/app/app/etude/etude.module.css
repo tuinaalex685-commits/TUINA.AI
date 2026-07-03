@@ -1,0 +1,95 @@
+.container {
+  padding: 32px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  border-color: #0070f3;
+  box-shadow: 0 4px 20px rgba(0, 112, 243, 0.1);
+  transform: translateY(-2px);
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardStatus {
+  display: inline-block;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+
+.statusNonCommence {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.statusEnCours {
+  background: rgba(0, 112, 243, 0.1);
+  color: #3291FF;
+}
+
+.statusTermine {
+  background: rgba(0, 200, 100, 0.1);
+  color: #00c864;
+}
+
+.btn {
+  margin-top: auto;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--text-main);
+  color: var(--bg-dark);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn:hover {
+  background: #e0e0e0;
+}
