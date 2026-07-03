@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 // @ts-ignore - Les types pour pdf-parse n'existent pas nativement
 import pdfParse from 'pdf-parse';
 import crypto from 'crypto';
+
+const supabaseAdmin = createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // Types pour l'API Gemini @google/genai
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -113,7 +119,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Vérifier si une génération existe déjà (Couche 1)
-    let { data: coursEtude } = await supabase
+    let { data: coursEtude } = await supabaseAdmin
       .from('etude_cours')
       .select('*')
       .eq('pdf_id', documentId)
@@ -129,7 +135,7 @@ export async function POST(req: NextRequest) {
       // Si statut est 'erreur', on continue pour réessayer
     } else {
       // Créer l'entrée
-      const { data: newCours, error: insertError } = await supabase
+      const { data: newCours, error: insertError } = await supabaseAdmin
         .from('etude_cours')
         .insert({ pdf_id: documentId, statut_generation: 'en_cours' })
         .select()
@@ -140,7 +146,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Mettre le statut en cours (pour le retry ou si nouveau)
-    await supabase.from('etude_cours').update({ statut_generation: 'en_cours' }).eq('id', coursEtude.id);
+    await supabaseAdmin.from('etude_cours').update({ statut_generation: 'en_cours' }).eq('id', coursEtude.id);
 
     try {
       // 3. Télécharger le PDF
@@ -150,7 +156,7 @@ export async function POST(req: NextRequest) {
 
       // Calculer le Hash pour éviter les doublons absolus (sécurité supplémentaire)
       const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-      await supabase.from('etude_cours').update({ generation_hash: hash }).eq('id', coursEtude.id);
+      await supabaseAdmin.from('etude_cours').update({ generation_hash: hash }).eq('id', coursEtude.id);
 
       // 4. Parser le PDF
       const pdfData = await pdfParse(buffer);
@@ -202,7 +208,7 @@ export async function POST(req: NextRequest) {
 
       // 6. Sauvegarder en DB (Couche 1)
       for (const section of generatedData.sections) {
-        const { data: sectionData, error: secError } = await supabase
+        const { data: sectionData, error: secError } = await supabaseAdmin
           .from('etude_sections')
           .insert({
             cours_id: coursEtude.id,
@@ -217,7 +223,7 @@ export async function POST(req: NextRequest) {
         if (secError) throw new Error(`Erreur insertion section: ${secError.message}`);
 
         for (const theme of section.themes) {
-          const { error: themeError } = await supabase
+          const { error: themeError } = await supabaseAdmin
             .from('etude_themes')
             .insert({
               section_id: sectionData.id,
@@ -235,14 +241,14 @@ export async function POST(req: NextRequest) {
       }
 
       // Tout s'est bien passé, on passe le statut à pret
-      await supabase.from('etude_cours').update({ statut_generation: 'pret' }).eq('id', coursEtude.id);
+      await supabaseAdmin.from('etude_cours').update({ statut_generation: 'pret' }).eq('id', coursEtude.id);
 
       return NextResponse.json({ success: true, coursId: coursEtude.id });
 
     } catch (processError: any) {
       console.error("Erreur de traitement PDF/IA:", processError);
       // Fallback: passer le statut en erreur
-      await supabase.from('etude_cours').update({ statut_generation: 'erreur' }).eq('id', coursEtude.id);
+      await supabaseAdmin.from('etude_cours').update({ statut_generation: 'erreur' }).eq('id', coursEtude.id);
       return NextResponse.json({ error: processError.message || "Erreur de génération du cours" }, { status: 500 });
     }
 

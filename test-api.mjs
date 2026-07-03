@@ -1,39 +1,31 @@
-import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const type = 'qcm';
-let instruction = "Génère 2 questions à choix multiples (QCM). Fournis 4 options par question et indique l'index de la bonne réponse.";
-const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}\n\nIMPORTANT: Tu DOIS générer un JSON valide contenant un tableau d'objets. Ne rajoute aucun texte avant ou après le JSON.
-Tu DOIS utiliser EXACTEMENT ces noms de propriétés pour chaque objet du tableau :
-- "question" : le texte de la question, de l'affirmation ou du cas pratique
-${type === 'qcm' || type === 'vrai_faux' ? '- "options" : un tableau de chaînes de caractères (les choix de réponses)\n- "correctAnswer" : un nombre entier représentant l\'index de la bonne réponse (commençant à 0)\n- "explication" : l\'explication de la réponse' : '- "expectedAnswer" : la réponse ou les éléments de correction attendus'}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-Exemple de format attendu :
-[
-  {
-    "question": "...",
-    ${type === 'qcm' || type === 'vrai_faux' ? '"options": ["...", "..."],\n    "correctAnswer": 0,\n    "explication": "..."' : '"expectedAnswer": "..."'}
+async function test() {
+  const { data: docs, error: fetchError } = await supabase.from('documents').select('id').limit(1);
+  if (fetchError || !docs || docs.length === 0) {
+    console.error("Fetch docs error:", fetchError);
+    return;
   }
-]`;
-
-async function run() {
-  const stream = await ai.models.generateContentStream({
-    model: 'gemini-1.5-flash',
-    contents: "Base-toi strictement sur le cours de droit constitutionnel français.",
-    config: {
-      systemInstruction,
-      responseMimeType: 'application/json',
-    }
-  });
-
-  let fullResponse = "";
-  for await (const chunk of stream) {
-    if (chunk.text) {
-      fullResponse += chunk.text;
-    }
+  const documentId = docs[0].id;
+  console.log("Testing with documentId:", documentId);
+  
+  const { data: newCours, error: insertError } = await supabase
+    .from('etude_cours')
+    .insert({ pdf_id: documentId, statut_generation: 'en_cours' })
+    .select()
+    .single();
+    
+  if (insertError) {
+    console.error("INSERT ERROR:", insertError);
+  } else {
+    console.log("INSERT SUCCESS:", newCours);
   }
-  console.log(fullResponse);
 }
-run();
+test();
