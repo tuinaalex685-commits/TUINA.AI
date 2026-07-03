@@ -249,7 +249,7 @@ export default function EtudeEngine({
       {step === 'cas_pratique' && currentTheme && (
         <div className={styles.card}>
           <span className={`${styles.tag} ${styles.tagCasPratique}`}>Mise en Situation (Pratique)</span>
-          <p className={styles.content} style={{ fontStyle: 'italic', background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8 }}>
+          <p className={styles.content} style={{ fontStyle: 'italic', background: 'var(--color-bg-secondary)', padding: 16, borderRadius: 8 }}>
             {currentTheme.cas_pratique_fond.situation}
           </p>
           <h2 className={styles.title} style={{ fontSize: 22 }}>{currentTheme.cas_pratique_fond.question}</h2>
@@ -258,14 +258,14 @@ export default function EtudeEngine({
           <div className={styles.feedbackBox}>
             <p className={styles.feedbackTitle}>Réponse attendue par l&apos;IA :</p>
             <p className={styles.content}>{currentTheme.cas_pratique_fond.reponse_attendue_ou_choix}</p>
-            <p style={{marginBottom: 16, fontSize: 14, color: 'var(--text-muted)'}}>Avez-vous répondu correctement dans votre tête ou sur brouillon ?</p>
+            <p style={{marginBottom: 16, fontSize: 14, color: 'var(--color-text-secondary)'}}>Avez-vous répondu correctement dans votre tête ou sur brouillon ?</p>
             <div style={{display: 'flex', gap: 12}}>
-              <button className={styles.primaryBtn} style={{background: '#00C864', color: '#000'}} onClick={handleNextStep}>Oui, j&apos;avais bon !</button>
-              <button className={styles.primaryBtn} style={{background: 'rgba(255,255,255,0.1)'}} onClick={() => setRemediation(currentTheme.remediation_fond?.[0]?.reexplication || "Lisez bien l'application.")}>Non, j&apos;ai fait erreur</button>
+              <button className={styles.primaryBtn} style={{background: '#00C864', color: '#fff'}} onClick={handleNextStep}>Oui, j&apos;avais bon !</button>
+              <button className={styles.primaryBtn} style={{background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)'}} onClick={() => setRemediation(currentTheme.remediation_fond?.[0]?.reexplication || "Lisez bien l'application.")}>Non, j&apos;ai fait erreur</button>
             </div>
             
             {remediation && (
-              <div style={{marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)'}}>
+              <div style={{marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)'}}>
                 <p className={styles.content}>{remediation}</p>
               </div>
             )}

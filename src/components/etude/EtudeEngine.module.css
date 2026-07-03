@@ -30,14 +30,14 @@
 }
 
 .loadingText {
-  color: var(--text-muted);
+  color: var(--color-text-secondary);
   font-size: 16px;
   text-align: center;
 }
 
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
+  background: var(--color-bg-primary, #ffffff);
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   padding: 40px;
   margin-bottom: 24px;
@@ -68,14 +68,14 @@
 .title {
   font-size: 28px;
   font-weight: 700;
-  color: var(--text-main);
+  color: var(--color-text-main);
   margin-bottom: 24px;
 }
 
 .content {
   font-size: 16px;
   line-height: 1.7;
-  color: var(--text-muted);
+  color: var(--color-text-secondary);
   margin-bottom: 32px;
   white-space: pre-wrap;
 }
@@ -88,11 +88,11 @@
 }
 
 .optionBtn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-light);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   padding: 16px;
   border-radius: 12px;
-  color: var(--text-main);
+  color: var(--color-text-main);
   font-size: 16px;
   text-align: left;
   cursor: pointer;
@@ -100,8 +100,8 @@
 }
 
 .optionBtn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .optionBtn.selected {
@@ -122,8 +122,8 @@
 }
 
 .primaryBtn {
-  background: var(--text-main);
-  color: var(--bg-dark);
+  background: var(--color-primary, #6366f1);
+  color: white;
   border: none;
   padding: 14px 24px;
   border-radius: 8px;
@@ -147,15 +147,15 @@
   margin-top: 24px;
   padding: 20px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-light);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   animation: slideUp 0.3s ease-out;
 }
 
 .feedbackTitle {
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--text-main);
+  color: var(--color-text-main);
 }
 
 .remediationBtn {
