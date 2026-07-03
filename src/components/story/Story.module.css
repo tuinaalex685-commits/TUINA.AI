@@ -14,10 +14,10 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background-image: url('/hero-bg-jeunes.png');
+  background-image: url('/story-library-bg.png');
   background-size: cover;
   background-position: center;
-  opacity: 0.15;
+  opacity: 0.20;
   mask-image: linear-gradient(to bottom, black 10%, transparent 90%);
   -webkit-mask-image: linear-gradient(to bottom, black 10%, transparent 90%);
 }
