@@ -23,6 +23,13 @@ const features = [
 export default function Features() {
   return (
     <section className={styles.featuresSection} id="features">
+      {/* Fond lumineux azur/blanc (arrière-plan profond) */}
+      <div className={styles.luminousBackground}>
+        <div className={styles.glowCyan} />
+        <div className={styles.glowAzure} />
+        <div className={styles.glowWhite} />
+      </div>
+
       <div className={styles.container}>
         <div className={styles.header}>
           <motion.h2 
