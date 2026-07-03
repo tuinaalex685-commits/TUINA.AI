@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
+// @ts-ignore - Les types pour pdf-parse n'existent pas nativement
 import pdfParse from 'pdf-parse';
 import crypto from 'crypto';
 
