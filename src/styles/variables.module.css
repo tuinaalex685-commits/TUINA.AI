@@ -1,8 +1,9 @@
 :global(:root) {
-  --noir-profond: #08090C;
-  --graphite: #14161B;
-  --champagne: #E8C989;
-  --violet-electrique: #7C5CFF;
-  --chrome: #C9CDD3;
-  --blanc: #F5F5F7;
+  --bg-dark: #000000;
+  --bg-card: #0A0A0A;
+  --border-light: rgba(255, 255, 255, 0.1);
+  --border-glow: rgba(255, 255, 255, 0.3);
+  --text-main: #FFFFFF;
+  --text-muted: #888888;
+  --accent-glow: rgba(124, 92, 255, 0.5); /* Subtle violet glow */
 }

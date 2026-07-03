@@ -1,6 +1,6 @@
 .container {
   min-height: 100vh;
-  background-color: var(--noir-profond);
+  background-color: var(--bg-dark);
   display: flex;
   flex-direction: column;
 }
@@ -18,45 +18,43 @@
 }
 
 .logo {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 800;
-  font-size: 24px;
-  color: var(--blanc);
+  font-size: 20px;
+  color: var(--text-main);
   letter-spacing: -0.02em;
 }
 
 .loginBtn {
   font-family: var(--font-inter), sans-serif;
   font-size: 14px;
-  font-weight: 600;
-  color: var(--blanc);
+  font-weight: 500;
+  color: var(--text-main);
   text-decoration: none;
-  padding: 10px 24px;
-  border-radius: 99px;
-  border: 1px solid rgba(201, 205, 211, 0.2); /* chrome */
-  background: rgba(20, 22, 27, 0.5); /* graphite */
+  padding: 8px 20px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  transition: all 0.2s ease;
   backdrop-filter: blur(8px);
-  transition: all 0.3s ease;
 }
 
 .loginBtn:hover {
-  background-color: var(--blanc);
-  color: var(--noir-profond);
-  transform: translateY(-2px);
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .footer {
-  background-color: var(--noir-profond);
+  background-color: var(--bg-dark);
   padding: 40px 24px;
   text-align: center;
-  border-top: 1px solid rgba(201, 205, 211, 0.1);
+  border-top: 1px solid var(--border-light);
 }
 
 .footer p {
-  font-family: var(--font-space-mono), monospace;
-  font-size: 12px;
-  color: var(--chrome);
-  opacity: 0.6;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {

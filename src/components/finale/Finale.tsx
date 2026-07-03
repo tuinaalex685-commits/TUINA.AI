@@ -6,35 +6,31 @@ import { motion, Variants } from "framer-motion";
 import styles from "./Finale.module.css";
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
 };
 
 export default function Finale() {
   return (
     <section className={styles.finaleSection}>
-      {/* Background discrete SVG */}
-      <div className={styles.bgSvg}>
-        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-          <path d="M96 40 h8 v110 h-8 zM40 50 h120 v6 h-120 z" fill="rgba(255,255,255,0.02)" />
-        </svg>
-      </div>
-
       <motion.div 
         className={styles.content}
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "-100px" }}
-        variants={{ visible: { transition: { staggerChildren: 0.06 } } }}
+        variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
       >
         <motion.h2 variants={fadeUp} className={styles.title}>
-          L&apos;IA ne vous remplace pas.<br/>
-          Elle vous élève.
+          Prêt à exceller ?
         </motion.h2>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
-          <Link href="/login" className={styles.pillBtn}>
+          <Link href="/login" className={styles.hugeBtn}>
             Accéder à la plateforme
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
           </Link>
         </motion.div>
       </motion.div>

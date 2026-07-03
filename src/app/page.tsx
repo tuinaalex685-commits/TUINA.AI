@@ -5,8 +5,9 @@ import Link from "next/link";
 import styles from "./page.module.css";
 
 import Hero from "../components/hero/Hero";
-import Status from "../components/status/Status";
-import Articles from "../components/articles/Articles";
+import Story from "../components/story/Story";
+import Features from "../components/features/Features";
+import Different from "../components/different/Different";
 import Finale from "../components/finale/Finale";
 
 export default function Home() {
@@ -16,13 +17,14 @@ export default function Home() {
       <nav className={styles.nav}>
         <div className={styles.logo}>TUINA.AI</div>
         <Link href="/login" className={styles.loginBtn}>
-          Connexion
+          Se connecter
         </Link>
       </nav>
 
       <Hero />
-      <Status />
-      <Articles />
+      <Story />
+      <Features />
+      <Different />
       <Finale />
 
       {/* Footer */}

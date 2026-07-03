@@ -1,13 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
 import styles from "./Hero.module.css";
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
 };
 
 const staggerContainer: Variants = {
@@ -15,53 +15,39 @@ const staggerContainer: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.06
+      staggerChildren: 0.15
     }
   }
 };
 
 export default function Hero() {
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({
+        x: (e.clientX / window.innerWidth) * 2 - 1,
+        y: (e.clientY / window.innerHeight) * 2 - 1,
+      });
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, []);
+
   return (
     <section className={styles.heroSection}>
-      {/* Animated Mesh Gradient Background */}
-      <div className={styles.meshGradient} />
+      {/* Grid and Particles Background */}
+      <div className={styles.gridBg} />
       
-      {/* Floating 3D/Glass Balance of Justice SVG */}
-      <div className={styles.glassBalanceContainer}>
-        <svg viewBox="0 0 200 200" className={styles.glassBalanceSvg} xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
-              <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
-            </linearGradient>
-            <linearGradient id="chromeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#C9CDD3" />
-              <stop offset="50%" stopColor="#FFFFFF" />
-              <stop offset="100%" stopColor="#8A8E94" />
-            </linearGradient>
-            <filter id="glassFilter" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#7C5CFF" floodOpacity="0.2" />
-            </filter>
-          </defs>
-          
-          <g filter="url(#glassFilter)">
-            {/* Center Pillar */}
-            <path d="M96 40 h8 v110 h-8 z" fill="url(#glassGradient)" stroke="url(#chromeGradient)" strokeWidth="1.5" />
-            <path d="M85 150 h30 v10 h-30 z" fill="url(#glassGradient)" stroke="url(#chromeGradient)" strokeWidth="1.5" />
-            
-            {/* Top Beam */}
-            <path d="M40 50 h120 v6 h-120 z" fill="url(#glassGradient)" stroke="url(#chromeGradient)" strokeWidth="1.5" />
-            
-            {/* Left Scale */}
-            <path d="M40 56 l-15 40 h30 z" fill="none" stroke="url(#chromeGradient)" strokeWidth="1" opacity="0.6"/>
-            <path d="M20 96 q20 15 40 0" fill="url(#glassGradient)" stroke="url(#chromeGradient)" strokeWidth="1.5" />
-            
-            {/* Right Scale */}
-            <path d="M160 56 l-15 40 h30 z" fill="none" stroke="url(#chromeGradient)" strokeWidth="1" opacity="0.6"/>
-            <path d="M140 96 q20 15 40 0" fill="url(#glassGradient)" stroke="url(#chromeGradient)" strokeWidth="1.5" />
-          </g>
-        </svg>
-      </div>
+      {/* Dynamic Glow following mouse slightly */}
+      <motion.div 
+        className={styles.dynamicGlow}
+        animate={{
+          x: mousePosition.x * 30,
+          y: mousePosition.y * 30,
+        }}
+        transition={{ type: "spring", stiffness: 50, damping: 20 }}
+      />
       
       <motion.div 
         className={styles.content}
@@ -69,17 +55,27 @@ export default function Hero() {
         animate="visible"
         variants={staggerContainer}
       >
+        <motion.div variants={fadeUp} className={styles.badge}>
+          <span className={styles.badgeDot} />
+          Tuina.ai est maintenant disponible
+        </motion.div>
+
         <motion.h1 variants={fadeUp} className={styles.title}>
-          TUINA<span className={styles.highlight}>.AI</span>
+          L&apos;IA qui accompagne <span>réellement</span><br />
+          les étudiants en droit.
         </motion.h1>
         
         <motion.p variants={fadeUp} className={styles.subtitle}>
-          Deviens le juriste que tu es censé devenir.
+          Tuina.ai n&apos;est pas seulement une IA. C&apos;est une plateforme complète conçue pour organiser, réviser et exceller dans vos études universitaires.
         </motion.p>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
-          <Link href="/login" className={styles.pillBtn}>
-            Rejoindre maintenant
+          <Link href="/login" className={styles.primaryBtn}>
+            Commencer mon apprentissage
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
           </Link>
         </motion.div>
       </motion.div>
