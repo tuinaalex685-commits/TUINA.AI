@@ -32,9 +32,10 @@ export default async function EtudeListPage() {
   // Maper la progression par pdf_id
   const progressByPdf = new Map();
   if (progressions) {
-    progressions.forEach(p => {
-      if (p.etude_cours && p.etude_cours.pdf_id) {
-        progressByPdf.set(p.etude_cours.pdf_id, {
+    progressions.forEach((p: any) => {
+      const coursData = Array.isArray(p.etude_cours) ? p.etude_cours[0] : p.etude_cours;
+      if (coursData && coursData.pdf_id) {
+        progressByPdf.set(coursData.pdf_id, {
           statut: p.statut,
           coursId: p.cours_id
         });
