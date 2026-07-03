@@ -248,6 +248,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("API Generer Etude Error:", error);
-    return NextResponse.json({ error: "Erreur serveur interne" }, { status: 500 });
+    return NextResponse.json({ error: "Erreur serveur interne: " + (error.message || String(error)) }, { status: 500 });
   }
 }
