@@ -36,6 +36,9 @@ export default function Hero() {
 
   return (
     <section className={styles.heroSection}>
+      {/* Background Image of Young Lawyers */}
+      <div className={styles.imageBg} />
+      
       {/* Grid and Particles Background */}
       <div className={styles.gridBg} />
       
@@ -48,6 +51,7 @@ export default function Hero() {
         }}
         transition={{ type: "spring", stiffness: 50, damping: 20 }}
       />
+
       
       <motion.div 
         className={styles.content}
