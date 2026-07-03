@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
-import { Modal } from '@/components/ui/Modal/Modal';
-import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function EtudeList({ documents, progressByPdf }: { documents: any[], progressByPdf: any }) {
   const router = useRouter();
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
@@ -17,22 +15,21 @@ export default function EtudeList({ documents, progressByPdf }: { documents: any
         <div>
           <h1 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '28px' }}>Choisis ton cours</h1>
           <p style={{ margin: 0, color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-            Sélectionne un PDF pour démarrer l'étude séquentielle guidée par l'IA.
+            Sélectionne un PDF issu de votre bibliothèque pour démarrer l'étude séquentielle guidée par l'IA.
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} style={{ padding: '10px 20px' }}>
-          ➕ Importer un PDF
-        </Button>
       </header>
 
       {documents.length === 0 ? (
         <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 24px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
           <span style={{ fontSize: '48px', marginBottom: '16px' }}>📖</span>
           <h3 style={{ color: 'var(--color-text-main)', fontSize: '20px', margin: 0 }}>Aucun cours disponible</h3>
-          <p style={{ marginTop: '8px', marginBottom: '24px' }}>Importe ton premier PDF pour générer ton apprentissage guidé.</p>
-          <Button onClick={() => setIsModalOpen(true)} style={{ padding: '12px 24px' }}>
-            Importer un cours
-          </Button>
+          <p style={{ marginTop: '8px', marginBottom: '24px' }}>Vous n'avez importé aucun PDF. L'import se fait exclusivement dans la Bibliothèque.</p>
+          <Link href="/app/bibliotheque">
+            <Button style={{ padding: '12px 24px' }}>
+              Aller dans la Bibliothèque pour importer
+            </Button>
+          </Link>
         </Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--spacing-standard)' }}>
@@ -69,17 +66,6 @@ export default function EtudeList({ documents, progressByPdf }: { documents: any
           })}
         </div>
       )}
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Importer un PDF de cours">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
-          <DocumentUploader 
-            onUploadComplete={() => {
-              setIsModalOpen(false);
-              router.refresh();
-            }}
-          />
-        </div>
-      </Modal>
     </div>
   );
 }

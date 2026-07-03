@@ -18,9 +18,9 @@ export default async function EtudeListPage() {
   // 1. Récupérer tous les documents de l'étudiant
   const { data: documents } = await supabase
     .from('documents')
-    .select('id, nom, created_at')
+    .select('id, nom, date_import')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('date_import', { ascending: false });
 
   // 2. Récupérer la progression pour ces documents
   const { data: progressions } = await supabase
