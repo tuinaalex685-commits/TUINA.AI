@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    const prompt = `Tu es un professeur tuteur expérimenté. 
+    const prompt = `Tu es un professeur de droit très exigeant sur la méthodologie juridique. 
 Concept enseigné : "${themeTitre}"
 Explication du concept : "${themeExplication}"
 
@@ -52,10 +52,10 @@ Réponse idéale attendue : "${expectedAnswer}"
 Réponse de l'étudiant : "${userAnswer}"
 
 Ta tâche :
-1. Évaluer la réponse de l'étudiant. A-t-il compris l'essentiel du concept ? (Il n'a pas besoin d'avoir les mots exacts, cherche la compréhension du fond).
-2. Fournir une courte explication pour valider ou corriger (utilise le tutoiement ou vouvoiement de manière bienveillante).
-3. SI sa réponse est fausse (correct: false), tu dois OBLIGATOIREMENT inventer un nouveau cas pratique (nouveau_cas) totalement différent (autre situation, autre contexte) mais qui teste EXACTEMENT le même concept ("${themeTitre}").
-Si sa réponse est juste (correct: true), nouveau_cas doit être null.`;
+1. Évaluer la réponse de l'étudiant. A-t-il compris le fond du concept MAIS AUSSI a-t-il utilisé un raisonnement juridique structuré (le syllogisme : Majeure/Règle de droit, Mineure/Faits, Conclusion) ? S'il donne juste la réponse sans expliquer le raisonnement, tu dois le corriger (correct: false).
+2. Fournir une explication pédagogique. Si la méthodologie (syllogisme) manque ou est floue, rappelle-lui gentiment qu'en droit, le raisonnement compte autant que la solution.
+3. SI sa réponse est fausse ou manque de méthode juridique (correct: false), tu dois OBLIGATOIREMENT inventer un nouveau cas pratique (nouveau_cas) totalement différent (autre situation) mais qui teste EXACTEMENT le même concept ("${themeTitre}") pour qu'il s'entraîne à nouveau au syllogisme.
+Si sa réponse est juste ET argumentée (correct: true), nouveau_cas doit être null.`;
 
     const aiResponse = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
