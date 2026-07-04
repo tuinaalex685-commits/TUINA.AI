@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { documentId } = body;
+    const { documentId, force } = body;
 
     if (!documentId) {
       return NextResponse.json({ error: "ID de document manquant" }, { status: 400 });
@@ -130,10 +130,10 @@ export async function POST(req: NextRequest) {
       if (coursEtude.statut_generation === 'pret') {
         return NextResponse.json({ success: true, message: "Déjà généré", coursId: coursEtude.id });
       }
-      if (coursEtude.statut_generation === 'en_cours') {
+      if (coursEtude.statut_generation === 'en_cours' && !force) {
         return NextResponse.json({ success: false, error: "Génération déjà en cours" }, { status: 409 });
       }
-      // Si statut est 'erreur', on continue pour réessayer
+      // Si statut est 'erreur' ou si force === true, on continue pour réessayer
     } else {
       // Créer l'entrée
       const { data: newCours, error: insertError } = await supabaseAdmin

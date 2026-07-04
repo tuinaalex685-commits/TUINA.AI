@@ -54,12 +54,14 @@ export default function EtudeEngine({
     }
   }, [coursId]);
 
-  const generateCourse = async () => {
+  const generateCourse = async (force: boolean = false) => {
     try {
+      setLoading(true);
+      setError('');
       const res = await fetch('/api/etude/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: pdfId })
+        body: JSON.stringify({ documentId: pdfId, force })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur de génération");
@@ -232,7 +234,7 @@ export default function EtudeEngine({
         <div className={styles.card}>
           <h2 className={styles.title} style={{ color: '#FF3232' }}>Erreur de génération</h2>
           <p className={styles.content}>{error}</p>
-          <button className={styles.primaryBtn} onClick={() => window.location.reload()}>Réessayer</button>
+          <button className={styles.primaryBtn} onClick={() => generateCourse(true)}>Réessayer</button>
         </div>
       </div>
     );
