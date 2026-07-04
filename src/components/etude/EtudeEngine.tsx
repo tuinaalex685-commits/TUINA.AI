@@ -47,6 +47,9 @@ export default function EtudeEngine({
   // Helper pour obtenir le cas actif (celui de base, ou celui généré par l'IA)
   const activeCas = dynamicCas || (currentTheme?.cas_pratique_fond);
 
+  // Helper pour normaliser les chaines (gérer la ponctuation IA)
+  const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
+
   useEffect(() => {
     if (!coursId) {
       // Trigger generation
@@ -181,17 +184,17 @@ export default function EtudeEngine({
     let remediationText = "";
 
     if (step === 'question_forme') {
-      isCorrect = answer === currentTheme.question_forme.reponse_correcte;
+      isCorrect = normalize(answer) === normalize(currentTheme.question_forme.reponse_correcte);
       if (!isCorrect && currentTheme.remediation_forme?.length > 0) {
         remediationText = currentTheme.remediation_forme[0].reexplication;
       }
     } else if (step === 'cas_pratique') {
-      isCorrect = answer === currentTheme.cas_pratique_fond.reponse_attendue_ou_choix;
+      isCorrect = normalize(answer) === normalize(currentTheme.cas_pratique_fond.reponse_attendue_ou_choix);
       if (!isCorrect && currentTheme.remediation_fond?.length > 0) {
         remediationText = currentTheme.remediation_fond[0].reexplication;
       }
     } else if (step === 'cloture') {
-      isCorrect = answer === currentSection.questions_cloture[currentClotureIdx]?.reponse_correcte;
+      isCorrect = normalize(answer) === normalize(currentSection.questions_cloture[currentClotureIdx]?.reponse_correcte);
     }
 
     setShowFeedback(true);
@@ -274,7 +277,7 @@ export default function EtudeEngine({
           <div className={styles.optionsGrid}>
             {currentTheme.question_forme.choix.map((choix: string, i: number) => {
               const isSelected = selectedAnswer === choix;
-              const isCorrect = choix === currentTheme.question_forme.reponse_correcte;
+              const isCorrect = normalize(choix) === normalize(currentTheme.question_forme.reponse_correcte);
               let btnClass = styles.optionBtn;
               
               if (showFeedback) {
@@ -299,7 +302,7 @@ export default function EtudeEngine({
 
           {showFeedback && (
             <div className={styles.feedbackBox}>
-              {selectedAnswer === currentTheme.question_forme.reponse_correcte ? (
+              {(selectedAnswer && normalize(selectedAnswer) === normalize(currentTheme.question_forme.reponse_correcte)) ? (
                 <>
                   <p className={styles.feedbackTitle} style={{color: '#00C864'}}>Excellent !</p>
                   <button className={styles.primaryBtn} onClick={handleNextStep}>Passer à la pratique</button>
@@ -389,7 +392,7 @@ export default function EtudeEngine({
               <div className={styles.optionsGrid}>
                 {currentSection.questions_cloture[currentClotureIdx].choix.map((choix: string, i: number) => {
                   const isSelected = selectedAnswer === choix;
-                  const isCorrect = choix === currentSection.questions_cloture[currentClotureIdx].reponse_correcte;
+                  const isCorrect = normalize(choix) === normalize(currentSection.questions_cloture[currentClotureIdx].reponse_correcte);
                   let btnClass = styles.optionBtn;
                   
                   if (showFeedback) {
@@ -414,7 +417,7 @@ export default function EtudeEngine({
 
               {showFeedback && (
                 <div className={styles.feedbackBox}>
-                  {selectedAnswer === currentSection.questions_cloture[currentClotureIdx].reponse_correcte ? (
+                  {(selectedAnswer && normalize(selectedAnswer) === normalize(currentSection.questions_cloture[currentClotureIdx].reponse_correcte)) ? (
                     <>
                       <p className={styles.feedbackTitle} style={{color: '#00C864'}}>Correct !</p>
                       <button className={styles.primaryBtn} onClick={handleNextStep}>Question suivante</button>
