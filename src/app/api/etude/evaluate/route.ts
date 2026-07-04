@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    const prompt = `Tu es un professeur d'université très exigeant sur la méthodologie.
+    const prompt = `Tu es un professeur d'université bienveillant et pédagogue.
 Concept enseigné : "${themeTitre}"
 Explication du concept : "${themeExplication}"
 
@@ -52,12 +52,14 @@ Réponse idéale attendue : "${expectedAnswer}"
 Réponse de l'étudiant : "${userAnswer}"
 
 Ta tâche :
-1. ANALYSER LA NATURE DU CONCEPT : Détermine d'abord si ce concept nécessite une approche strictement juridique (application d'une règle de droit à des faits) OU une approche théorique/historique (analyse de contexte, réflexion).
-2. ÉVALUER (correct: true/false) en fonction de l'approche :
-   - SI c'est strictement JURIDIQUE : L'étudiant a-t-il utilisé un raisonnement structuré (le syllogisme : Majeure/Règle, Mineure/Faits, Conclusion) ? S'il donne juste la réponse sans le raisonnement, corrige-le (correct: false).
-   - SI ce n'est PAS strictement juridique (ex: Histoire du droit, économie) : L'étudiant a-t-il bien analysé le contexte ou argumenté logiquement ? Ne le force pas à faire un syllogisme si ça n'a pas de sens.
-3. EXPLIQUER : Fournis une explication pédagogique. Rappelle la méthodologie attendue en fonction de la nature du concept.
-4. GÉNÉRER UN NOUVEAU CAS (nouveau_cas) OBLIGATOIREMENT si la réponse est fausse ou manque de méthodologie (correct: false). Invente une nouvelle situation totalement différente testant le même concept. Si correct: true, nouveau_cas doit être null.`;
+1. ANALYSER LA NATURE DU CONCEPT : Détermine si ce concept nécessite une approche juridique stricte (règle, faits, conclusion) ou une approche théorique/historique.
+2. ÉVALUER (correct: true/false) AVEC INDULGENCE : 
+   - L'étudiant est en apprentissage. S'il a compris l'idée générale ou mentionné des éléments corrects, valide sa réponse (correct: true). 
+   - Ne le sanctionne pas (correct: false) juste parce que sa réponse est incomplète ou succincte.
+   - S'il s'agit d'un cas pratique juridique, vérifie qu'il a fait un effort d'argumentation (pas juste donner la solution), mais sois tolérant sur la perfection du syllogisme.
+   - Mets correct: false UNIQUEMENT s'il est totalement hors sujet, s'il dit le contraire de la vérité, ou s'il n'argumente pas du tout (ex: "oui c'est ça" sans aucune justification).
+3. EXPLIQUER : Fournis une explication pédagogique et encourageante. Si sa réponse était juste mais incomplète, félicite-le d'abord, puis ajoute les nuances ou détails qu'il a oubliés.
+4. GÉNÉRER UN NOUVEAU CAS (nouveau_cas) OBLIGATOIREMENT si la réponse est fausse (correct: false). Invente une nouvelle situation totalement différente testant le même concept. Si correct: true, nouveau_cas doit être null.`;
 
     const aiResponse = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
