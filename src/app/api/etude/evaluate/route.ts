@@ -40,11 +40,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    const prompt = `Tu es un professeur de droit très exigeant sur la méthodologie juridique. 
+    const prompt = `Tu es un professeur d'université très exigeant sur la méthodologie.
 Concept enseigné : "${themeTitre}"
 Explication du concept : "${themeExplication}"
 
-Cas pratique soumis à l'étudiant : 
+Cas pratique / Exercice soumis à l'étudiant : 
 Situation : "${situation}"
 Question posée : "${question}"
 Réponse idéale attendue : "${expectedAnswer}"
@@ -52,10 +52,12 @@ Réponse idéale attendue : "${expectedAnswer}"
 Réponse de l'étudiant : "${userAnswer}"
 
 Ta tâche :
-1. Évaluer la réponse de l'étudiant. A-t-il compris le fond du concept MAIS AUSSI a-t-il utilisé un raisonnement juridique structuré (le syllogisme : Majeure/Règle de droit, Mineure/Faits, Conclusion) ? S'il donne juste la réponse sans expliquer le raisonnement, tu dois le corriger (correct: false).
-2. Fournir une explication pédagogique. Si la méthodologie (syllogisme) manque ou est floue, rappelle-lui gentiment qu'en droit, le raisonnement compte autant que la solution.
-3. SI sa réponse est fausse ou manque de méthode juridique (correct: false), tu dois OBLIGATOIREMENT inventer un nouveau cas pratique (nouveau_cas) totalement différent (autre situation) mais qui teste EXACTEMENT le même concept ("${themeTitre}") pour qu'il s'entraîne à nouveau au syllogisme.
-Si sa réponse est juste ET argumentée (correct: true), nouveau_cas doit être null.`;
+1. ANALYSER LA NATURE DU CONCEPT : Détermine d'abord si ce concept nécessite une approche strictement juridique (application d'une règle de droit à des faits) OU une approche théorique/historique (analyse de contexte, réflexion).
+2. ÉVALUER (correct: true/false) en fonction de l'approche :
+   - SI c'est strictement JURIDIQUE : L'étudiant a-t-il utilisé un raisonnement structuré (le syllogisme : Majeure/Règle, Mineure/Faits, Conclusion) ? S'il donne juste la réponse sans le raisonnement, corrige-le (correct: false).
+   - SI ce n'est PAS strictement juridique (ex: Histoire du droit, économie) : L'étudiant a-t-il bien analysé le contexte ou argumenté logiquement ? Ne le force pas à faire un syllogisme si ça n'a pas de sens.
+3. EXPLIQUER : Fournis une explication pédagogique. Rappelle la méthodologie attendue en fonction de la nature du concept.
+4. GÉNÉRER UN NOUVEAU CAS (nouveau_cas) OBLIGATOIREMENT si la réponse est fausse ou manque de méthodologie (correct: false). Invente une nouvelle situation totalement différente testant le même concept. Si correct: true, nouveau_cas doit être null.`;
 
     const aiResponse = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
