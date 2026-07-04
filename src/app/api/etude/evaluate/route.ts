@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-export const maxDuration = 60; // 60s max for AI
+export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient } from '@/lib/supabase/server';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 
