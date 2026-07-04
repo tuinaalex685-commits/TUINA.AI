@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
       // 4. Parser le PDF
       const pdfData = await pdfParse(buffer);
       
-      if (pdfData.numpages > 50) {
-        throw new Error(`Le PDF dépasse la limite de 50 pages (actuel: ${pdfData.numpages} pages).`);
+      if (pdfData.numpages > 100) {
+        throw new Error(`Le PDF dépasse la limite de 100 pages (actuel: ${pdfData.numpages} pages).`);
       }
 
       const text = pdfData.text;
