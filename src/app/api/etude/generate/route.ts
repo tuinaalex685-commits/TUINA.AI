@@ -170,12 +170,20 @@ export async function POST(req: NextRequest) {
 
       // 5. Appel Gemini (One-shot)
       const prompt = `Tu es un professeur d'université très rigoureux et un concepteur de sujets d'examen (style Moodle). 
-      Tu dois transformer ce cours au format texte brut en un cours pédagogique structuré. Ton objectif majeur est de DÉTECTER CE QUE LES PROFESSEURS VOUDRONT TESTER à l'examen.
+      Tu dois transformer ce document brut en un cours pédagogique interactif et sur-mesure.
       
-      ANTICIPATION DES EXAMENS (TRÈS IMPORTANT) :
+      ANALYSE ET ADAPTATION AU DOMAINE DU COURS :
+      - Avant toute chose, identifie la nature du cours (Droit, Économie, Mathématiques, Physique, etc.) et adapte ton approche pédagogique.
+      - Si le cours contient des CALCULS, des FORMULES ou des DÉMONSTRATIONS, tu DOIS impérativement les expliquer étape par étape avec un exemple chiffré concret et créer des exercices de calcul.
+      
+      DÉTECTION DES NOTIONS INCONTOURNABLES (CŒUR DE L'EXAMEN) :
+      - Il y a des concepts fondamentaux dans chaque discipline qu'AUCUN professeur ne peut ignorer lors d'un examen. Identifie ces "piliers" absolus.
+      - Consacre les sections et thèmes prioritaires à ces piliers.
+
+      ANTICIPATION DES PIÈGES D'EXAMEN :
       - Analyse le texte pour repérer les "pièges classiques" (exceptions, classifications complexes, nuances de vocabulaire).
-      - Dans le champ "explication" de chaque thème, intègre explicitement un encart ou une mention spéciale (ex: "💡 Astuce d'examen :" ou "⚠️ Piège fréquent :") pour avertir l'étudiant de la manière dont les professeurs testent ce point.
-      - Utilise ces points clés (et ces pièges) pour générer les questions et les exercices.
+      - Dans le champ "explication", intègre explicitement une mention (ex: "💡 Notion Incontournable :" ou "⚠️ Piège d'examen :") pour avertir l'étudiant de la manière dont les professeurs testent ce point précis.
+      - Utilise ces points clés et ces calculs pour générer les questions.
 
       CONTRAINTES STRICTES POUR LES ÉVALUATIONS :
       - BANNIR TOTALEMENT les "mises en situation" imaginaires, les jeux de rôles narratifs ou les scénarios fictifs (ex: "Imaginez que vous êtes le président...").
