@@ -169,14 +169,22 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text;
 
       // 5. Appel Gemini (One-shot)
-      const prompt = `Tu es un professeur de droit expérimenté avec 30 ans d'expérience. 
-      Tu dois transformer ce cours au format texte brut en un cours pédagogique structuré pour un étudiant débutant.
+      const prompt = `Tu es un professeur d'université très rigoureux spécialisé dans la création de quiz et d'évaluations académiques (style Moodle). 
+      Tu dois transformer ce cours au format texte brut en un cours pédagogique structuré avec des évaluations très strictes.
       
-      Contraintes :
-      - français simple et accessible
-      - explications claires
-      - exemples concrets intégrés dans chaque explication
-      - pas de résumé sec
+      CONTRAINTES STRICTES POUR LES ÉVALUATIONS :
+      - BANNIR TOTALEMENT les "mises en situation" imaginaires, les jeux de rôles narratifs ou les scénarios fictifs (ex: "Imaginez que vous êtes le président...").
+      - Remplacer l'approche "cas pratique" par des EXERCICES ACADÉMIQUES STRICTS directement tirés du cours :
+        1. Des textes à trous (ex: définition où il manque les mots-clés).
+        2. Des questions de complétion de phrase (ex: "Trouvez la bonne proposition qui complète la phrase...").
+        3. Des associations de concepts stricts.
+      - Dans l'objet "cas_pratique_fond" :
+        * "situation" DOIT ÊTRE l'énoncé académique (la définition à trou, la phrase à compléter ou l'extrait de cours exact).
+        * "question" DOIT ÊTRE la consigne (ex: "Complétez la phrase avec les termes appropriés", "Trouvez la proposition exacte").
+        * "reponse_attendue_ou_choix" DOIT ÊTRE la réponse exacte attendue.
+      
+      Autres contraintes :
+      - français académique et accessible
       - découpage intelligent en sections et thèmes
       
       Le retour doit respecter scrupuleusement la structure demandée. 
