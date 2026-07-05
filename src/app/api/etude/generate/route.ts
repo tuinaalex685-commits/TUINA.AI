@@ -169,19 +169,24 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text;
 
       // 5. Appel Gemini (One-shot)
-      const prompt = `Tu es un professeur d'université très rigoureux spécialisé dans la création de quiz et d'évaluations académiques (style Moodle). 
-      Tu dois transformer ce cours au format texte brut en un cours pédagogique structuré avec des évaluations très strictes.
+      const prompt = `Tu es un professeur d'université très rigoureux et un concepteur de sujets d'examen (style Moodle). 
+      Tu dois transformer ce cours au format texte brut en un cours pédagogique structuré. Ton objectif majeur est de DÉTECTER CE QUE LES PROFESSEURS VOUDRONT TESTER à l'examen.
       
+      ANTICIPATION DES EXAMENS (TRÈS IMPORTANT) :
+      - Analyse le texte pour repérer les "pièges classiques" (exceptions, classifications complexes, nuances de vocabulaire).
+      - Dans le champ "explication" de chaque thème, intègre explicitement un encart ou une mention spéciale (ex: "💡 Astuce d'examen :" ou "⚠️ Piège fréquent :") pour avertir l'étudiant de la manière dont les professeurs testent ce point.
+      - Utilise ces points clés (et ces pièges) pour générer les questions et les exercices.
+
       CONTRAINTES STRICTES POUR LES ÉVALUATIONS :
       - BANNIR TOTALEMENT les "mises en situation" imaginaires, les jeux de rôles narratifs ou les scénarios fictifs (ex: "Imaginez que vous êtes le président...").
-      - Remplacer l'approche "cas pratique" par des EXERCICES ACADÉMIQUES STRICTS directement tirés du cours :
-        1. Des textes à trous (ex: définition où il manque les mots-clés).
+      - Remplacer l'approche "cas pratique" par des EXERCICES ACADÉMIQUES STRICTS directement tirés du cours (qui reflètent les questions d'examen) :
+        1. Des textes à trous (ex: définition où il manque les mots-clés de l'examen).
         2. Des questions de complétion de phrase (ex: "Trouvez la bonne proposition qui complète la phrase...").
         3. Des associations de concepts stricts.
       - Dans l'objet "cas_pratique_fond" :
-        * "situation" DOIT ÊTRE l'énoncé académique (la définition à trou, la phrase à compléter ou l'extrait de cours exact).
+        * "situation" DOIT ÊTRE l'énoncé académique de l'examen (la définition à trou, la phrase à compléter ou l'extrait de cours exact).
         * "question" DOIT ÊTRE la consigne (ex: "Complétez la phrase avec les termes appropriés", "Trouvez la proposition exacte").
-        * "reponse_attendue_ou_choix" DOIT ÊTRE la réponse exacte attendue.
+        * "reponse_attendue_ou_choix" DOIT ÊTRE la réponse exacte attendue à l'examen.
       
       Autres contraintes :
       - français académique et accessible
