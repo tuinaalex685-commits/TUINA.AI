@@ -14,6 +14,8 @@ export default function EtudeEngine({
   const router = useRouter();
   const [loading, setLoading] = useState(!coursId);
   const [error, setError] = useState('');
+  const [isQueued, setIsQueued] = useState(false);
+  const [pollingCoursId, setPollingCoursId] = useState<string | null>(null);
   
   // State Machine logic simplified for the MVP
   // states: 'synthese' | 'explication' | 'question_forme' | 'cas_pratique' | 'cloture'
@@ -51,16 +53,40 @@ export default function EtudeEngine({
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
 
   useEffect(() => {
-    if (!coursId) {
+    if (!coursId && !pollingCoursId) {
       // Trigger generation
       generateCourse();
     }
   }, [coursId]);
 
+  // Polling silencieux
+  useEffect(() => {
+    let interval: any;
+    if (pollingCoursId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/etude/status?coursId=${pollingCoursId}`);
+          const data = await res.json();
+          if (data.success && data.status === 'pret') {
+            clearInterval(interval);
+            router.refresh();
+          } else if (data.status === 'erreur') {
+            clearInterval(interval);
+            setError("Erreur lors de la génération. Veuillez réessayer.");
+            setLoading(false);
+            setIsQueued(false);
+          }
+        } catch (err) {}
+      }, 5000); // Polling toutes les 5 secondes
+    }
+    return () => clearInterval(interval);
+  }, [pollingCoursId, router]);
+
   const generateCourse = async (force: boolean = false) => {
     try {
       setLoading(true);
       setError('');
+      setIsQueued(true);
       const res = await fetch('/api/etude/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,11 +95,15 @@ export default function EtudeEngine({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur de génération");
       
-      // Generation done, reload page to get server data
-      router.refresh();
+      if (data.status === 'pret') {
+        router.refresh();
+      } else {
+        setPollingCoursId(data.coursId);
+      }
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
+      setIsQueued(false);
     }
   };
 
@@ -223,8 +253,18 @@ export default function EtudeEngine({
         <div className={styles.loaderContainer}>
           <div className={styles.spinner} />
           <p className={styles.loadingText}>
-            L&apos;IA découpe, analyse et prépare votre cours...<br/>
-            Cette étape peut prendre jusqu&apos;à 30 secondes, mais n&apos;est faite qu&apos;une seule fois !
+            {isQueued ? (
+              <>
+                Votre cours est dans la file d'attente de l'IA...<br/>
+                Cette opération peut prendre quelques minutes si l'application est très sollicitée.<br/>
+                Veuillez patienter, la page se rafraîchira automatiquement.
+              </>
+            ) : (
+              <>
+                L'IA découpe, analyse et prépare votre cours...<br/>
+                Connexion au cerveau juridique en cours...
+              </>
+            )}
           </p>
         </div>
       </div>
