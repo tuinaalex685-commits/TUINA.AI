@@ -97,7 +97,7 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
         </Card>
       </div>
 
-      <div style={{ marginTop: '24px', padding: '16px', borderRadius: '12px', background: isGoldenRuleMet ? 'rgba(0, 200, 100, 0.1)' : 'rgba(255, 50, 50, 0.1)', border: \`1px solid \${isGoldenRuleMet ? 'rgba(0, 200, 100, 0.3)' : 'rgba(255, 50, 50, 0.3)'}\`, display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ marginTop: '24px', padding: '16px', borderRadius: '12px', background: isGoldenRuleMet ? 'rgba(0, 200, 100, 0.1)' : 'rgba(255, 50, 50, 0.1)', border: `1px solid ${isGoldenRuleMet ? 'rgba(0, 200, 100, 0.3)' : 'rgba(255, 50, 50, 0.3)'}`, display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={{ fontSize: '24px' }}>{isGoldenRuleMet ? '🔥' : '⚠️'}</div>
         <div>
           <h4 style={{ margin: '0 0 4px 0', color: 'var(--color-text-main)' }}>Règle d'or (LTV {'>'} 3x CAC) : {isGoldenRuleMet ? 'Validée !' : 'En danger'}</h4>

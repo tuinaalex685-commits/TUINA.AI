@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text;
 
       // 5. Appel Gemini (One-shot)
-      const prompt = \`Tu es une équipe de quatre experts (Un Professeur d'université, un Docteur en Droit, un Concepteur d'examen, et un Major de promotion). Ton objectif est de préparer l'étudiant à réussir ses examens universitaires de droit.
+      const prompt = `Tu es une équipe de quatre experts (Un Professeur d'université, un Docteur en Droit, un Concepteur d'examen, et un Major de promotion). Ton objectif est de préparer l'étudiant à réussir ses examens universitaires de droit.
       
       RÈGLE 1 : RÉFLEXION INVISIBLE OBLIGATOIRE (Champ '_reflexion_interne_comite')
       Avant de générer le cours, débattez dans le champ '_reflexion_interne_comite' (invisible pour l'étudiant). 
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
       RÈGLE 4 : REMÉDIATION INTELLIGENTE (Champs 'branches_remediation')
       Le 'blocage' correspond à une erreur classique. La 'reexplication' DOIT expliquer pourquoi cette erreur est logique, quelle règle a été oubliée, et comment éviter l'erreur à l'examen. L'étudiant doit apprendre de ses erreurs.
       
-      Voici le document brut :\\n\\n\${text.substring(0, 80000)}\`;
+      Voici le document brut :\n\n${text.substring(0, 80000)}`;
 
       let generatedData: any = null;
       let retryCount = 0;
