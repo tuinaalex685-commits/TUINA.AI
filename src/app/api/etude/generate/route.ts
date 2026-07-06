@@ -18,6 +18,7 @@ const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
+    _reflexion_interne_comite: { type: Type.STRING, description: "Espace de réflexion INVISIBLE. ULTRA CONCIS (style télégraphique, puces courtes). Le comité y liste : Fondamentaux, Pièges, Exceptions. Ne pas faire de phrases longues." },
     sections: {
       type: Type.ARRAY,
       items: {
@@ -33,7 +34,7 @@ const RESPONSE_SCHEMA = {
               properties: {
                 ordre: { type: Type.INTEGER },
                 titre: { type: Type.STRING },
-                explication: { type: Type.STRING, description: "Texte pédagogique du concept, avec exemple concret." },
+                explication: { type: Type.STRING, description: "Cours complet formaté en Markdown suivant strictement la progression en 11 étapes pédagogiques requise (Synthèse, Explication notion, Ratio legis, Logique législateur, Conditions, Exceptions, Conséquences, Pièges, Confusions, Exemple, Évaluation) et incluant les étoiles d'importance (★)." },
                 question_forme: {
                   type: Type.OBJECT,
                   properties: {
@@ -169,39 +170,37 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text;
 
       // 5. Appel Gemini (One-shot)
-      const prompt = `Tu es un professeur d'université très rigoureux et un concepteur de sujets d'examen (style Moodle). 
-      Tu dois transformer ce document brut en un cours pédagogique interactif et sur-mesure.
+      const prompt = `Tu es une équipe de quatre experts (Un Professeur d'université, un Docteur en Droit, un Concepteur d'examen, et un Major de promotion). Ton objectif est de préparer l'étudiant à réussir ses examens universitaires de droit.
       
-      ANALYSE ET ADAPTATION AU DOMAINE DU COURS :
-      - Avant toute chose, identifie la nature du cours (Droit, Économie, Mathématiques, Physique, etc.) et adapte ton approche pédagogique.
-      - Si le cours contient des CALCULS, des FORMULES ou des DÉMONSTRATIONS, tu DOIS impérativement les expliquer étape par étape avec un exemple chiffré concret et créer des exercices de calcul.
+      RÈGLE 1 : RÉFLEXION INVISIBLE OBLIGATOIRE (Champ '_reflexion_interne_comite')
+      Avant de générer le cours, débattez dans le champ '_reflexion_interne_comite' (invisible pour l'étudiant). 
+      ⚠️ IMPÉRATIF DE COÛT : Cette réflexion doit être EXTRÊMEMENT COURTE. Utilisez uniquement des mots-clés (style télégraphique).
+      Identifiez : Les notions fondamentales, les pièges d'examen, et les erreurs étudiantes. Ne générez l'explication qu'APRÈS.
       
-      DÉTECTION DES NOTIONS INCONTOURNABLES (CŒUR DE L'EXAMEN) :
-      - Il y a des concepts fondamentaux dans chaque discipline qu'AUCUN professeur ne peut ignorer lors d'un examen. Identifie ces "piliers" absolus.
-      - Consacre les sections et thèmes prioritaires à ces piliers.
-
-      ANTICIPATION DES PIÈGES D'EXAMEN :
-      - Analyse le texte pour repérer les "pièges classiques" (exceptions, classifications complexes, nuances de vocabulaire).
-      - Dans le champ "explication", intègre explicitement une mention (ex: "💡 Notion Incontournable :" ou "⚠️ Piège d'examen :") pour avertir l'étudiant de la manière dont les professeurs testent ce point précis.
-      - Utilise ces points clés et ces calculs pour générer les questions.
-
-      CONTRAINTES STRICTES POUR LES ÉVALUATIONS :
-      - BANNIR TOTALEMENT les "mises en situation" imaginaires, les jeux de rôles narratifs ou les scénarios fictifs (ex: "Imaginez que vous êtes le président...").
-      - Remplacer l'approche "cas pratique" par des EXERCICES ACADÉMIQUES STRICTS directement tirés du cours (qui reflètent les questions d'examen) :
-        1. Des textes à trous (ex: définition où il manque les mots-clés de l'examen).
-        2. Des questions de complétion de phrase (ex: "Trouvez la bonne proposition qui complète la phrase...").
-        3. Des associations de concepts stricts.
-      - Dans l'objet "cas_pratique_fond" :
-        * "situation" DOIT ÊTRE l'énoncé académique de l'examen (la définition à trou, la phrase à compléter ou l'extrait de cours exact).
-        * "question" DOIT ÊTRE la consigne (ex: "Complétez la phrase avec les termes appropriés", "Trouvez la proposition exacte").
-        * "reponse_attendue_ou_choix" DOIT ÊTRE la réponse exacte attendue à l'examen.
+      RÈGLE 2 : PROGRESSION PÉDAGOGIQUE OBLIGATOIRE (Champ 'explication')
+      Le champ 'explication' DOIT suivre EXACTEMENT cette progression pédagogique en 11 étapes pour CHAQUE notion :
+      ### [Titre de la notion] (Importance : ★★★★★)
+      **1. Synthèse très claire** : (Résumé du point abordé)
+      **2. Explication de la notion** : (Définition exacte)
+      **3. Pourquoi la règle existe** : (Ratio legis)
+      **4. Logique du législateur** : (Le raisonnement de fond)
+      **5. Conditions** : (Application cumulative/alternative)
+      **6. Exceptions** : (Limites de la règle)
+      **7. Conséquences** : (Effets juridiques)
+      **8. Pièges d'examen** : (Ce que le prof va tester)
+      **9. Confusions possibles** : (Erreurs classiques des étudiants)
+      **10. Exemple concret** : (Application matérielle)
+      **11. Méthode d'évaluation** : (Comment cette notion est testée à l'université)
       
-      Autres contraintes :
-      - français académique et accessible
-      - découpage intelligent en sections et thèmes
+      RÈGLE 3 : EXERCICES INTELLIGENTS DE NIVEAU FACULTÉ (Champs 'question_forme' et 'cas_pratique_fond')
+      Génère des exercices redoutables validés par le concepteur d'examen.
+      Utilise : Textes à trous intelligents, Qualification juridique, Recherche de l'exception, Distinction de notions proches.
+      Les mauvaises réponses (choix) DOIVENT être crédibles et correspondre aux erreurs réellement commises par les étudiants.
       
-      Le retour doit respecter scrupuleusement la structure demandée. 
-      Voici le texte brut du cours :\n\n${text.substring(0, 80000)}`; // Limite de sécurité textuelle
+      RÈGLE 4 : REMÉDIATION INTELLIGENTE (Champs 'branches_remediation')
+      Le 'blocage' correspond à une erreur classique. La 'reexplication' DOIT expliquer pourquoi cette erreur est logique, quelle règle a été oubliée, et comment éviter l'erreur à l'examen. L'étudiant doit apprendre de ses erreurs.
+      
+      Voici le document brut :\n\n${text.substring(0, 80000)}`; // Limite de sécurité textuelle
 
       let generatedData: any = null;
       let retryCount = 0;

@@ -40,26 +40,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    const prompt = `Tu es un professeur d'université bienveillant et pédagogue.
+    const prompt = `Tu es un Maître de Conférences en Droit exigeant, mais ton but est l'apprentissage adaptatif de l'étudiant.
 Concept enseigné : "${themeTitre}"
 Explication du concept : "${themeExplication}"
 
-Cas pratique / Exercice soumis à l'étudiant : 
+Exercice soumis à l'étudiant : 
 Situation : "${situation}"
 Question posée : "${question}"
-Réponse idéale attendue : "${expectedAnswer}"
+Réponse attendue : "${expectedAnswer}"
 
 Réponse de l'étudiant : "${userAnswer}"
 
-Ta tâche :
-1. ANALYSER LA NATURE DU CONCEPT : Détermine si ce concept nécessite une approche juridique stricte (règle, faits, conclusion) ou une approche théorique/historique.
-2. ÉVALUER (correct: true/false) AVEC INDULGENCE : 
-   - L'étudiant est en apprentissage. S'il a compris l'idée générale ou mentionné des éléments corrects, valide sa réponse (correct: true). 
-   - Ne le sanctionne pas (correct: false) juste parce que sa réponse est incomplète ou succincte.
-   - S'il s'agit d'un cas pratique juridique, vérifie qu'il a fait un effort d'argumentation (pas juste donner la solution), mais sois tolérant sur la perfection du syllogisme.
-   - Mets correct: false UNIQUEMENT s'il est totalement hors sujet, s'il dit le contraire de la vérité, ou s'il n'argumente pas du tout (ex: "oui c'est ça" sans aucune justification).
-3. EXPLIQUER : Fournis une explication pédagogique et encourageante. Si sa réponse était juste mais incomplète, félicite-le d'abord, puis ajoute les nuances ou détails qu'il a oubliés.
-4. GÉNÉRER UN NOUVEAU CAS (nouveau_cas) OBLIGATOIREMENT si la réponse est fausse (correct: false). Invente une nouvelle situation totalement différente testant le même concept. Si correct: true, nouveau_cas doit être null.`;
+Ta tâche : ÉVALUATION ADAPTATIVE ET PROGRESSIVE
+1. ÉVALUER (correct: true/false) AVEC RIGUEUR : 
+   - Valide (correct: true) si l'étudiant a compris la logique ET utilisé les mots-clés juridiques essentiels.
+   - Invalide (correct: false) s'il manque de précision, s'il fait un hors-sujet, ou s'il n'argumente pas. Le Droit exige de la précision.
+2. EXPLIQUER ET ADAPTER LE PARCOURS (explication) :
+   - Si la réponse est correcte et précise : Raccourcis ton explication, valide son point rapidement.
+   - Si la réponse est fausse ou imprécise : Ralentis. Ne te contente pas de corriger. Décortique son erreur (pourquoi est-ce une confusion classique ?), reformule la règle avec une nouvelle approche, et ré-explique la notion mal comprise.
+3. GÉNÉRER UN NOUVEAU CAS (nouveau_cas) OBLIGATOIRE si la réponse est fausse :
+   - Si correct = false : Génère un TOUT NOUVEAU cas pratique abordant la notion sous un autre angle pour retenter sa chance.
+   - Si correct = true : Mets null.`;
 
     const aiResponse = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',

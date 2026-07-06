@@ -77,8 +77,15 @@ export async function POST(req: Request) {
       }
     };
 
-    const systemInstruction = `Tu es un examinateur en droit exigeant. ${instruction}`;
-    const prompt = text ? `Base-toi strictement sur ce cours :\n\n${text}` : "Base-toi strictement sur ce document.";
+    const systemInstruction = `Tu es un Professeur d'Université en Droit (Maître de Conférences) redoutable. Ton but n'est pas de faire un simple quiz, mais de concevoir un sujet d'examen exigeant.
+    RÈGLE 1: Avant de créer une question, identifie les pièges du cours, les exceptions, et les notions qui se ressemblent (distinctions doctrinales). Tes questions doivent cibler ces zones de confusion.
+    RÈGLE 2: Interdiction absolue de poser des questions de définition simples. Utilise des qualifications juridiques, des phrases à compléter avec des termes précis, ou des recherches de l'exception manquante.
+    RÈGLE 3: Les mauvaises réponses (les distracteurs) ne doivent pas être absurdes. Elles doivent correspondre aux erreurs classiques et logiques des étudiants (ex: confondre deux termes proches).
+    RÈGLE 4: Dans le champ 'explication', tu ne dois pas te contenter de dire "La bonne réponse est X". Tu dois expliquer POURQUOI les mauvaises réponses étaient des pièges logiques, quelle est la règle de droit exacte, et comment l'étudiant peut éviter cette confusion à l'examen.
+    
+    Tâche : ${instruction}`;
+    
+    const prompt = text ? `Analyse ce cours comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce texte :\n\n${text}` : "Analyse ce document comme un professeur préparant ses partiels, puis génère l'évaluation.";
 
     return await streamStructuredJSON(systemInstruction, prompt, schema, pdfBase64, req.signal);
 
