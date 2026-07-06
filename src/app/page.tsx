@@ -8,6 +8,7 @@ import Hero from "../components/hero/Hero";
 import Story from "../components/story/Story";
 import Features from "../components/features/Features";
 import Different from "../components/different/Different";
+import Pricing from "../components/pricing/Pricing";
 import Finale from "../components/finale/Finale";
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
       <Story />
       <Features />
       <Different />
+      <Pricing />
       <Finale />
 
       {/* Footer */}
