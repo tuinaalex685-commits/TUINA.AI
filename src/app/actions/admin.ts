@@ -28,6 +28,7 @@ export async function createAccessCode(customCode: string) {
     }
 
     revalidatePath('/admin/dashboard/users');
+    revalidatePath('/admin/dashboard');
     return { success: true, data };
   } catch (err) {
     return { error: "Erreur inattendue." };
@@ -63,6 +64,7 @@ export async function updateAccessCodeStatus(id: string, status: 'active' | 'ina
   }
 
   revalidatePath('/admin/dashboard/users');
+  revalidatePath('/admin/dashboard');
   return { success: true };
 }
 
@@ -85,5 +87,6 @@ export async function deleteAccessCode(id: string, email: string) {
   }
 
   revalidatePath('/admin/dashboard/users');
+  revalidatePath('/admin/dashboard');
   return { success: true };
 }
