@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import styles from './Sidebar.module.css';
+import { supabase } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/app/dashboard', icon: '📊' },
@@ -19,7 +20,14 @@ const NAV_ITEMS = [
 
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   useEffect(() => {
     const handleToggle = () => setIsOpen(prev => !prev);
@@ -43,22 +51,29 @@ export function Sidebar({ className }: { className?: string }) {
         </div>
         
         <nav className={styles.nav}>
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname?.startsWith(item.path);
-          return (
-            <Link 
-              key={item.path} 
-              href={item.path}
-              prefetch={true}
-              className={`${styles.navItem} ${isActive ? styles.active : ''}`}
-            >
-              <span className={styles.icon}>{item.icon}</span>
-              <span className={styles.label}>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-    </aside>
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname?.startsWith(item.path);
+            return (
+              <Link 
+                key={item.path} 
+                href={item.path}
+                prefetch={true}
+                className={`${styles.navItem} ${isActive ? styles.active : ''}`}
+              >
+                <span className={styles.icon}>{item.icon}</span>
+                <span className={styles.label}>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+        
+        <div style={{ marginTop: 'auto', padding: 'var(--spacing-standard)', borderTop: '1px solid var(--color-border)' }}>
+          <button onClick={handleLogout} className={styles.navItem} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}>
+            <span className={styles.icon}>🚪</span>
+            <span className={styles.label}>Déconnexion</span>
+          </button>
+        </div>
+      </aside>
     </>
   );
 }
