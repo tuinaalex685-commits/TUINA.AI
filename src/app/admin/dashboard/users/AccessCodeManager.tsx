@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { createAccessCode, updateAccessCodeStatus, deleteAccessCode } from '@/app/actions/admin';
 import { Badge } from '@/components/ui/Badge/Badge';
+import { useRouter } from 'next/navigation';
 
 export default function AccessCodeManager({ initialCodes }: { initialCodes: any[] }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [customCode, setCustomCode] = useState('');
@@ -29,6 +31,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     else {
       setMessage("Code ajouté avec succès !");
       setCustomCode(''); // Clear the input
+      router.refresh();
     }
     setLoading(false);
   };
@@ -38,6 +41,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     setActiveActionId(`${id}-status`);
     startTransition(async () => {
       await updateAccessCodeStatus(id, newStatus as any);
+      router.refresh();
       setActiveActionId(null);
     });
   };
@@ -47,6 +51,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
       setActiveActionId(`${id}-delete`);
       startTransition(async () => {
         await deleteAccessCode(id, userEmail || '');
+        router.refresh();
         setActiveActionId(null);
       });
     }

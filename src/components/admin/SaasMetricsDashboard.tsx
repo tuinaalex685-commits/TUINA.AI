@@ -4,20 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 
 export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
-  const [marketingSpend, setMarketingSpend] = useState<number>(0);
+  const [marketingSpend, setMarketingSpend] = useState<string>('0');
 
   useEffect(() => {
     // Restaurer la valeur sauvegardée depuis le local storage
     const savedSpend = localStorage.getItem('tuina_marketing_spend');
     if (savedSpend) {
-      setMarketingSpend(parseInt(savedSpend, 10));
+      setMarketingSpend(savedSpend);
     }
   }, []);
 
   const handleSpendChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10) || 0;
+    const val = e.target.value;
     setMarketingSpend(val);
-    localStorage.setItem('tuina_marketing_spend', val.toString());
+    localStorage.setItem('tuina_marketing_spend', val);
   };
 
   // --- CALCUL DES MÉTRIQUES (Masterclass iZi SaaS) ---
@@ -35,7 +35,8 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
   const churnPercent = (churnRate * 100).toFixed(1);
 
   // 3. CAC (Coût d'Acquisition Client) = Dépenses / Total Nouveaux Clients
-  const cac = totalCodes > 0 ? Math.round(marketingSpend / totalCodes) : 0;
+  const numericSpend = parseInt(marketingSpend, 10) || 0;
+  const cac = totalCodes > 0 ? Math.round(numericSpend / totalCodes) : 0;
 
   // 4. LTV (Valeur Vie Client) = MRR par utilisateur / Churn Rate
   // Si churn est 0, on estime arbitrairement à 20 mois pour le MVP
