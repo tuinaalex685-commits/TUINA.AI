@@ -153,38 +153,44 @@ export async function runWorker() {
 
       const text = pdfData.text;
 
-      // 5. Appel Gemini (One-shot)
-      const prompt = `Tu es une équipe de quatre experts (Un Professeur d'université, un Docteur en Droit, un Concepteur d'examen, et un Major de promotion). Ton objectif est de préparer l'étudiant à réussir ses examens universitaires de droit.
+      // 5. Phase 1 : Analyse Préalable (Intelligence Pédagogique)
+      const { PRE_ANALYSIS_SCHEMA, getPreAnalysisPrompt, getPedagogicalStrategyPrompt } = await import('@/lib/prompts/pedagogicalEngine');
       
-      RÈGLE 1 : RÉFLEXION INVISIBLE OBLIGATOIRE (Champ '_reflexion_interne_comite')
-      Avant de générer le cours, débattez dans le champ '_reflexion_interne_comite' (invisible pour l'étudiant). 
-      ⚠️ IMPÉRATIF DE COÛT : Cette réflexion doit être EXTRÊMEMENT COURTE. Utilisez uniquement des mots-clés (style télégraphique).
-      Identifiez : Les notions fondamentales, les pièges d'examen, et les erreurs étudiantes. Ne générez l'explication qu'APRÈS.
+      let intelligenceData: any = null;
+      let intelligenceRetryCount = 0;
+      let lastIntelligenceError: any = null;
       
-      RÈGLE 2 : PROGRESSION PÉDAGOGIQUE OBLIGATOIRE (Champ 'explication')
-      Le champ 'explication' DOIT suivre EXACTEMENT cette progression pédagogique en 11 étapes pour CHAQUE notion :
-      ### [Titre de la notion] (Importance : ★★★★★)
-      **1. Synthèse très claire** : (Résumé du point abordé)
-      **2. Explication de la notion** : (Définition exacte)
-      **3. Pourquoi la règle existe** : (Ratio legis)
-      **4. Logique du législateur** : (Le raisonnement de fond)
-      **5. Conditions** : (Application cumulative/alternative)
-      **6. Exceptions** : (Limites de la règle)
-      **7. Conséquences** : (Effets juridiques)
-      **8. Pièges d'examen** : (Ce que le prof va tester)
-      **9. Confusions possibles** : (Erreurs classiques des étudiants)
-      **10. Exemple concret** : (Application matérielle)
-      **11. Méthode d'évaluation** : (Comment cette notion est testée à l'université)
-      
-      RÈGLE 3 : EXERCICES INTELLIGENTS DE NIVEAU FACULTÉ (Champs 'question_forme' et 'cas_pratique_fond')
-      Génère des exercices redoutables validés par le concepteur d'examen.
-      Utilise : Textes à trous intelligents, Qualification juridique, Recherche de l'exception, Distinction de notions proches.
-      Les mauvaises réponses (choix) DOIVENT être crédibles et correspondre aux erreurs réellement commises par les étudiants.
-      
-      RÈGLE 4 : REMÉDIATION INTELLIGENTE (Champs 'branches_remediation')
-      Le 'blocage' correspond à une erreur classique. La 'reexplication' DOIT expliquer pourquoi cette erreur est logique, quelle règle a été oubliée, et comment éviter l'erreur à l'examen. L'étudiant doit apprendre de ses erreurs.
-      
-      Voici le document brut :\n\n${text.substring(0, 80000)}`;
+      while (intelligenceRetryCount < 2 && !intelligenceData) {
+        try {
+          const aiAnalysisResponse = await genAI.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: getPreAnalysisPrompt(text.substring(0, 80000)),
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: PRE_ANALYSIS_SCHEMA,
+              temperature: 0.1
+            }
+          });
+          intelligenceData = JSON.parse(aiAnalysisResponse.text || "{}");
+        } catch (genError: any) {
+          console.error("Gemini Pre-Analysis Error (Retry):", genError);
+          lastIntelligenceError = genError;
+          intelligenceRetryCount++;
+        }
+      }
+
+      if (!intelligenceData) {
+        throw new Error("Impossible de générer l'intelligence pédagogique. Erreur: " + lastIntelligenceError?.message);
+      }
+
+      // Sauvegarde de l'intelligence dans la table documents
+      await supabaseAdmin
+        .from('documents')
+        .update({ intelligence_pedagogique: intelligenceData })
+        .eq('id', job.pdf_id);
+
+      // 6. Phase 2 : Génération du Cours avec Stratégie Adaptée
+      const prompt = getPedagogicalStrategyPrompt(intelligenceData, text.substring(0, 80000));
 
       let generatedData: any = null;
       let retryCount = 0;
@@ -210,7 +216,7 @@ export async function runWorker() {
       }
 
       if (!generatedData || !generatedData.sections) {
-        throw new Error("Impossible de générer un JSON valide. Erreur: " + lastGenError?.message);
+        throw new Error("Impossible de générer un JSON valide pour le cours. Erreur: " + lastGenError?.message);
       }
 
       // 6. Sauvegarder en DB

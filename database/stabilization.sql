@@ -66,3 +66,6 @@ DROP POLICY IF EXISTS "Users can insert own versions" ON public.redaction_versio
 CREATE POLICY "Users can insert own versions" ON public.redaction_versions FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM public.redactions WHERE redactions.id = redaction_versions.redaction_id AND redactions.user_id = auth.uid())
 );
+
+-- 12. DOCUMENTS : Ajouter l'intelligence pédagogique
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS intelligence_pedagogique JSONB;
