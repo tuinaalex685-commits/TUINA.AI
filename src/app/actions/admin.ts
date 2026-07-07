@@ -49,16 +49,21 @@ export async function updateAccessCodeStatus(id: string, status: 'active' | 'ina
   // 2. Bannir ou Débannir instantanément l'utilisateur dans Supabase Auth
   // Cela bloque TOUTES ses requêtes API sans avoir besoin de charger le middleware
   if (codeData?.email) {
-    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-    const user = usersData.users.find(u => u.email === codeData.email);
-    
-    if (user) {
+    // Éviter listUsers() qui est paginé (max 50 users).
+    // On utilise user_roles pour trouver l'ID.
+    const { data: roleData } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id')
+      .ilike('email', codeData.email)
+      .single();
+
+    if (roleData?.user_id) {
       if (status === 'inactive' || status === 'blocked') {
         // Banni pendant 100 ans = effet immédiat
-        await supabaseAdmin.auth.admin.updateUserById(user.id, { ban_duration: "876000h" });
+        await supabaseAdmin.auth.admin.updateUserById(roleData.user_id, { ban_duration: "876000h" });
       } else {
         // Débanni
-        await supabaseAdmin.auth.admin.updateUserById(user.id, { ban_duration: "none" });
+        await supabaseAdmin.auth.admin.updateUserById(roleData.user_id, { ban_duration: "none" });
       }
     }
   }
@@ -77,13 +82,19 @@ export async function deleteAccessCode(id: string, email: string) {
 
   if (codeError) return { error: codeError.message };
 
-  // 2. Tenter de supprimer le compte utilisateur de l'auth Supabase s'il s'était déjà connecté
-  // (Cela l'empêchera totalement de se reconnecter)
-  const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-  const user = usersData.users.find(u => u.email === email);
-  
-  if (user) {
-    await supabaseAdmin.auth.admin.deleteUser(user.id);
+  if (email) {
+    const { data: roleData } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id')
+      .ilike('email', email)
+      .single();
+
+    if (roleData?.user_id) {
+      await supabaseAdmin.auth.admin.deleteUser(roleData.user_id);
+      // Nettoyage manuel au cas où la cascade n'est pas configurée
+      await supabaseAdmin.from('user_roles').delete().eq('user_id', roleData.user_id);
+      await supabaseAdmin.from('documents').delete().eq('user_id', roleData.user_id);
+    }
   }
 
   revalidatePath('/admin/dashboard/users');
