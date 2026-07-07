@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Badge } from '@/components/ui/Badge/Badge';
@@ -16,6 +16,8 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
   const router = useRouter();
   
   const [matieres, setMatieres] = useState<any[]>(initialMatieres);
+  const [isPending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const channel = supabase
@@ -95,13 +97,19 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
                 <span className={styles.progressText}>Créé le {new Date(matiere.created_at).toLocaleDateString()}</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}`); }}>Ouvrir</Button>
-                  <Button variant="secondary" onClick={async (e) => { 
+                  <Button variant="secondary" onClick={(e) => { 
                     e.preventDefault(); 
                     if(confirm('Voulez-vous vraiment supprimer cette matière et tout son contenu ?')) { 
-                      const { deleteMatiere } = await import('@/app/actions/student');
-                      await deleteMatiere(matiere.id); 
+                      setDeletingId(matiere.id);
+                      startTransition(async () => {
+                        const { deleteMatiere } = await import('@/app/actions/student');
+                        await deleteMatiere(matiere.id); 
+                        setDeletingId(null);
+                      });
                     } 
-                  }} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>🗑️</Button>
+                  }} disabled={isPending && deletingId === matiere.id} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
+                    {isPending && deletingId === matiere.id ? '⌛' : '🗑️'}
+                  </Button>
                 </div>
               </div>
             </Card>

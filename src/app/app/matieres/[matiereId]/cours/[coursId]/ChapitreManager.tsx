@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { Modal } from '@/components/ui/Modal/Modal';
@@ -9,7 +9,6 @@ import { createChapitre, updateChapitreContent } from '@/app/actions/student';
 import { deleteDocument } from '@/app/actions/documents';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { useEffect } from 'react';
 
 export default function ChapitreManager({ 
   matiere, 
@@ -33,11 +32,13 @@ export default function ChapitreManager({
   );
   
   const activeChapitre = initialChapitres.find(c => c.id === activeChapitreId);
-  const activeDocuments = initialDocuments.filter(d => d.chapitre_id === activeChapitreId);
   
   const router = useRouter();
 
+  const [chapitres, setChapitres] = useState<any[]>(initialChapitres);
   const [documents, setDocuments] = useState<any[]>(initialDocuments);
+  const [isPending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const channel = supabase
@@ -74,13 +75,16 @@ export default function ChapitreManager({
     setContenu(chap?.contenu_texte || '');
   };
 
-  const handleDeleteDocument = async (docId: string, url: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer ce document ?")) return;
-    const res = await deleteDocument(docId, url);
-    if (res.error) alert(res.error);
-    else router.refresh(); // Recharge les données serveur pour enlever le doc supprimé
+  const handleDeleteDocument = (id: string, url: string) => {
+    if (confirm("Voulez-vous vraiment supprimer ce document ?")) {
+      setDeletingId(id);
+      startTransition(async () => {
+        await deleteDocument(id, url);
+        setDeletingId(null);
+      });
+    }
   };
-  // ... (Suite inchangée jusqu'au render)
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -143,8 +147,8 @@ export default function ChapitreManager({
                       </span>
                     </div>
                   </div>
-                  <Button variant="secondary" onClick={() => handleDeleteDocument(doc.id, doc.url_fichier)} style={{ padding: '8px 12px', fontSize: '13px', color: '#e53e3e', borderColor: '#fc8181', marginLeft: '12px' }}>
-                    Supprimer
+                  <Button variant="secondary" onClick={() => handleDeleteDocument(doc.id, doc.url_fichier)} disabled={isPending && deletingId === doc.id} style={{ padding: '8px 12px', fontSize: '13px', color: '#e53e3e', borderColor: '#fc8181', marginLeft: '12px' }}>
+                    {isPending && deletingId === doc.id ? 'Suppression...' : 'Supprimer'}
                   </Button>
                 </div>
               ))}

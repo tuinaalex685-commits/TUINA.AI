@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge/Badge';
 import styles from './dashboard.module.css';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function DashboardManager({
   user,
@@ -75,7 +76,7 @@ export default function DashboardManager({
         <Card className={styles.objectivesCard}>
           <div className={styles.objectivesHeader}>
             <h3>Vos Objectifs</h3>
-            <a href="/app/objectifs" className={styles.link}>Voir tout</a>
+            <Link href="/app/objectifs" className={styles.link}>Voir tout</Link>
           </div>
           {objectifs.length > 0 ? (
             <ul className={styles.objectivesList}>

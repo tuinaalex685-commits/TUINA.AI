@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
@@ -8,12 +8,13 @@ import { Modal } from '@/components/ui/Modal/Modal';
 import { createObjectif, updateObjectifProgress, deleteObjectif } from '@/app/actions/student';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { useEffect } from 'react';
 
 export default function ObjectifsManager({ initialObjectifs }: { initialObjectifs: any[] }) {
   const router = useRouter();
   
   const [objectifs, setObjectifs] = useState<any[]>(initialObjectifs);
+  const [isPending, startTransition] = useTransition();
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   useEffect(() => {
     const channel = supabase
@@ -66,19 +67,25 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
     setLoading(false);
   };
 
-  const handleUpdate = async (id: string, current: number, target: number, increment: number) => {
+  const handleUpdate = (id: string, current: number, target: number, increment: number) => {
     let newProgression = current + increment;
     if (newProgression < 0) newProgression = 0;
     if (newProgression > target) newProgression = target;
     
-    await updateObjectifProgress(id, newProgression);
-    router.refresh();
+    setActiveActionId(`${id}-update`);
+    startTransition(async () => {
+      await updateObjectifProgress(id, newProgression);
+      setActiveActionId(null);
+    });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm('Supprimer cet objectif ?')) return;
-    await deleteObjectif(id);
-    router.refresh();
+    setActiveActionId(`${id}-delete`);
+    startTransition(async () => {
+      await deleteObjectif(id);
+      setActiveActionId(null);
+    });
   };
 
   return (
@@ -125,12 +132,12 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
                   
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {!isCompleted && (
-                      <Button variant="secondary" onClick={() => handleUpdate(obj.id, obj.progression, obj.cible, 1)} style={{ padding: '6px 12px' }}>
-                        +1
+                      <Button variant="secondary" onClick={() => handleUpdate(obj.id, obj.progression, obj.cible, 1)} disabled={isPending && activeActionId === `${obj.id}-update`} style={{ padding: '6px 12px' }}>
+                        {isPending && activeActionId === `${obj.id}-update` ? '⌛' : '+1'}
                       </Button>
                     )}
-                    <Button variant="secondary" onClick={() => handleDelete(obj.id)} style={{ padding: '6px 12px', color: '#e53e3e', borderColor: '#fc8181' }}>
-                      Supprimer
+                    <Button variant="secondary" onClick={() => handleDelete(obj.id)} disabled={isPending && activeActionId === `${obj.id}-delete`} style={{ padding: '6px 12px', color: '#e53e3e', borderColor: '#fc8181' }}>
+                      {isPending && activeActionId === `${obj.id}-delete` ? 'Suppression...' : 'Supprimer'}
                     </Button>
                   </div>
                 </div>

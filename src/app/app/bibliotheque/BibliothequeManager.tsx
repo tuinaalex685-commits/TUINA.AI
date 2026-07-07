@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Modal } from '@/components/ui/Modal/Modal';
@@ -17,6 +17,8 @@ export default function BibliothequeManager({
   const router = useRouter();
   
   const [documents, setDocuments] = useState<any[]>(initialDocuments);
+  const [isPending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     // Écoute des changements en temps réel sur la table documents
@@ -51,11 +53,16 @@ export default function BibliothequeManager({
   // État pour la modale d'importation
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  const handleDelete = async (id: string, url: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer ce document ? Cela supprimera également les flashcards et quiz qui y sont liés.")) return;
-    const res = await deleteDocument(id, url);
-    if (res.error) alert(res.error);
-    else router.refresh();
+  const handleDelete = (id: string, url: string) => {
+    if (confirm("Voulez-vous vraiment supprimer ce document ? Cela supprimera également les flashcards et quiz qui y sont liés.")) {
+      setDeletingId(id);
+      startTransition(async () => {
+        const res = await deleteDocument(id, url);
+        if (res.error) alert(res.error);
+        else router.refresh();
+        setDeletingId(null);
+      });
+    }
   };
 
   return (
@@ -115,9 +122,10 @@ export default function BibliothequeManager({
                 <Button 
                   variant="secondary" 
                   onClick={() => handleDelete(doc.id, doc.url_fichier)}
+                  disabled={isPending && deletingId === doc.id}
                   style={{ flex: 1, padding: '8px', fontSize: '13px', color: '#e53e3e', borderColor: '#fc8181' }}
                 >
-                  🗑️ Supprimer
+                  {isPending && deletingId === doc.id ? 'Suppression...' : '🗑️ Supprimer'}
                 </Button>
               </div>
             </Card>

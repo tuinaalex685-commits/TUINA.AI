@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { createAccessCode, updateAccessCodeStatus, deleteAccessCode } from '@/app/actions/admin';
@@ -10,6 +10,8 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [customCode, setCustomCode] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,14 +33,22 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     setLoading(false);
   };
 
-  const handleStatusChange = async (id: string, currentStatus: string) => {
+  const handleStatusChange = (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    await updateAccessCodeStatus(id, newStatus as any);
+    setActiveActionId(`${id}-status`);
+    startTransition(async () => {
+      await updateAccessCodeStatus(id, newStatus as any);
+      setActiveActionId(null);
+    });
   };
 
-  const handleDelete = async (id: string, userEmail: string | null) => {
+  const handleDelete = (id: string, userEmail: string | null) => {
     if (confirm("Voulez-vous vraiment supprimer cet accès ?")) {
-      await deleteAccessCode(id, userEmail || '');
+      setActiveActionId(`${id}-delete`);
+      startTransition(async () => {
+        await deleteAccessCode(id, userEmail || '');
+        setActiveActionId(null);
+      });
     }
   };
 
@@ -94,16 +104,18 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                     <Button 
                       variant="secondary" 
                       onClick={() => handleStatusChange(code.id, code.status)}
+                      disabled={isPending && activeActionId === `${code.id}-status`}
                       style={{ padding: '6px 12px', fontSize: '12px' }}
                     >
-                      {code.status === 'active' ? 'Désactiver' : 'Activer'}
+                      {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : code.status === 'active' ? 'Désactiver' : 'Activer'}
                     </Button>
                     <Button 
                       variant="secondary" 
                       onClick={() => handleDelete(code.id, code.email)}
+                      disabled={isPending && activeActionId === `${code.id}-delete`}
                       style={{ padding: '6px 12px', fontSize: '12px', color: '#e53e3e', borderColor: '#fc8181' }}
                     >
-                      Supprimer
+                      {isPending && activeActionId === `${code.id}-delete` ? 'Suppression...' : 'Supprimer'}
                     </Button>
                   </div>
                 </td>

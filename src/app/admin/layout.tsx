@@ -1,5 +1,6 @@
 import React from 'react';
 import styles from './layout.module.css';
+import Link from 'next/link';
 
 export default function AdminLayout({
   children,
@@ -12,9 +13,9 @@ export default function AdminLayout({
         <div className={styles.logo}>Tuina.ai Admin</div>
         <div className={styles.actions}>
           {/* Lien pour basculer vers le Dashboard Étudiant */}
-          <a href="/app/dashboard" className={styles.switchLink}>
+          <Link href="/app/dashboard" className={styles.switchLink}>
             Basculer en vue Étudiant
-          </a>
+          </Link>
         </div>
       </div>
       <main className={styles.mainContent}>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
@@ -11,7 +11,6 @@ import { deleteDocument } from '@/app/actions/documents';
 import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { useEffect } from 'react';
 
 export default function CoursManager({ matiere, initialCours, initialDocuments = [] }: { matiere: any, initialCours: any[], initialDocuments?: any[] }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,6 +20,8 @@ export default function CoursManager({ matiere, initialCours, initialDocuments =
   const router = useRouter();
 
   const [coursList, setCoursList] = useState<any[]>(initialCours);
+  const [isPending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const channel = supabase
@@ -93,13 +94,19 @@ export default function CoursManager({ matiere, initialCours, initialDocuments =
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: 'var(--spacing-standard)' }}>
                 <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}/cours/${cours.id}`); }} style={{ flex: 1 }}>Ouvrir</Button>
-                <Button variant="secondary" onClick={async (e) => { 
+                <Button variant="secondary" onClick={(e) => { 
                   e.preventDefault(); 
                   if(confirm('Voulez-vous vraiment supprimer ce cours ?')) { 
-                    const { deleteCours } = await import('@/app/actions/student');
-                    await deleteCours(cours.id, matiere.id); 
+                    setDeletingId(cours.id);
+                    startTransition(async () => {
+                      const { deleteCours } = await import('@/app/actions/student');
+                      await deleteCours(cours.id, matiere.id); 
+                      setDeletingId(null);
+                    });
                   } 
-                }} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>🗑️</Button>
+                }} disabled={isPending && deletingId === cours.id} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
+                  {isPending && deletingId === cours.id ? '⌛' : '🗑️'}
+                </Button>
               </div>
             </Card>
           </Link>
