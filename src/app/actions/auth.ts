@@ -41,8 +41,8 @@ export async function loginWithAccessCode(email: string, secret: string) {
           return { error: "Votre accès à la plateforme a été bloqué." };
         }
         
-        // S'assurer que l'email correspond au code
-        if (accessCode.email && accessCode.email !== email) {
+        // S'assurer que l'email correspond au code (en ignorant la casse)
+        if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
           return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
         }
       }
@@ -96,7 +96,7 @@ export async function loginWithAccessCode(email: string, secret: string) {
       return { error: "Identifiants ou code d'accès invalides." };
     }
 
-    if (accessCode.email && accessCode.email !== email) {
+    if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
       return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
     }
     if (accessCode.status === 'inactive') {
@@ -106,8 +106,18 @@ export async function loginWithAccessCode(email: string, secret: string) {
       return { error: "L'accès à ce compte a été bloqué." };
     }
 
-    // Assigner l'email si ce n'est pas fait
+    // Assigner l'email si ce n'est pas fait (C'est un code vierge)
     if (!accessCode.email) {
+      // SÉCURITÉ : Vérifier que l'étudiant ne possède pas DÉJÀ un autre code !
+      const { data: existingCodes } = await supabaseAdmin
+        .from('access_codes')
+        .select('id')
+        .ilike('email', email); // Recherche insensible à la casse
+
+      if (existingCodes && existingCodes.length > 0) {
+        return { error: "Vous possédez déjà un code d'accès. Si vous l'avez perdu, demandez à l'administrateur de le réinitialiser." };
+      }
+
       await supabaseAdmin
         .from('access_codes')
         .update({ email: email })
@@ -116,7 +126,7 @@ export async function loginWithAccessCode(email: string, secret: string) {
 
     // Vérifier si l'étudiant a déjà un compte Auth
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const userExists = existingUsers.users.find(u => u.email === email);
+    const userExists = existingUsers.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
 
     if (!userExists) {
       // Création du compte étudiant
