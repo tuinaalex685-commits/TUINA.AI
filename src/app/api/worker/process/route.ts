@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
           .select()
           .single();
 
-        if (secError) throw new Error(\`Erreur insertion section: \${secError.message}\`);
+        if (secError) throw new Error(`Erreur insertion section: ${secError.message}`);
 
         for (const theme of section.themes) {
           const { error: themeError } = await supabaseAdmin
@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
               remediation_fond: theme.branches_remediation_fond
             });
 
-          if (themeError) throw new Error(\`Erreur insertion thème: \${themeError.message}\`);
+          if (themeError) throw new Error(`Erreur insertion thème: ${themeError.message}`);
         }
       }
 
