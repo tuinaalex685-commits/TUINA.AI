@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
 
     // Déclencher le Worker en arrière-plan (Fire-and-forget)
     // On n'attend pas la réponse pour libérer immédiatement le front-end
-    const workerUrl = new URL('/api/worker/process', req.url).toString();
-    fetch(workerUrl, { method: 'POST' }).catch((err) => console.error("Erreur de lancement du worker:", err));
+    import('@/app/api/worker/process/route').then((m) => {
+      m.runWorker().catch((err: any) => console.error("Erreur de lancement du worker:", err));
+    });
 
     // Réponse instantanée au Front-end
     return NextResponse.json({ success: true, status: 'en_attente', coursId: coursEtude.id });

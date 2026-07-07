@@ -91,9 +91,9 @@ const RESPONSE_SCHEMA = {
   required: ["sections"]
 } as Schema;
 
-export async function POST(req: NextRequest) {
+export async function runWorker() {
   try {
-    // Le Worker est protégé, soit par un secret, soit il est interne
+    // Contrôle de concurrence
     // Pour l'instant, on laisse l'appel libre, mais on contrôle l'exécution
     
     // Contrôle de concurrence
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     // Limite stricte pour éviter le Rate Limit Google
     if ((count || 0) >= 5) {
       console.log("[Worker] Trop de jobs en cours. Retourne.");
-      return NextResponse.json({ message: "File pleine" });
+      return { message: "File pleine" };
     }
 
     // Récupérer le plus ancien job en attente
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (fetchError || !job) {
-      return NextResponse.json({ message: "Aucun job en attente" });
+      return { message: "Aucun job en attente" };
     }
 
     // Lock le job en passant son statut à 'en_cours'
@@ -251,21 +251,29 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.from('etude_cours').update({ statut_generation: 'pret' }).eq('id', job.id);
 
       // Si le worker a fini, on relance un appel pour dépiler la suite de la file d'attente
-      fetch(new URL(req.url).toString(), { method: 'POST' }).catch(() => {});
+      setTimeout(() => runWorker().catch(console.error), 0);
 
-      return NextResponse.json({ success: true, processedJob: job.id });
+      return { success: true, processedJob: job.id };
 
     } catch (processError: any) {
       console.error("Worker Error:", processError);
       await supabaseAdmin.from('etude_cours').update({ statut_generation: 'erreur' }).eq('id', job.id);
       
       // On lance le worker sur le job suivant quand même
-      fetch(new URL(req.url).toString(), { method: 'POST' }).catch(() => {});
-      return NextResponse.json({ error: processError.message }, { status: 500 });
+      setTimeout(() => runWorker().catch(console.error), 0);
+      return { error: processError.message };
     }
 
   } catch (error: any) {
     console.error("Worker Global Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return { error: error.message };
   }
+}
+
+export async function POST(req: NextRequest) {
+  const result = await runWorker();
+  if (result.error) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+  return NextResponse.json(result);
 }

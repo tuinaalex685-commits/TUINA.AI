@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
 
     // Sécurité : Si c'est en attente, on s'assure que le worker tourne
     if (coursEtude.statut_generation === 'en_attente') {
-      fetch(new URL('/api/worker/process', req.url).toString(), { method: 'POST' }).catch(() => {});
+      import('@/app/api/worker/process/route').then((m) => {
+        m.runWorker().catch(() => {});
+      });
     }
 
     return NextResponse.json({ 
