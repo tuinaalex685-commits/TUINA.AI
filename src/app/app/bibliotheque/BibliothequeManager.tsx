@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useTransition } from 'react';
+import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Modal } from '@/components/ui/Modal/Modal';
@@ -58,7 +59,7 @@ export default function BibliothequeManager({
       setDeletingId(id);
       startTransition(async () => {
         const res = await deleteDocument(id, url);
-        if (res.error) alert(res.error);
+        if (res.error) toast.error(res.error);
         else router.refresh();
         setDeletingId(null);
       });

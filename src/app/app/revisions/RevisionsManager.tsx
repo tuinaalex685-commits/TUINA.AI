@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { updateFlashcardReview, generateFlashcardsAction } from '@/app/actions/ai';
@@ -106,27 +107,32 @@ export default function RevisionsManager({
 
     try {
       console.log(`[FLOW 2] Appel de la Server Action generateFlashcardsAction...`);
-      const res = await generateFlashcardsAction(docId, docName, cId, flashcardCount);
+      
+      const generationPromise = generateFlashcardsAction(docId, docName, cId, flashcardCount);
+      
+      toast.promise(generationPromise, {
+        loading: 'Analyse et génération des flashcards en cours...',
+        success: 'Flashcards générées avec succès !',
+        error: 'Erreur lors de la génération des flashcards.'
+      });
+
+      const res = await generationPromise;
       setIsGenerating(false);
       
-      const serverLogs = res.logs ? `\n\n--- LOGS SERVEUR ---\n${res.logs.join('\n')}` : '';
-
       if (res.error) {
          console.error(`[FLOW END ERROR] Erreur retournée par le backend :`, res.error);
-         alert(`Erreur: ${res.error}${serverLogs}`);
+         toast.error(`Erreur: ${res.error}`);
       } else {
         console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
         if (res.wasTruncated) {
-          alert(`Flashcards générées !\n\nInformation : Seules les 50 premières pages du PDF ont été analysées pour optimiser les performances de traitement.${serverLogs}`);
-        } else {
-          alert(`Flashcards générées avec succès !${serverLogs}`);
+          toast.success(`Seules les 50 premières pages du PDF ont été analysées.`);
         }
         fetchFlashcards();
       }
     } catch (err: any) {
       console.error(`[FLOW FATAL ERROR] Erreur inattendue :`, err);
       setIsGenerating(false);
-      alert("Erreur système critique ou Timeout de Vercel (délai > 10s dépassé sans réponse du serveur). Détail: " + err.message);
+      toast.error("Erreur système ou délai dépassé. Veuillez réessayer.");
     }
   };
 

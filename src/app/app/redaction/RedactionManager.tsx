@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { Modal } from '@/components/ui/Modal/Modal';
 import { createRedaction, updateRedactionContent, saveRedactionVersion, getDailyRedactionUsage } from '@/app/actions/redaction';
+import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import styles from './redaction.module.css';
@@ -171,28 +172,29 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
   const handleSendForAnalysis = async () => {
     if (!activeRedaction) return;
     if (!contenu.trim()) {
-      alert("Vous devez rédiger du contenu avant de demander une analyse.");
+      toast.error("Vous devez rédiger du contenu avant de demander une analyse.");
       return;
     }
     if (contenu.length > 10000) {
-      alert("Votre texte dépasse la limite autorisée de 10 000 caractères.");
+      toast.error("Votre texte dépasse la limite autorisée de 10 000 caractères.");
       return;
     }
     
     const remaining = Math.max(0, 3 - dailyUsage);
     if (remaining <= 0) {
-      alert("Vous avez atteint votre limite de 3 générations pour aujourd'hui.");
+      toast.error("Vous avez atteint votre limite de 3 générations pour aujourd'hui.");
       return;
     }
 
     if (!confirm(`Il vous reste ${remaining} générations pour aujourd'hui. Voulez-vous utiliser une génération pour ce texte ?`)) return;
 
     setIsAnalyzing(true);
+    const toastId = toast.loading('Analyse de votre rédaction par l\'IA en cours...');
     try {
       const saveRes = await updateRedactionContent(activeRedaction.id, contenu);
       if (saveRes.error) {
         setIsAnalyzing(false);
-        alert("Erreur de sauvegarde avant analyse : " + saveRes.error);
+        toast.error("Erreur de sauvegarde avant analyse : " + saveRes.error, { id: toastId });
         return;
       }
       
@@ -211,7 +213,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         }
       } catch (parseError: any) {
         setIsAnalyzing(false);
-        alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
+        toast.error(`L'IA a rencontré une erreur ou renvoyé un format invalide.`, { id: toastId });
         return;
       }
 
@@ -221,9 +223,9 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
       setIsAnalyzing(false);
 
       if (res.error) {
-        alert("Erreur d'enregistrement de l'analyse : " + res.error);
+        toast.error("Erreur d'enregistrement de l'analyse : " + res.error, { id: toastId });
       } else {
-        alert("Analyse terminée ! Consultez le rapport IA.");
+        toast.success("Analyse terminée ! Consultez le rapport IA.", { id: toastId });
         // UPDATE LOCAL STATE SO IT DISPLAYS IMMEDIATELY
         setActiveRedaction({ ...activeRedaction, rapport_analyse: feedbackJson, statut: 'analysé' });
         setViewMode('analyse');
@@ -233,7 +235,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
     } catch (err: any) {
       setIsAnalyzing(false);
-      alert("Erreur système lors de l'analyse : " + err.message);
+      toast.error("Erreur système lors de l'analyse.", { id: toastId });
     }
   };
 

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Outfit, Space_Mono } from "next/font/google";
 import "../styles/variables.module.css";
 import "./globals.css";
+import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,7 +41,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${inter.variable} ${outfit.variable} ${spaceMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Toaster position="bottom-right" toastOptions={{ duration: 4000, style: { background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' } }} />
+        {children}
+      </body>
     </html>
   );
 }

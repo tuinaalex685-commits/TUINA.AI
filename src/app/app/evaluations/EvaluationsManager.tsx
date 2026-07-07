@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { updateEvaluationScore } from '@/app/actions/student';
@@ -57,7 +58,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
   const handleGenerate = async () => {
     if (!selectedCoursId) {
-      alert("Veuillez sélectionner un cours avant de générer l'évaluation.");
+      toast.error("Veuillez sélectionner un cours avant de générer l'évaluation.");
       return;
     }
     setIsGenerating(true);
@@ -68,6 +69,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     const coursName = coursList.find(c => c.id === selectedCoursId)?.titre || '';
 
     try {
+      const toastId = toast.loading('Création de l\'évaluation en cours...');
       // Memory leak prevention: cancel previous request if still running
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -135,9 +137,10 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         setIsGenerating(false);
         if (parseError.name === 'AbortError') {
            console.log("Génération annulée par l'utilisateur.");
+           toast.dismiss(toastId);
            return;
         }
-        alert(`L'IA a rencontré une erreur ou renvoyé un format invalide: ${parseError.message}`);
+        toast.error(`Erreur de format renvoyé par l'IA.`, { id: toastId });
         return;
       }
 
@@ -156,16 +159,16 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
       if (saveRes.error) {
         console.error(`[EVAL ERROR] Erreur sauvegarde BDD :`, saveRes.error);
-        alert(`Erreur de sauvegarde: ${saveRes.error}`);
+        toast.error(`Erreur de sauvegarde: ${saveRes.error}`, { id: toastId });
       } else {
-        alert(`Évaluation générée avec succès via Streaming !`);
+        toast.success(`Évaluation prête !`, { id: toastId });
         router.refresh();
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Génération annulée par l'utilisateur.");
       } else {
-        alert("Erreur: " + err.message);
+        toast.error("Erreur système ou délai dépassé.");
       }
     } finally {
       setIsGenerating(false);
