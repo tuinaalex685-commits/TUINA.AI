@@ -1,122 +1,96 @@
 .heroSection {
   position: relative;
-  min-height: 100vh;
+  min-height: 90vh;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
-  background-color: var(--bg-dark);
-  color: var(--text-main);
+  justify-content: center;
+  padding: 40px 24px;
   overflow: hidden;
-  padding: 120px 24px;
+  z-index: 10;
 }
 
-/* Image de fond avec les jeunes avocats */
-.imageBg {
-  position: absolute;
-  inset: 0;
-  background-image: url('/hero-bg-jeunes.png');
-  background-size: cover;
-  background-position: center 20%;
-  opacity: 0.25; /* Opacité faible pour ne pas gêner la lisibilité */
-  z-index: 0;
-  pointer-events: none;
-  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-}
-
-/* Grille Futuriste Discrète */
-.gridBg {
-  position: absolute;
-  inset: 0;
-  background-size: 50px 50px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
-  -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* Halos Lumineux Dynamiques */
 .dynamicGlow {
   position: absolute;
-  top: 40%;
-  left: 50%;
   width: 600px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(124, 92, 255, 0.15) 0%, transparent 70%);
-  filter: blur(60px);
-  transform: translate(-50%, -50%);
-  z-index: 0;
+  height: 600px;
+  background: radial-gradient(circle, rgba(45, 107, 228, 0.08) 0%, rgba(124, 92, 255, 0.08) 50%, rgba(255, 255, 255, 0) 70%);
+  border-radius: 50%;
   pointer-events: none;
+  z-index: -1;
+  filter: blur(40px);
 }
 
-/* Contenu */
 .content {
   position: relative;
   z-index: 10;
+  max-width: 800px;
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  max-width: 900px;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-light);
-  border-radius: 99px;
+  background: rgba(45, 107, 228, 0.05);
+  border: 1px solid rgba(45, 107, 228, 0.2);
+  padding: 6px 16px;
+  border-radius: 999px;
   font-family: var(--font-inter), sans-serif;
   font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--color-primary);
   margin-bottom: 32px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .badgeDot {
   width: 8px;
   height: 8px;
+  background-color: var(--color-primary);
   border-radius: 50%;
-  background-color: #7C5CFF;
-  box-shadow: 0 0 10px #7C5CFF;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(45, 107, 228, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(45, 107, 228, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(45, 107, 228, 0); }
 }
 
 .title {
-  font-family: var(--font-inter), sans-serif;
-  font-size: clamp(40px, 6vw, 72px);
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  margin: 0 0 24px 0;
-  color: var(--text-main);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 64px;
+  font-weight: 800;
   line-height: 1.1;
+  letter-spacing: -2px;
+  color: var(--color-text-main);
+  margin: 0 0 24px 0;
 }
 
 .title span {
-  background: linear-gradient(135deg, #FFFFFF, #888888);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
+  display: inline-block;
+  padding-bottom: 8px;
 }
 
 .subtitle {
   font-family: var(--font-inter), sans-serif;
-  font-size: clamp(16px, 2vw, 20px);
-  font-weight: 400;
-  color: var(--text-muted);
-  max-width: 650px;
-  margin: 0 0 48px 0;
-  letter-spacing: 0.01em;
+  font-size: 20px;
   line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 600px;
+  margin: 0 0 40px 0;
+  font-weight: 500;
 }
 
 .ctaWrapper {
   display: flex;
+  gap: 16px;
   justify-content: center;
 }
 
@@ -124,19 +98,46 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  background-color: var(--text-main);
-  color: var(--bg-dark);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
   font-family: var(--font-inter), sans-serif;
-  font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 18px;
   padding: 16px 32px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
+  border-radius: 999px;
   text-decoration: none;
-  box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 24px rgba(45, 107, 228, 0.25);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .primaryBtn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(45, 107, 228, 0.35);
+}
+
+.primaryBtn svg {
+  transition: transform 0.3s ease;
+}
+
+.primaryBtn:hover svg {
+  transform: translateX(4px);
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 40px;
+    letter-spacing: -1px;
+  }
+  
+  .subtitle {
+    font-size: 16px;
+  }
+
+  .primaryBtn {
+    width: 100%;
+    justify-content: center;
+    font-size: 16px;
+    padding: 14px 24px;
+  }
 }

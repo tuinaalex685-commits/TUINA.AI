@@ -1,62 +1,10 @@
 .featuresSection {
-  background-color: var(--bg-dark);
   padding: 120px 24px;
   display: flex;
   justify-content: center;
   position: relative;
   overflow: hidden;
-}
-
-/* Nouvel arrière-plan lumineux profond */
-.luminousBackground {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  opacity: 0.6; /* Plus opaque pour qu'on voit bien le bleu */
-}
-
-.glowCyan, .glowAzure, .glowWhite {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  animation: floatLight 25s infinite alternate ease-in-out;
-}
-
-.glowCyan {
-  width: 700px;
-  height: 700px;
-  background: radial-gradient(circle, rgba(0, 180, 255, 0.6), transparent 70%); /* Bleu plus vif */
-  top: 5%;
-  left: 15%;
-  animation-delay: 0s;
-}
-
-.glowAzure {
-  width: 900px;
-  height: 900px;
-  background: radial-gradient(circle, rgba(0, 112, 243, 0.6), transparent 70%); /* Vrai bleu azur Vercel */
-  bottom: 5%;
-  right: 10%;
-  animation-delay: -8s;
-}
-
-.glowWhite {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(0, 200, 255, 0.4), transparent 70%); /* Cyan clair au lieu de blanc pur */
-  top: 40%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation-delay: -15s;
-}
-
-@keyframes floatLight {
-  0% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(40px, -30px) scale(1.05); }
-  66% { transform: translate(-30px, 40px) scale(0.95); }
-  100% { transform: translate(20px, 20px) scale(1); }
+  z-index: 10;
 }
 
 .container {
@@ -72,11 +20,11 @@
 }
 
 .title {
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-outfit), sans-serif;
   font-size: clamp(32px, 4vw, 48px);
-  font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: var(--color-text-main);
+  letter-spacing: -1px;
 }
 
 .grid {
@@ -87,67 +35,48 @@
 
 .card {
   position: relative;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
+  background: var(--color-bg-main);
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 20px;
   padding: 32px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.cardGlow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at 50% 0%, rgba(124, 92, 255, 0.1), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
+  transition: all 0.4s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
 }
 
 .card:hover {
   transform: translateY(-8px);
-  border-color: var(--border-glow);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4),
-              0 0 0 1px rgba(124, 92, 255, 0.1) inset;
-}
-
-.card:hover .cardGlow {
-  opacity: 1;
+  border-color: rgba(45, 107, 228, 0.3);
+  box-shadow: 0 20px 40px rgba(45, 107, 228, 0.1);
 }
 
 .iconWrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.8); /* Fond noir sombre */
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(45, 107, 228, 0.1);
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #0070F3; /* Premium Blue */
+  color: var(--color-primary);
   margin-bottom: 24px;
   transition: all 0.3s ease;
 }
 
 .card:hover .iconWrapper {
-  background: #000000;
-  border-color: rgba(0, 112, 243, 0.4);
-  color: #3291FF;
-  box-shadow: 0 0 20px rgba(0, 112, 243, 0.2);
+  background: var(--color-primary);
+  color: #fff;
+  transform: scale(1.1);
 }
 
 .cardTitle {
   font-family: var(--font-inter), sans-serif;
   font-size: 20px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 12px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin: 0 0 12px 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -155,19 +84,19 @@
 
 .badge {
   font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
   background: rgba(124, 92, 255, 0.1);
   color: #7C5CFF;
-  border: 1px solid rgba(124, 92, 255, 0.2);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.5px;
 }
 
 .cardDesc {
   font-family: var(--font-inter), sans-serif;
   font-size: 15px;
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--color-text-secondary);
+  margin: 0;
 }

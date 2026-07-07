@@ -1,53 +1,80 @@
 .container {
   min-height: 100vh;
-  background-color: var(--bg-dark);
+  background-color: var(--color-bg-main);
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Grille en arrière-plan subtile pour l'effet Premium */
+.container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  background-image: 
+    linear-gradient(rgba(27, 58, 107, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 58, 107, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .nav {
-  position: absolute;
+  position: sticky;
   top: 0;
   left: 0;
   width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32px 48px;
+  padding: 20px 48px;
   z-index: 50;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
 
 .logo {
   font-family: var(--font-inter), sans-serif;
-  font-weight: 800;
-  font-size: 20px;
-  color: var(--text-main);
-  letter-spacing: -0.02em;
+  font-weight: 900;
+  font-size: 24px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -1px;
 }
 
 .loginBtn {
   font-family: var(--font-inter), sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
   text-decoration: none;
-  padding: 8px 20px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-light);
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 4px 12px rgba(45, 107, 228, 0.3);
   transition: all 0.2s ease;
-  backdrop-filter: blur(8px);
 }
 
 .loginBtn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(45, 107, 228, 0.4);
 }
 
 .footer {
-  background-color: var(--bg-dark);
-  padding: 40px 24px;
-  border-top: 1px solid var(--border-light);
+  background-color: var(--color-bg-secondary);
+  padding: 60px 24px;
+  border-top: 1px solid var(--color-border);
+  position: relative;
+  z-index: 10;
 }
 
 .footerContent {
@@ -57,42 +84,46 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 24px;
 }
 
 .copyright {
   font-family: var(--font-inter), sans-serif;
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .footerInfo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   font-family: var(--font-inter), sans-serif;
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 15px;
+  color: var(--color-text-secondary);
 }
 
 .separator {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--color-border);
 }
 
 .contactLink {
-  color: var(--text-main);
+  color: var(--color-text-main);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .contactLink:hover {
-  color: #0070F3;
+  color: var(--color-primary);
 }
 
 @media (max-width: 768px) {
   .nav {
-    padding: 24px;
+    padding: 16px 24px;
   }
   
   .footerContent {
@@ -103,7 +134,7 @@
   
   .footerInfo {
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
   
   .separator {

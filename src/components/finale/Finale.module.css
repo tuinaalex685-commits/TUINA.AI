@@ -1,11 +1,12 @@
 .finaleSection {
-  background: linear-gradient(to bottom, var(--bg-dark) 0%, rgba(30, 20, 60, 0.4) 100%);
+  background: linear-gradient(to bottom, var(--color-bg-main) 0%, rgba(45, 107, 228, 0.05) 100%);
   padding: 160px 24px;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   overflow: hidden;
+  border-top: 1px solid rgba(45, 107, 228, 0.1);
 }
 
 .finaleSection::before {
@@ -16,7 +17,7 @@
   transform: translate(-50%, -50%);
   width: 1000px;
   height: 1000px;
-  background: radial-gradient(circle, rgba(124, 92, 255, 0.25) 0%, rgba(0, 112, 243, 0.15) 30%, transparent 65%);
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.08) 0%, rgba(0, 112, 243, 0.05) 30%, transparent 65%);
   filter: blur(80px);
   z-index: 0;
   pointer-events: none;
@@ -33,13 +34,12 @@
 }
 
 .title {
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-outfit), sans-serif;
   font-size: clamp(40px, 6vw, 80px);
-  font-weight: 700;
-  color: #ffffff;
+  font-weight: 800;
+  color: var(--color-text-main);
   margin-bottom: 56px;
-  letter-spacing: -0.04em;
-  text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
+  letter-spacing: -2px;
 }
 
 .ctaWrapper {
@@ -58,14 +58,15 @@
 .accessCodeNotice {
   font-family: var(--font-inter), sans-serif;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  background: rgba(45, 107, 228, 0.05);
   padding: 10px 20px;
   border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(45, 107, 228, 0.15);
   display: flex;
   align-items: center;
   gap: 8px;
+  font-weight: 500;
 }
 
 .lockIcon {
@@ -76,21 +77,21 @@
   display: inline-flex;
   align-items: center;
   gap: 16px;
-  background-color: var(--text-main);
-  color: var(--bg-dark);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
   font-family: var(--font-inter), sans-serif;
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 24px 48px;
-  border-radius: 16px;
+  border-radius: 999px;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   text-decoration: none;
-  box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 30px rgba(45, 107, 228, 0.3);
 }
 
 .hugeBtn:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(255, 255, 255, 0.2);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(45, 107, 228, 0.4);
 }
 
 @media (max-width: 768px) {
