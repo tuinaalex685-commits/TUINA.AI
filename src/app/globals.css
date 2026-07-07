@@ -2,12 +2,12 @@
 
 :root {
   /* Colors */
-  --color-primary: #1B3A6B; /* Royal blue */
-  --color-accent: #2D6BE4; /* Accent blue */
+  --color-primary: #D97706; /* Premium Golden Orange */
+  --color-accent: #F59E0B; /* Bright Amber */
   
   /* Backgrounds */
   --color-bg-main: #FFFFFF;
-  --color-bg-secondary: #F4F7FD;
+  --color-bg-secondary: #FFFBEB; /* Soft beige background */
   
   /* Text */
   --color-text-main: #1A1A2E;
@@ -50,10 +50,17 @@ html, body {
   color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 * {
   box-sizing: border-box;
+}
+
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 h1 {

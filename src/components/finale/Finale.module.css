@@ -1,12 +1,12 @@
 .finaleSection {
-  background: linear-gradient(to bottom, var(--color-bg-main) 0%, rgba(45, 107, 228, 0.05) 100%);
+  background: linear-gradient(to bottom, var(--color-bg-main) 0%, rgba(217, 119, 6, 0.05) 100%);
   padding: 160px 24px;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   overflow: hidden;
-  border-top: 1px solid rgba(45, 107, 228, 0.1);
+  border-top: 1px solid rgba(217, 119, 6, 0.1);
 }
 
 .finaleSection::before {
@@ -17,7 +17,7 @@
   transform: translate(-50%, -50%);
   width: 1000px;
   height: 1000px;
-  background: radial-gradient(circle, rgba(124, 92, 255, 0.08) 0%, rgba(0, 112, 243, 0.05) 30%, transparent 65%);
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.05) 30%, transparent 65%);
   filter: blur(80px);
   z-index: 0;
   pointer-events: none;
@@ -59,10 +59,10 @@
   font-family: var(--font-inter), sans-serif;
   font-size: 14px;
   color: var(--color-text-secondary);
-  background: rgba(45, 107, 228, 0.05);
+  background: rgba(217, 119, 6, 0.05);
   padding: 10px 20px;
   border-radius: 30px;
-  border: 1px solid rgba(45, 107, 228, 0.15);
+  border: 1px solid rgba(217, 119, 6, 0.15);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -86,12 +86,12 @@
   border-radius: 999px;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   text-decoration: none;
-  box-shadow: 0 8px 30px rgba(45, 107, 228, 0.3);
+  box-shadow: 0 8px 30px rgba(217, 119, 6, 0.3);
 }
 
 .hugeBtn:hover {
   transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(45, 107, 228, 0.4);
+  box-shadow: 0 20px 40px rgba(217, 119, 6, 0.4);
 }
 
 @media (max-width: 768px) {
