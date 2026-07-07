@@ -87,7 +87,7 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
         <Card style={{ borderTop: '4px solid #FFB400' }}>
           <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px', margin: '0 0 8px 0' }}>CAC (Coût d'Acquisition)</p>
           <h3 style={{ fontSize: '32px', margin: 0, color: 'var(--color-text-main)' }}>{formatCFA(cac)}</h3>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '8px 0 0 0' }}>{formatCFA(marketingSpend)} pub / {totalCodes} clients</p>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '8px 0 0 0' }}>{formatCFA(numericSpend)} pub / {totalCodes} clients</p>
         </Card>
 
         {/* LTV Card */}
