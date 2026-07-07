@@ -33,10 +33,10 @@ export default function Story() {
         
         <motion.div variants={fadeUp} className={styles.content}>
           <p>
-            On le sait tous : les études de droit, c&apos;est dense. Entre la montagne de PDF à lire, les arrêts à ficher et l&apos;organisation qui finit souvent par lâcher en cours d&apos;année, on a vite fait de se sentir noyé sans un bon accompagnement.
+            Le droit est fascinant, mais la charge de travail est écrasante. Entre les centaines de pages de doctrine à lire, la jurisprudence à ficher et la méthodologie stricte, la plupart des étudiants se sentent noyés.
           </p>
           <p>
-            C&apos;est de ce constat qu&apos;est née Tuina.ai. Créée par <strong>Tuina Zoubiesse Alex Ulrich</strong> (lui-même étudiant en droit) et son équipe, c&apos;est très exactement l&apos;outil qu&apos;on aurait tous rêvé d&apos;avoir en première année pour y voir clair et avancer sereinement.
+            C'est exactement pour cela que Tuina.ai a été créé par un étudiant en droit (Tuina Zoubiesse Alex Ulrich). C'est <strong>l'outil qu'il nous manquait en L1</strong> pour y voir clair, gagner du temps et réussir sereinement.
           </p>
         </motion.div>
       </motion.div>

@@ -59,16 +59,16 @@ export default function Hero() {
         </motion.div>
 
         <motion.h1 variants={fadeUp} className={styles.title}>
-          L'IA conçue pour vous faire <span>majorer</span> en droit.
+          Majorez en droit sans sacrifier vos <span>nuits</span>.
         </motion.h1>
         
         <motion.p variants={fadeUp} className={styles.subtitle}>
-          Bien plus qu'un simple outil, Tuina.ai est votre copilote quotidien pour organiser votre semestre, réviser intelligemment et cartonner à vos examens sans y passer vos nuits.
+          Votre professeur particulier virtuel disponible 24h/24. Analysez des arrêts complexes en quelques secondes, révisez intelligemment et arrivez confiant à vos examens.
         </motion.p>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
           <Link href="/login" className={styles.primaryBtn}>
-            Commencer mon apprentissage
+            Débloquer mon potentiel
             <ArrowRight size={20} />
           </Link>
         </motion.div>

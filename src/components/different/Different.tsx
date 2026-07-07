@@ -23,15 +23,15 @@ export default function Different() {
           <div className={styles.glowBg} />
           
           <motion.h2 variants={fadeUp} className={styles.title}>
-            Pourquoi Tuina.ai change la donne ?
+            L'arme secrète des meilleurs étudiants.
           </motion.h2>
           
           <motion.p variants={fadeUp} className={styles.subtitle}>
-            On ne fait pas le travail à votre place. On vous rend meilleur.
+            On ne fait pas le travail à votre place. On vous rend exceptionnel.
           </motion.p>
           
           <motion.p variants={fadeUp} className={styles.desc}>
-            Oubliez les IA génériques qui recrachent du texte sans comprendre votre besoin. Tuina.ai rassemble l&apos;organisation, l&apos;entraînement et la correction dans un seul endroit, pensé à 100% pour la rigueur des études de droit.
+            Oubliez ChatGPT qui invente des lois ou donne des réponses génériques. Tuina.ai est une intelligence artificielle rigoureuse, pensée à 100% pour la méthodologie juridique.
           </motion.p>
         </motion.div>
       </div>

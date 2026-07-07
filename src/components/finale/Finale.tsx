@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion, Variants } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import styles from "./Finale.module.css";
 
 const fadeUp: Variants = {
@@ -21,20 +22,17 @@ export default function Finale() {
         variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
       >
         <motion.h2 variants={fadeUp} className={styles.title}>
-          Prêt à majorer cette année ?
+          Ne laissez pas vos examens au hasard.
         </motion.h2>
         
         <motion.div variants={fadeUp} className={styles.ctaWrapper}>
           <div className={styles.actionGroup}>
             <Link href="/login" className={styles.hugeBtn}>
-              Créer mon compte
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-              </svg>
+              Je prends mon Pass Premium
+              <ArrowRight size={24} />
             </Link>
             <p className={styles.accessCodeNotice}>
-              <span className={styles.lockIcon}>🔒</span> Un code d&apos;accès est requis pour rejoindre la plateforme.
+              <span className={styles.lockIcon}>🔒</span> Un code d'accès est requis pour rejoindre la plateforme.
             </p>
           </div>
         </motion.div>

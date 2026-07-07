@@ -11,11 +11,11 @@ const fadeUp: Variants = {
 };
 
 const features = [
-  { icon: <BookOpen size={20} />, title: "Bibliothèque augmentée", desc: "Chargez vos PDF de cours. L'IA les décortique et vous sort l'essentiel en quelques secondes." },
+  { icon: <BookOpen size={20} />, title: "Lecture Éclair", desc: "Lisez 10x plus vite. Confiez vos PDF de cours à l'IA : elle décortique les notions juridiques et vous extrait l'essentiel instantanément." },
   { icon: <Calendar size={20} />, title: "Organisation au top", desc: "Créez vos matières et planifiez votre semestre sans prise de tête." },
   { icon: <Zap size={20} />, title: "Révisions optimisées", desc: "Des flashcards générées automatiquement avec un algorithme de répétition pour ne rien oublier." },
-  { icon: <Target size={20} />, title: "Entraînement ciblé", desc: "Testez-vous avec des QCM et des quiz générés sur mesure par l'IA." },
-  { icon: <PenTool size={20} />, title: "Aide à la rédaction", desc: "Faites corriger intelligemment vos dissertations et commentaires d'arrêt pour viser l'excellence." },
+  { icon: <Target size={20} />, title: "Simulateur d'Examens", desc: "Ne découvrez pas vos lacunes le jour J. Testez-vous avec des Cas Pratiques et QCM générés sur mesure." },
+  { icon: <PenTool size={20} />, title: "Correction Chirurgicale", desc: "Soumettez vos dissertations et commentaires d'arrêt. L'IA vous corrige et vous donne les clés pour viser le 16/20." },
   { icon: <TrendingUp size={20} />, title: "Suivi en direct", desc: "Visualisez votre progression et vos stats pour rester motivé tout au long de l'année." },
   { icon: <Compass size={20} />, title: "Votre tuteur IA", desc: "Un coach virtuel proactif pour vous guider pas à pas (Bientôt disponible).", isNew: true },
 ];

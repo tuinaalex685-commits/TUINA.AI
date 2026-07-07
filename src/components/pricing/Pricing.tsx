@@ -19,7 +19,7 @@ export default function Pricing() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
-          L'excellence a un prix abordable.
+          Investissez dans votre réussite.
         </motion.h2>
         <motion.p 
           className={styles.subtitle}
@@ -28,7 +28,7 @@ export default function Pricing() {
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
         >
-          Passez à la vitesse supérieure et débloquez tout le potentiel de votre Professeur Universitaire Virtuel.
+          Pour le prix d'un café par semaine, offrez-vous l'avantage déloyal qui fera la différence sur vos relevés de notes.
         </motion.p>
 
         <div className={styles.pricingCards}>
