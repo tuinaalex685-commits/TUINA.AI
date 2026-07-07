@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Sécurité : Si c'est en attente, on s'assure que le worker tourne
-    if (coursEtude.statut_generation === 'en_attente') {
+    if (coursEtude.statut_generation === 'pending') {
       import('@/app/api/worker/process/route').then((m) => {
         m.runWorker().catch(() => {});
       });

@@ -36,7 +36,7 @@ export async function runWorker() {
     const { data: job, error: fetchError } = await supabaseAdmin
       .from('etude_cours')
       .select('id, pdf_id')
-      .eq('statut_generation', 'en_attente')
+      .eq('statut_generation', 'pending')
       .order('created_at', { ascending: true })
       .limit(1)
       .single();

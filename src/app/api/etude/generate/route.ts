@@ -48,26 +48,28 @@ export async function POST(req: NextRequest) {
       if (coursEtude.statut_generation === 'pret') {
         return NextResponse.json({ success: true, message: "Déjà généré", coursId: coursEtude.id, status: 'pret' });
       }
-      if (coursEtude.statut_generation === 'en_cours' || coursEtude.statut_generation === 'en_attente') {
+      if (coursEtude.statut_generation === 'en_cours' || coursEtude.statut_generation === 'pending') {
         if (!force) {
-          // On renvoie 'en_attente' ou 'en_cours' au front-end pour qu'il commence le polling
-          return NextResponse.json({ success: true, message: "Génération en cours", coursId: coursEtude.id, status: coursEtude.statut_generation });
+          // On renvoie 'pending' ou 'en_cours' au front-end pour qu'il commence le polling
+          return NextResponse.json({ success: true, status: coursEtude.statut_generation, coursId: coursEtude.id });
         }
       }
     } else {
-      // Créer l'entrée
+      // 3. Créer une nouvelle entrée dans etude_cours si elle n'existe pas
       const { data: newCours, error: insertError } = await supabaseAdmin
         .from('etude_cours')
-        .insert({ pdf_id: documentId, statut_generation: 'en_attente' })
+        .insert({ pdf_id: documentId, statut_generation: 'pending' })
         .select()
         .single();
-        
-      if (insertError) throw new Error(insertError.message);
+
+      if (insertError) throw new Error("Erreur création etude_cours : " + insertError.message);
       coursEtude = newCours;
     }
 
-    // Mettre le statut en attente (pour le retry ou si nouveau)
-    await supabaseAdmin.from('etude_cours').update({ statut_generation: 'en_attente' }).eq('id', coursEtude.id);
+    // 4. Si force = true, on réinitialise l'état
+    if (force) {
+      await supabaseAdmin.from('etude_cours').update({ statut_generation: 'pending' }).eq('id', coursEtude.id);
+    }
 
     // Déclencher le Worker en arrière-plan avec next/server after() pour Vercel
     after(() => {
@@ -76,8 +78,7 @@ export async function POST(req: NextRequest) {
       });
     });
 
-    // Réponse instantanée au Front-end
-    return NextResponse.json({ success: true, status: 'en_attente', coursId: coursEtude.id });
+    return NextResponse.json({ success: true, status: 'pending', coursId: coursEtude.id });
 
   } catch (error: any) {
     console.error("API Generer Etude Error:", error);
