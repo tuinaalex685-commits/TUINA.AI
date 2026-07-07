@@ -42,7 +42,7 @@ export function Header({ className, isAdmin = false }: { className?: string, isA
       </div>
       <div className={styles.actions}>
         {isAdmin && (
-          <Link href="/admin/dashboard" className={styles.mobileHidden}>
+          <Link href="/admin/dashboard">
             <Button variant="secondary" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
               Retour Admin
             </Button>

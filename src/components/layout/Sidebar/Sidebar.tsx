@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { label: 'Progression', path: '/app/progression', icon: '📈' },
 ];
 
-export function Sidebar({ className }: { className?: string }) {
+export function Sidebar({ className, isAdmin }: { className?: string, isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -67,7 +67,12 @@ export function Sidebar({ className }: { className?: string }) {
           })}
         </nav>
         
-        <div style={{ marginTop: 'auto', padding: 'var(--spacing-standard)', borderTop: '1px solid var(--color-border)' }}>
+        <div style={{ marginTop: 'auto', padding: 'var(--spacing-standard)', borderTop: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {isAdmin && (
+            <Link href="/admin/dashboard" className={styles.navItem} style={{ width: '100%', color: 'var(--color-primary)', backgroundColor: 'var(--color-bg-main)', border: '1px solid var(--color-primary)', justifyContent: 'center' }}>
+              <span className={styles.label} style={{ fontWeight: 'bold' }}>Retour Admin</span>
+            </Link>
+          )}
           <button onClick={handleLogout} className={styles.navItem} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error)' }}>
             <span className={styles.icon}>🚪</span>
             <span className={styles.label}>Déconnexion</span>

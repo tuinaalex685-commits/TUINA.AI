@@ -25,7 +25,7 @@ export default async function AppLayout({
 
   return (
     <div className={styles.appContainer}>
-      <Sidebar className={styles.sidebar} />
+      <Sidebar className={styles.sidebar} isAdmin={isAdmin} />
       <div className={styles.mainWrapper}>
         <Header className={styles.header} isAdmin={isAdmin} />
         <main className={styles.mainContent}>

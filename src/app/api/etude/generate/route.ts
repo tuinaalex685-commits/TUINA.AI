@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+
+export const maxDuration = 300;
 
 const supabaseAdmin = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -66,10 +69,11 @@ export async function POST(req: NextRequest) {
     // Mettre le statut en attente (pour le retry ou si nouveau)
     await supabaseAdmin.from('etude_cours').update({ statut_generation: 'en_attente' }).eq('id', coursEtude.id);
 
-    // Déclencher le Worker en arrière-plan (Fire-and-forget)
-    // On n'attend pas la réponse pour libérer immédiatement le front-end
-    import('@/app/api/worker/process/route').then((m) => {
-      m.runWorker().catch((err: any) => console.error("Erreur de lancement du worker:", err));
+    // Déclencher le Worker en arrière-plan avec next/server after() pour Vercel
+    after(() => {
+      import('@/app/api/worker/process/route').then((m) => {
+        m.runWorker().catch((err: any) => console.error("Erreur de lancement du worker:", err));
+      });
     });
 
     // Réponse instantanée au Front-end
