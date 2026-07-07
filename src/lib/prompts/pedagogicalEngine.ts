@@ -1,126 +1,142 @@
 import { Type, Schema } from '@google/genai';
 
-export const PRE_ANALYSIS_SCHEMA: Schema = {
+export const PEDAGOGICAL_MASTER_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    langue_principale: { type: Type.STRING },
-    discipline_juridique: { type: Type.STRING },
-    pays_systeme_juridique: { type: Type.STRING },
-    type_document: { 
-      type: Type.STRING, 
-      description: "Ex: Cours magistral, Fiche de TD, Dissertation juridique, Cas pratique, Commentaire d'arrêt, Jurisprudence, Anglais juridique, Code annoté, etc." 
+    intelligence_pedagogique: {
+      type: Type.OBJECT,
+      description: "Carte mentale exhaustive du document pour construire le moteur pédagogique",
+      properties: {
+        langue_principale: { type: Type.STRING },
+        discipline_juridique: { type: Type.STRING },
+        pays_systeme_juridique: { type: Type.STRING },
+        type_document: { type: Type.STRING, description: "Nature réelle du document" },
+        niveau_universitaire: { type: Type.STRING },
+        difficulte: { type: Type.STRING },
+        notions_fondamentales: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ce que l'étudiant doit absolument retenir" },
+        notions_secondaires: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ce qui est secondaire" },
+        connaissances_prealables: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Prérequis nécessaires" },
+        liens_inter_chapitres: { type: Type.ARRAY, items: { type: Type.STRING } },
+        exceptions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        exceptions_aux_exceptions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        distinctions_doctrinales: { type: Type.ARRAY, items: { type: Type.STRING } },
+        erreurs_90_pourcent: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Erreurs que 90% des étudiants commettent" },
+        pieges_enseignants: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Pièges utilisés par les enseignants" },
+        notions_souvent_confondues: { type: Type.ARRAY, items: { type: Type.STRING } },
+        questions_qui_tombent_souvent: { type: Type.ARRAY, items: { type: Type.STRING } },
+        questions_qui_ne_tombent_jamais: { type: Type.ARRAY, items: { type: Type.STRING } },
+        raisonnements_attendus: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ex: Syllogisme, Qualification juridique, Fiche d'arrêt" },
+        methodes_resolution: { type: Type.ARRAY, items: { type: Type.STRING } },
+        articles_essentiels: { type: Type.ARRAY, items: { type: Type.STRING } },
+        jurisprudences_importantes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        jurisprudences_souvent_confondues: { type: Type.ARRAY, items: { type: Type.STRING } },
+        elements_evalues_examen: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      required: [
+        "langue_principale", "type_document", "notions_fondamentales", "erreurs_90_pourcent",
+        "pieges_enseignants", "raisonnements_attendus", "elements_evalues_examen"
+      ]
     },
-    niveau_universitaire: { type: Type.STRING },
-    difficulte: { type: Type.STRING },
-    structure_document: { type: Type.STRING },
-    objectifs_pedagogiques: { type: Type.ARRAY, items: { type: Type.STRING } },
-    competences_visees: { type: Type.ARRAY, items: { type: Type.STRING } },
-    notions_fondamentales: { type: Type.ARRAY, items: { type: Type.STRING } },
-    notions_secondaires: { type: Type.ARRAY, items: { type: Type.STRING } },
-    exceptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-    distinctions_importantes: { type: Type.ARRAY, items: { type: Type.STRING } },
-    notions_frequemment_confondues: { type: Type.ARRAY, items: { type: Type.STRING } },
-    pieges_classiques: { type: Type.ARRAY, items: { type: Type.STRING } },
-    erreurs_etudiantes_frequentes: { type: Type.ARRAY, items: { type: Type.STRING } },
-    raisonnements_juridiques_indispensables: { type: Type.ARRAY, items: { type: Type.STRING } },
-    articles_essentiels: { type: Type.ARRAY, items: { type: Type.STRING } },
-    jurisprudences_importantes: { type: Type.ARRAY, items: { type: Type.STRING } },
-    concepts_evalues_examen: { type: Type.ARRAY, items: { type: Type.STRING } }
+    strategie_pedagogique_sur_mesure: {
+      type: Type.STRING,
+      description: "Le Professeur (l'IA) définit ici, en langage clair, la meilleure méthode pour enseigner CE document spécifique en se basant sur l'intelligence extraite ci-dessus. Cette stratégie dictera la façon dont les sections seront générées."
+    },
+    sections: {
+      type: Type.ARRAY,
+      description: "Le cours interactif généré en appliquant rigoureusement la 'strategie_pedagogique_sur_mesure' définie ci-dessus.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          ordre: { type: Type.INTEGER },
+          titre: { type: Type.STRING },
+          synthese: { type: Type.STRING, description: "Texte narratif résumant cette section." },
+          themes: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                ordre: { type: Type.INTEGER },
+                titre: { type: Type.STRING },
+                explication: { type: Type.STRING, description: "Explication pédagogique au format Markdown, structurée exactement selon la 'strategie_pedagogique_sur_mesure'." },
+                question_forme: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING },
+                    choix: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    reponse_correcte: { type: Type.STRING }
+                  },
+                  required: ["question", "choix", "reponse_correcte"]
+                },
+                cas_pratique_fond: {
+                  type: Type.OBJECT,
+                  properties: {
+                    situation: { type: Type.STRING },
+                    question: { type: Type.STRING },
+                    reponse_attendue_ou_choix: { type: Type.STRING }
+                  },
+                  required: ["situation", "question", "reponse_attendue_ou_choix"]
+                },
+                branches_remediation_forme: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: { blocage: { type: Type.STRING }, reexplication: { type: Type.STRING } },
+                    required: ["blocage", "reexplication"]
+                  }
+                },
+                branches_remediation_fond: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: { blocage: { type: Type.STRING }, reexplication: { type: Type.STRING } },
+                    required: ["blocage", "reexplication"]
+                  }
+                }
+              },
+              required: ["ordre", "titre", "explication", "question_forme", "cas_pratique_fond", "branches_remediation_forme", "branches_remediation_fond"]
+            }
+          },
+          questions_cloture_section: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                choix: { type: Type.ARRAY, items: { type: Type.STRING } },
+                reponse_correcte: { type: Type.STRING }
+              },
+              required: ["question", "choix", "reponse_correcte"]
+            }
+          }
+        },
+        required: ["ordre", "titre", "synthese", "themes", "questions_cloture_section"]
+      }
+    }
   },
-  required: [
-    "langue_principale", "discipline_juridique", "type_document", "notions_fondamentales", 
-    "pieges_classiques", "erreurs_etudiantes_frequentes", "raisonnements_juridiques_indispensables"
-  ]
+  required: ["intelligence_pedagogique", "strategie_pedagogique_sur_mesure", "sections"]
 };
 
-export function getPreAnalysisPrompt(documentText: string): string {
-  return `Tu es un Professeur d'université de très haut niveau et un expert en pédagogie juridique. 
-Ton rôle est d'analyser en profondeur le document fourni pour en extraire l'essence pédagogique, avant toute tentative d'enseignement.
-Ne génère PAS de cours. Analyse simplement le contenu avec une précision chirurgicale pour remplir la grille d'intelligence pédagogique.
+export function getPedagogicalMasterPrompt(documentText: string): string {
+  return `Tu es un collège composé des meilleurs Professeurs d'université de droit, d'un Docteur en Droit, d'un concepteur de sujets d'examen et d'un Major de promotion.
+Ton objectif est de créer un Moteur Pédagogique absolu à partir du document fourni.
 
-Directives :
-1. Identifie précisément la langue, la discipline, et le type exact du document (ex: Cours magistral, Fiche de TD, Dissertation, Cas pratique, Commentaire d'arrêt, Décision de justice, etc.).
-2. Dégage les notions fondamentales et secondaires.
-3. Identifie les pièges classiques, les erreurs fréquentes des étudiants et les confusions possibles sur ce sujet spécifique.
-4. Identifie les raisonnements juridiques indispensables (ex: syllogisme, qualification juridique, etc.).
-5. Fais preuve d'une rigueur académique absolue. N'invente pas de jurisprudence ou d'articles de loi s'ils ne s'appliquent pas.
+ATTENTION : La génération de la réponse JSON DOIT suivre un ordre chronologique strict (Single-Pass Knowledge Generation) :
 
-Voici le document brut :
+ÉTAPE 1 : Remplis l'objet 'intelligence_pedagogique'.
+Analyse le document en profondeur. Dresse une véritable "carte mentale". Identifie la nature exacte du document (Arrêt, Cas pratique, Cours, etc.), les notions clés, mais surtout les erreurs que 90% des étudiants commettent, les pièges d'examen, les exceptions et les raisonnements attendus (ex: syllogisme). Ne génère aucun cours ici.
 
-${documentText}
-`;
-}
+ÉTAPE 2 : Rédige la 'strategie_pedagogique_sur_mesure'.
+En te basant UNIQUEMENT sur l'intelligence que tu viens d'extraire, invente la meilleure méthode pour enseigner ce document. Ne te limite à aucune catégorie prédéfinie. Si c'est un cas pratique, enseigne la méthode. Si c'est un commentaire d'arrêt, enseigne la fiche d'arrêt. Si c'est un mélange, invente une méthode mixte. Adapte le vocabulaire, la progression et les analogies.
 
-export function getPedagogicalStrategyPrompt(intelligence: any, documentText: string): string {
-  const typeDoc = (intelligence.type_document || '').toLowerCase();
-  
-  let specificStrategy = `**Stratégie Pédagogique par défaut** : 
-Enseigne les notions progressivement. Hiérarchise l'information.`;
+ÉTAPE 3 : Génère les 'sections' (Le cours interactif).
+En appliquant RIGOUREUSEMENT la stratégie sur-mesure que tu viens d'inventer, rédige le cours.
+- L'explication (Markdown) doit suivre ta propre stratégie.
+- Les exercices (question_forme, cas_pratique_fond) doivent CIBLER EXCLUSIVEMENT les "erreurs_90_pourcent", les "pieges_enseignants" et les "notions_souvent_confondues" identifiés à l'étape 1. Les mauvaises réponses doivent être de vraies erreurs d'étudiants, jamais des choix absurdes.
+- La remédiation doit ré-expliquer la règle oubliée en ciblant l'erreur logique.
 
-  if (typeDoc.includes('cas pratique') || typeDoc.includes('cas_pratique')) {
-    specificStrategy = `**Stratégie Pédagogique - Cas Pratique** :
-1. Enseigne la méthode de qualification juridique des faits.
-2. Apprends à l'étudiant à poser correctement le problème de droit.
-3. Enseigne le syllogisme juridique (Majeure = règles de droit applicables, Mineure = application aux faits de l'espèce, Conclusion).
-4. Focalise-toi sur l'application pratique plutôt que sur la théorie pure.`;
-  } else if (typeDoc.includes('commentaire') && (typeDoc.includes('arrêt') || typeDoc.includes('arret') || typeDoc.includes('decision'))) {
-    specificStrategy = `**Stratégie Pédagogique - Commentaire d'Arrêt** :
-1. Enseigne la méthode de la fiche d'arrêt (Faits, Procédure, Prétentions, Problème de droit, Solution).
-2. Apprends à analyser le sens, la valeur et la portée de la décision.
-3. Pousse l'étudiant à critiquer la décision et à la replacer dans son contexte jurisprudentiel.
-4. Explique l'architecture d'un plan de commentaire d'arrêt.`;
-  } else if (typeDoc.includes('dissertation')) {
-    specificStrategy = `**Stratégie Pédagogique - Dissertation Juridique** :
-1. Enseigne l'importance de l'analyse des termes du sujet.
-2. Enseigne comment construire une problématique forte et pertinente.
-3. Apprends à construire un plan bipartite structuré (I. A/B, II. A/B) typique des facultés de droit.
-4. Montre comment lier les concepts théoriques entre eux.`;
-  } else if (typeDoc.includes('anglais')) {
-    specificStrategy = `**Stratégie Pédagogique - Anglais Juridique** :
-1. Privilégie le vocabulaire juridique spécifique, les expressions techniques.
-2. Signale les faux amis (ex: 'Magistrate' vs 'Magistrat', 'Jurisprudence' vs 'Case Law').
-3. Explique les distinctions fondamentales entre Common Law et Civil Law lorsque c'est pertinent.
-4. Enseigne la compréhension des notions juridiques anglo-saxonnes.`;
-  } else if (typeDoc.includes('cours') || typeDoc.includes('magistral')) {
-    specificStrategy = `**Stratégie Pédagogique - Cours Magistral** :
-1. Explique les concepts de manière progressive, de la théorie à la pratique.
-2. Montre les liens logiques entre les différentes notions.
-3. Mets en évidence l'évolution législative ou jurisprudentielle si mentionnée.
-4. Explique clairement "pourquoi" la règle existe (ratio legis).`;
-  }
+Ne réponds jamais à côté, sois d'une rigueur académique absolue. Génère l'ensemble dans la langue principale détectée du document.
 
-  return `Tu es une équipe de quatre experts (Un Professeur d'université, un Docteur en Droit, un Concepteur d'examen, et un Major de promotion). 
-Ton objectif est de créer un cours interactif (sections, thèmes, explications, exercices) à partir d'un document, en utilisant l'intelligence pédagogique qui a déjà été extraite.
-
-**Langue d'enseignement** : Le cours DOIT être généré dans la langue principale identifiée (${intelligence.langue_principale || 'Français'}).
-
-**Intelligence Pédagogique du document** :
-- Type de document : ${intelligence.type_document}
-- Discipline : ${intelligence.discipline_juridique}
-- Niveau attendu : ${intelligence.niveau_universitaire}
-- Notions fondamentales : ${intelligence.notions_fondamentales?.join(', ')}
-- Pièges classiques : ${intelligence.pieges_classiques?.join(', ')}
-- Erreurs fréquentes : ${intelligence.erreurs_etudiantes_frequentes?.join(', ')}
-- Raisonnements attendus : ${intelligence.raisonnements_juridiques_indispensables?.join(', ')}
-
-${specificStrategy}
-
-RÈGLE 1 : RÉFLEXION INVISIBLE OBLIGATOIRE (Champ '_reflexion_interne_comite')
-Avant de générer le contenu, débattez dans le champ '_reflexion_interne_comite'. Identifiez comment appliquer la stratégie pédagogique spécifique à ce document.
-
-RÈGLE 2 : CONTENU PÉDAGOGIQUE ADAPTÉ (Champ 'explication')
-Le champ 'explication' doit contenir l'explication au format Markdown. 
-Tu NE DOIS PAS utiliser une progression rigide pour tous les documents. Tu DOIS adapter ta pédagogie à la "Stratégie Pédagogique" définie ci-dessus.
-Hiérarchise les notions, explique les exceptions, les distinctions et les pièges d'examen.
-
-RÈGLE 3 : EXERCICES INTELLIGENTS (Champs 'question_forme' et 'cas_pratique_fond')
-Génère des exercices qui ciblent SPÉCIFIQUEMENT les "Pièges classiques", "Erreurs fréquentes" et "Raisonnements attendus" listés dans l'intelligence pédagogique.
-Les mauvaises réponses doivent refléter les vraies erreurs étudiantes.
-
-RÈGLE 4 : REMÉDIATION INTELLIGENTE (Champs 'branches_remediation')
-Explique pourquoi l'erreur classique est logique en apparence mais fausse juridiquement, et rappelle la règle oubliée.
-
-Voici le document brut pour contexte :
+Voici le document brut pour démarrer ton raisonnement :
 
 ${documentText}
 `;

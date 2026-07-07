@@ -13,84 +13,6 @@ const supabaseAdmin = createSupabaseClient(
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    _reflexion_interne_comite: { type: Type.STRING, description: "Espace de réflexion INVISIBLE. ULTRA CONCIS (style télégraphique, puces courtes). Le comité y liste : Fondamentaux, Pièges, Exceptions. Ne pas faire de phrases longues." },
-    sections: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          ordre: { type: Type.INTEGER },
-          titre: { type: Type.STRING },
-          synthese: { type: Type.STRING, description: "Texte narratif résumant cette section." },
-          themes: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                ordre: { type: Type.INTEGER },
-                titre: { type: Type.STRING },
-                explication: { type: Type.STRING, description: "Cours complet formaté en Markdown suivant strictement la progression en 11 étapes pédagogiques requise (Synthèse, Explication notion, Ratio legis, Logique législateur, Conditions, Exceptions, Conséquences, Pièges, Confusions, Exemple, Évaluation) et incluant les étoiles d'importance (★)." },
-                question_forme: {
-                  type: Type.OBJECT,
-                  properties: {
-                    question: { type: Type.STRING },
-                    choix: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    reponse_correcte: { type: Type.STRING }
-                  },
-                  required: ["question", "choix", "reponse_correcte"]
-                },
-                cas_pratique_fond: {
-                  type: Type.OBJECT,
-                  properties: {
-                    situation: { type: Type.STRING },
-                    question: { type: Type.STRING },
-                    reponse_attendue_ou_choix: { type: Type.STRING }
-                  },
-                  required: ["situation", "question", "reponse_attendue_ou_choix"]
-                },
-                branches_remediation_forme: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: { blocage: { type: Type.STRING }, reexplication: { type: Type.STRING } },
-                    required: ["blocage", "reexplication"]
-                  }
-                },
-                branches_remediation_fond: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: { blocage: { type: Type.STRING }, reexplication: { type: Type.STRING } },
-                    required: ["blocage", "reexplication"]
-                  }
-                }
-              },
-              required: ["ordre", "titre", "explication", "question_forme", "cas_pratique_fond", "branches_remediation_forme", "branches_remediation_fond"]
-            }
-          },
-          questions_cloture_section: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                choix: { type: Type.ARRAY, items: { type: Type.STRING } },
-                reponse_correcte: { type: Type.STRING }
-              },
-              required: ["question", "choix", "reponse_correcte"]
-            }
-          }
-        },
-        required: ["ordre", "titre", "synthese", "themes", "questions_cloture_section"]
-      }
-    }
-  },
-  required: ["sections"]
-} as Schema;
-
 export async function runWorker() {
   try {
     // Contrôle de concurrence
@@ -153,45 +75,9 @@ export async function runWorker() {
 
       const text = pdfData.text;
 
-      // 5. Phase 1 : Analyse Préalable (Intelligence Pédagogique)
-      const { PRE_ANALYSIS_SCHEMA, getPreAnalysisPrompt, getPedagogicalStrategyPrompt } = await import('@/lib/prompts/pedagogicalEngine');
+      // 5. Phase Unique : Single-Pass Master Generation
+      const { PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt } = await import('@/lib/prompts/pedagogicalEngine');
       
-      let intelligenceData: any = null;
-      let intelligenceRetryCount = 0;
-      let lastIntelligenceError: any = null;
-      
-      while (intelligenceRetryCount < 2 && !intelligenceData) {
-        try {
-          const aiAnalysisResponse = await genAI.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: getPreAnalysisPrompt(text.substring(0, 80000)),
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: PRE_ANALYSIS_SCHEMA,
-              temperature: 0.1
-            }
-          });
-          intelligenceData = JSON.parse(aiAnalysisResponse.text || "{}");
-        } catch (genError: any) {
-          console.error("Gemini Pre-Analysis Error (Retry):", genError);
-          lastIntelligenceError = genError;
-          intelligenceRetryCount++;
-        }
-      }
-
-      if (!intelligenceData) {
-        throw new Error("Impossible de générer l'intelligence pédagogique. Erreur: " + lastIntelligenceError?.message);
-      }
-
-      // Sauvegarde de l'intelligence dans la table documents
-      await supabaseAdmin
-        .from('documents')
-        .update({ intelligence_pedagogique: intelligenceData })
-        .eq('id', job.pdf_id);
-
-      // 6. Phase 2 : Génération du Cours avec Stratégie Adaptée
-      const prompt = getPedagogicalStrategyPrompt(intelligenceData, text.substring(0, 80000));
-
       let generatedData: any = null;
       let retryCount = 0;
       let lastGenError: any = null;
@@ -200,26 +86,37 @@ export async function runWorker() {
         try {
           const aiResponse = await genAI.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: prompt,
+            contents: getPedagogicalMasterPrompt(text.substring(0, 80000)),
             config: {
               responseMimeType: 'application/json',
-              responseSchema: RESPONSE_SCHEMA,
+              responseSchema: PEDAGOGICAL_MASTER_SCHEMA,
               temperature: 0.2
             }
           });
           generatedData = JSON.parse(aiResponse.text || "{}");
         } catch (genError: any) {
-          console.error("Gemini Generation Error (Retry):", genError);
+          console.error("Gemini Single-Pass Generation Error (Retry):", genError);
           lastGenError = genError;
           retryCount++;
         }
       }
 
-      if (!generatedData || !generatedData.sections) {
+      if (!generatedData || !generatedData.intelligence_pedagogique || !generatedData.sections) {
         throw new Error("Impossible de générer un JSON valide pour le cours. Erreur: " + lastGenError?.message);
       }
 
-      // 6. Sauvegarder en DB
+      // 6. Sauvegarde de la super-intelligence dans la table documents
+      const fullIntelligence = {
+        ...generatedData.intelligence_pedagogique,
+        strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
+      };
+
+      await supabaseAdmin
+        .from('documents')
+        .update({ intelligence_pedagogique: fullIntelligence })
+        .eq('id', job.pdf_id);
+
+      // 7. Sauvegarder les sections en DB
       for (const section of generatedData.sections) {
         const { data: sectionData, error: secError } = await supabaseAdmin
           .from('etude_sections')
