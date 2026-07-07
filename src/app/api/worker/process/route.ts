@@ -13,20 +13,15 @@ const supabaseAdmin = createSupabaseClient(
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export async function runWorker() {
+export async function runWorker(workerUrlStr?: string) {
   try {
-    // Contrôle de concurrence
-    // Pour l'instant, on laisse l'appel libre, mais on contrôle l'exécution
-    
-    // Contrôle de concurrence
+    // Limite stricte pour éviter le Rate Limit Google
     const { count, error: countError } = await supabaseAdmin
       .from('etude_cours')
       .select('id', { count: 'exact', head: true })
       .eq('statut_generation', 'en_cours');
       
     if (countError) throw new Error("Erreur de comptage");
-    
-    // Limite stricte pour éviter le Rate Limit Google
     if ((count || 0) >= 5) {
       console.log("[Worker] Trop de jobs en cours. Retourne.");
       return { message: "File pleine" };
@@ -45,11 +40,19 @@ export async function runWorker() {
       return { message: "Aucun job en attente" };
     }
 
-    // Lock le job en passant son statut à 'en_cours'
-    await supabaseAdmin
+    // Lock atomique du job
+    const { data: updatedJob, error: lockError } = await supabaseAdmin
       .from('etude_cours')
       .update({ statut_generation: 'en_cours' })
-      .eq('id', job.id);
+      .eq('id', job.id)
+      .eq('statut_generation', 'pending')
+      .select()
+      .single();
+
+    if (lockError || !updatedJob) {
+      console.log("[Worker] Job déjà pris par un autre processus.");
+      return { message: "Job déjà pris" };
+    }
 
     try {
       // 1. Récupérer le document
@@ -105,7 +108,7 @@ export async function runWorker() {
         throw new Error("Impossible de générer un JSON valide pour le cours. Erreur: " + lastGenError?.message);
       }
 
-      // 6. Sauvegarde de la super-intelligence dans la table documents
+      // 6. Sauvegarde de la super-intelligence
       const fullIntelligence = {
         ...generatedData.intelligence_pedagogique,
         strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
@@ -153,8 +156,10 @@ export async function runWorker() {
       // Tout s'est bien passé
       await supabaseAdmin.from('etude_cours').update({ statut_generation: 'pret' }).eq('id', job.id);
 
-      // Si le worker a fini, on relance un appel pour dépiler la suite de la file d'attente
-      setTimeout(() => runWorker().catch(console.error), 0);
+      // Relancer un appel HTTP pour le job suivant (évite le timeout récursif de Vercel)
+      if (workerUrlStr) {
+        fetch(workerUrlStr, { method: 'POST' }).catch(() => {});
+      }
 
       return { success: true, processedJob: job.id };
 
@@ -162,8 +167,9 @@ export async function runWorker() {
       console.error("Worker Error:", processError);
       await supabaseAdmin.from('etude_cours').update({ statut_generation: 'erreur' }).eq('id', job.id);
       
-      // On lance le worker sur le job suivant quand même
-      setTimeout(() => runWorker().catch(console.error), 0);
+      if (workerUrlStr) {
+        fetch(workerUrlStr, { method: 'POST' }).catch(() => {});
+      }
       return { error: processError.message };
     }
 
@@ -174,7 +180,11 @@ export async function runWorker() {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await runWorker();
+  const protocol = req.headers.get('x-forwarded-proto') || 'http';
+  const host = req.headers.get('host') || 'localhost:3000';
+  const workerUrl = `${protocol}://${host}/api/worker/process`;
+
+  const result = await runWorker(workerUrl);
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }

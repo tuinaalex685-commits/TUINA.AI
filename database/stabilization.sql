@@ -69,3 +69,6 @@ CREATE POLICY "Users can insert own versions" ON public.redaction_versions FOR I
 
 -- 12. DOCUMENTS : Ajouter l'intelligence pédagogique
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS intelligence_pedagogique JSONB;
+
+-- 13. ETUDE_COURS : Contrainte d'unicité sur pdf_id pour éviter les doublons générés en concurrence
+ALTER TABLE public.etude_cours ADD CONSTRAINT unique_pdf_id UNIQUE (pdf_id);

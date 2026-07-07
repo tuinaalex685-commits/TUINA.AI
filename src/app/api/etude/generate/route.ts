@@ -55,15 +55,32 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      // 3. Créer une nouvelle entrée dans etude_cours si elle n'existe pas
+      // 3. Créer une nouvelle entrée dans etude_cours (Safe concurrency)
       const { data: newCours, error: insertError } = await supabaseAdmin
         .from('etude_cours')
         .insert({ pdf_id: documentId, statut_generation: 'pending' })
         .select()
         .single();
 
-      if (insertError) throw new Error("Erreur création etude_cours : " + insertError.message);
-      coursEtude = newCours;
+      if (insertError) {
+        // En cas de conflit de concurrence (Race condition gérée par la contrainte UNIQUE)
+        if (insertError.code === '23505' || insertError.message?.includes('unique')) {
+          const { data: existingCours } = await supabaseAdmin
+            .from('etude_cours')
+            .select('*')
+            .eq('pdf_id', documentId)
+            .single();
+          if (existingCours) {
+            coursEtude = existingCours;
+          } else {
+            throw new Error("Erreur création etude_cours (conflit irrésolu) : " + insertError.message);
+          }
+        } else {
+          throw new Error("Erreur création etude_cours : " + insertError.message);
+        }
+      } else {
+        coursEtude = newCours;
+      }
     }
 
     // 4. Si force = true, on réinitialise l'état
