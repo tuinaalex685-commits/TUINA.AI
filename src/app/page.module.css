@@ -5,6 +5,8 @@
   flex-direction: column;
   position: relative;
   overflow-x: hidden;
+  user-select: none; /* Prevent awkward text selection */
+  -webkit-user-select: none;
 }
 
 /* Grille en arrière-plan subtile pour l'effet Premium */

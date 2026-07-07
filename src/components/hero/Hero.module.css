@@ -62,12 +62,13 @@
 
 .title {
   font-family: var(--font-outfit), sans-serif;
-  font-size: 64px;
+  font-size: clamp(48px, 6vw, 72px);
   font-weight: 800;
   line-height: 1.1;
-  letter-spacing: -2px;
-  color: var(--color-text-main);
+  letter-spacing: -1.5px;
+  color: #0f172a; /* Rich slate dark color */
   margin: 0 0 24px 0;
+  text-wrap: balance;
 }
 
 .title span {
@@ -80,12 +81,13 @@
 
 .subtitle {
   font-family: var(--font-inter), sans-serif;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.6;
-  color: var(--color-text-secondary);
-  max-width: 600px;
+  color: #475569; /* Slate grey */
+  max-width: 650px;
   margin: 0 0 40px 0;
   font-weight: 500;
+  text-wrap: balance;
 }
 
 .ctaWrapper {
