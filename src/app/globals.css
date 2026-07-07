@@ -2,12 +2,17 @@
 
 :root {
   /* Colors */
-  --color-primary: #D97706; /* Premium Golden Orange */
-  --color-accent: #F59E0B; /* Bright Amber */
+  --color-primary: #1B3A6B; /* Royal blue */
+  --color-accent: #2D6BE4; /* Accent blue */
+  
+  /* Embellishments */
+  --color-orange: #F59E0B;
+  --color-green: #10B981;
+  --color-brown: #8B5A2B;
   
   /* Backgrounds */
   --color-bg-main: #FFFFFF;
-  --color-bg-secondary: #FFFBEB; /* Soft beige background */
+  --color-bg-secondary: #F8FAFC; /* Light slate gray */
   
   /* Text */
   --color-text-main: #1A1A2E;

@@ -48,15 +48,15 @@
 
 .card:hover {
   transform: translateY(-8px);
-  border-color: rgba(217, 119, 6, 0.3);
-  box-shadow: 0 20px 40px rgba(217, 119, 6, 0.1);
+  border-color: rgba(45, 107, 228, 0.3);
+  box-shadow: 0 20px 40px rgba(45, 107, 228, 0.1);
 }
 
 .iconWrapper {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: rgba(217, 119, 6, 0.1);
+  background: rgba(45, 107, 228, 0.1);
   display: flex;
   justify-content: center;
   align-items: center;
