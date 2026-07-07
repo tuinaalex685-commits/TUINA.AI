@@ -18,6 +18,22 @@
   color: var(--color-text-main);
 }
 
+.hamburgerBtn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--color-text-main);
+  padding: 8px;
+  margin-right: 8px;
+  margin-left: -8px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.hamburgerBtn:active {
+  background: var(--color-bg-secondary);
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -45,5 +61,10 @@
   }
   .mobileHidden {
     display: none;
+  }
+  .hamburgerBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }

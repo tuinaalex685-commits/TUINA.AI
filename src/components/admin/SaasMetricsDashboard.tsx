@@ -208,7 +208,7 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
           ? 'linear-gradient(135deg, rgba(0, 200, 100, 0.1), rgba(0, 200, 100, 0.02))' 
           : 'linear-gradient(135deg, rgba(255, 50, 50, 0.1), rgba(255, 50, 50, 0.02))', 
         border: `1px solid ${isGoldenRuleMet ? 'rgba(0, 200, 100, 0.2)' : 'rgba(255, 50, 50, 0.2)'}`, 
-        display: 'flex', alignItems: 'flex-start', gap: '20px',
+        display: 'flex', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap',
         boxShadow: isGoldenRuleMet ? '0 8px 32px rgba(0, 200, 100, 0.05)' : '0 8px 32px rgba(255, 50, 50, 0.05)'
       }}>
         <div style={{ 

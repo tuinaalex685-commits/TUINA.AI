@@ -100,3 +100,25 @@
   color: var(--color-text-main);
   margin: 0;
 }
+
+@media (max-width: 768px) {
+  .featuresSection {
+    padding: 60px 16px;
+  }
+  
+  .header {
+    margin-bottom: 40px;
+  }
+  
+  .title {
+    font-size: clamp(28px, 8vw, 36px);
+  }
+  
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .card {
+    padding: 24px;
+  }
+}

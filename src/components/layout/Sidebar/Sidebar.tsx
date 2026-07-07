@@ -1,7 +1,8 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { X } from 'lucide-react';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
@@ -18,15 +19,30 @@ const NAV_ITEMS = [
 
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Mobile nav (5 max): Dashboard, Matières, Révisions, Évaluations, Menu
+  useEffect(() => {
+    const handleToggle = () => setIsOpen(prev => !prev);
+    window.addEventListener('toggle-sidebar', handleToggle);
+    return () => window.removeEventListener('toggle-sidebar', handleToggle as EventListener);
+  }, []);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   return (
-    <aside className={`${styles.sidebar} ${className || ''}`}>
-      <div className={styles.logoContainer}>
-        <h1 className={styles.logo}>Tuina.ai</h1>
-      </div>
-      
-      <nav className={styles.nav}>
+    <>
+      {isOpen && <div className={styles.overlay} onClick={() => setIsOpen(false)} />}
+      <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''} ${className || ''}`}>
+        <div className={styles.logoContainer}>
+          <h1 className={styles.logo}>Tuina.ai</h1>
+          <button className={styles.closeBtn} onClick={() => setIsOpen(false)}>
+            <X size={24} />
+          </button>
+        </div>
+        
+        <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
           const isActive = pathname?.startsWith(item.path);
           return (
@@ -43,5 +59,6 @@ export function Sidebar({ className }: { className?: string }) {
         })}
       </nav>
     </aside>
+    </>
   );
 }

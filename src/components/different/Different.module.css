@@ -68,7 +68,29 @@
 }
 
 @media (max-width: 768px) {
+  .differentSection {
+    padding: 60px 16px;
+  }
+
   .contentBox {
     padding: 40px 24px;
+    border-radius: 24px;
+  }
+  
+  .title {
+    font-size: clamp(28px, 8vw, 36px);
+  }
+  
+  .subtitle {
+    font-size: 20px;
+  }
+  
+  .desc {
+    font-size: 16px;
+  }
+  
+  .glowBg {
+    width: 300px;
+    height: 300px;
   }
 }

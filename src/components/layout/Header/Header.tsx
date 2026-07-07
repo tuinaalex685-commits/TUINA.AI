@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import styles from './Header.module.css';
 import { Button } from '@/components/ui/Button/Button';
 import Link from 'next/link';
+import { Menu } from 'lucide-react';
 
 const ROUTE_TITLES: Record<string, string> = {
   '/app/dashboard': 'Dashboard',
@@ -29,6 +30,13 @@ export function Header({ className, isAdmin = false }: { className?: string, isA
 
   return (
     <header className={`${styles.header} ${className || ''}`}>
+      <button 
+        className={styles.hamburgerBtn}
+        onClick={() => window.dispatchEvent(new CustomEvent('toggle-sidebar'))}
+        aria-label="Open Menu"
+      >
+        <Menu size={24} />
+      </button>
       <div className={styles.titleContainer}>
         <h2 className={styles.title}>{title}</h2>
       </div>
