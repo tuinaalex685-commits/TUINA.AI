@@ -82,7 +82,6 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         headers: { 'Content-Type': 'application/json' },
         signal: abortControllerRef.current.signal,
         body: JSON.stringify({
-          documentId: 'dummy',
           coursName,
           coursId: selectedCoursId,
           type: selectedType,
@@ -151,8 +150,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         meta_type: selectedType,
         titre: `Évaluation - ${coursName || 'Cours'}`,
         questions: questionsJson,
-        cours_id: selectedCoursId,
-        document_id: 'dummy'
+        cours_id: selectedCoursId
       });
 
       setIsGenerating(false);

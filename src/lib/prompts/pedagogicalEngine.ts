@@ -141,3 +141,28 @@ Voici le document brut pour démarrer ton raisonnement :
 ${documentText}
 `;
 }
+
+export const JIT_INTELLIGENCE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    intelligence_pedagogique: PEDAGOGICAL_MASTER_SCHEMA.properties!.intelligence_pedagogique,
+    strategie_pedagogique_sur_mesure: PEDAGOGICAL_MASTER_SCHEMA.properties!.strategie_pedagogique_sur_mesure
+  },
+  required: ["intelligence_pedagogique", "strategie_pedagogique_sur_mesure"]
+};
+
+export function getJitIntelligencePrompt(documentText: string): string {
+  return `Tu es un collège composé des meilleurs Professeurs d'université de droit, d'un Docteur en Droit, d'un concepteur de sujets d'examen et d'un Major de promotion.
+Ton objectif est de créer une "Super-Intelligence" pédagogique à partir du document fourni.
+
+ATTENTION : Ne génère AUCUN cours. Tu dois uniquement analyser et extraire les concepts selon le format JSON demandé.
+
+ÉTAPES :
+1. Analyse le document en profondeur et dresse une véritable "carte mentale" (langue, notions, erreurs classiques, pièges, exceptions).
+2. Rédige une stratégie pédagogique sur-mesure décrivant la meilleure façon de transmettre ce savoir spécifique.
+
+Voici le document brut pour démarrer ton raisonnement :
+
+${documentText}
+`;
+}

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { type, count, text, pdfBase64 } = body;
+    const { type, count, coursId } = body;
 
     // 1. Authentification
     const { createClient } = await import('@/lib/supabase/server');
@@ -32,8 +32,85 @@ export async function POST(req: Request) {
       console.warn(`[SECURITY] Paramètre count abusif (${count}) bloqué pour User: ${user.id}`);
       return NextResponse.json({ error: "Le nombre de questions doit être compris entre 1 et 20." }, { status: 400 });
     }
-    
-    console.log(`[API EVALUATE] Génération de ${safeCount} questions de type ${type} pour User: ${user.id}`);
+
+    if (!coursId) {
+      return NextResponse.json({ error: "coursId est requis." }, { status: 400 });
+    }
+
+    // 3. Récupération du Document et de son Intelligence
+    const { data: coursData, error: coursError } = await supabase
+      .from('cours')
+      .select('document_id')
+      .eq('id', coursId)
+      .single();
+
+    if (coursError || !coursData?.document_id) {
+       return NextResponse.json({ error: "Cours ou document associé introuvable." }, { status: 404 });
+    }
+
+    const { data: document, error: docError } = await supabase
+      .from('documents')
+      .select('id, url_fichier, intelligence_pedagogique')
+      .eq('id', coursData.document_id)
+      .single();
+
+    if (docError || !document) {
+      return NextResponse.json({ error: "Document introuvable." }, { status: 404 });
+    }
+
+    let intelligence = document.intelligence_pedagogique;
+
+    // --- FETCH PDF POUR L'ÉVALUATION ---
+    let pdfBase64 = "";
+    let buffer: Buffer | null = null;
+    try {
+      const response = await fetch(document.url_fichier);
+      const arrayBuffer = await response.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      pdfBase64 = buffer.toString('base64');
+    } catch (e) {
+      console.warn("Impossible de récupérer le PDF source pour l'évaluation", e);
+    }
+
+    // --- JUST-IN-TIME INTELLIGENCE ---
+    if (!intelligence && buffer) {
+      console.log(`[API EVALUATE] Just-In-Time Intelligence pour le document ${document.id}`);
+      
+      // @ts-ignore
+      const pdfParse = (await import('pdf-parse')).default;
+      const pdfData = await pdfParse(buffer);
+      
+      if (pdfData.numpages <= 100) {
+        const text = pdfData.text;
+
+        const { GoogleGenAI } = await import('@google/genai');
+        const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const { JIT_INTELLIGENCE_SCHEMA, getJitIntelligencePrompt } = await import('@/lib/prompts/pedagogicalEngine');
+        
+        const aiResponse = await genAI.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: getJitIntelligencePrompt(text.substring(0, 80000)),
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: JIT_INTELLIGENCE_SCHEMA,
+            temperature: 0.2
+          }
+        });
+        
+        const generatedData = JSON.parse(aiResponse.text || "{}");
+        if (generatedData && generatedData.intelligence_pedagogique) {
+          intelligence = {
+            ...generatedData.intelligence_pedagogique,
+            strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
+          };
+          // Sauvegarder en DB pour les futurs appels
+          await supabase.from('documents').update({ intelligence_pedagogique: intelligence }).eq('id', document.id);
+        }
+      }
+    }
+    // ---------------------------------
+
+    console.log(`[API EVALUATE] Génération de ${safeCount} questions de type ${type} pour User: ${user.id} (JIT Ok)`);
 
     let schemaTypeProps: any = {};
     let instruction = "";
@@ -85,7 +162,8 @@ export async function POST(req: Request) {
     
     Tâche : ${instruction}`;
     
-    const prompt = text ? `Analyse ce cours comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce texte :\n\n${text}` : "Analyse ce document comme un professeur préparant ses partiels, puis génère l'évaluation.";
+    const intelligenceContext = intelligence ? `\n\nVoici l'intelligence pédagogique extraite du document (erreurs fréquentes, pièges, notions fondamentales) sur laquelle tu DOIS baser tes questions :\n${JSON.stringify(intelligence, null, 2)}` : "";
+    const prompt = `Analyse le document fourni comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce document.${intelligenceContext}`;
 
     return await streamStructuredJSON(systemInstruction, prompt, schema, pdfBase64, req.signal);
 
