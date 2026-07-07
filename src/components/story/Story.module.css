@@ -40,7 +40,7 @@
 }
 
 .founderCard {
-  background: #ffffff;
+  background: linear-gradient(145deg, #ffffff 0%, rgba(245, 158, 11, 0.06) 100%);
   border: 1px solid rgba(45, 107, 228, 0.15);
   border-radius: 24px;
   padding: 48px;
