@@ -1,42 +1,79 @@
 .adminContainer {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   background-color: var(--color-bg-secondary);
+  position: relative;
 }
 
 .header {
-  height: 64px;
-  background-color: var(--color-primary);
-  color: white;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--spacing-section);
-  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
 }
 
-.logo {
+.logoContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoIcon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 10px rgba(45, 107, 228, 0.2);
+}
+
+.logoText {
   font-weight: 700;
   font-size: 20px;
+  color: var(--color-text-main);
+  letter-spacing: -0.5px;
 }
 
 .switchLink {
-  background-color: rgba(255, 255, 255, 0.1);
-  padding: var(--spacing-small) var(--spacing-standard);
-  border-radius: var(--radius-button);
+  background-color: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  padding: 8px 16px;
+  border-radius: 999px;
   font-size: 14px;
-  font-weight: 500;
-  color: white;
-  transition: background-color 150ms ease;
+  font-weight: 600;
+  color: var(--color-text-main);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .switchLink:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
 .mainContent {
   flex: 1;
-  padding: var(--spacing-large);
-  overflow-y: auto;
+  padding: var(--spacing-large) var(--spacing-section);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
