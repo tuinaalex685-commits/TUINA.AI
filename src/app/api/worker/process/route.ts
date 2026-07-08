@@ -15,6 +15,27 @@ const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function runWorker(workerUrlStr?: string) {
   try {
+    // NETTOYAGE DES JOBS ZOMBIES : Si un job est en 'en_cours' depuis + de 15 min sans heartbeat récent, on le remet en 'pending'
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: zombieJobs } = await supabaseAdmin
+      .from('etude_cours')
+      .select('id')
+      .eq('statut_generation', 'en_cours')
+      .or(`heartbeat.is.null,heartbeat.lt.${fifteenMinAgo}`);
+
+    if (zombieJobs && zombieJobs.length > 0) {
+      console.log(`[Worker] ${zombieJobs.length} job(s) zombie(s) détecté(s). Réinitialisation...`);
+      for (const zombie of zombieJobs) {
+        await supabaseAdmin.from('etude_cours').update({
+          statut_generation: 'pending',
+          started_at: null,
+          heartbeat: null,
+          last_error: 'Job zombie réinitialisé automatiquement',
+          updated_at: new Date().toISOString()
+        }).eq('id', zombie.id);
+      }
+    }
+
     // Limite stricte pour éviter le Rate Limit Google
     const { count, error: countError } = await supabaseAdmin
       .from('etude_cours')
@@ -61,14 +82,30 @@ export async function runWorker(workerUrlStr?: string) {
     const startTime = Date.now();
 
     try {
-      // 1. Récupérer le document ET son texte/intelligence en cache
+      // 1. Récupérer le document (colonnes de base garanties d'exister)
       const { data: document, error: docError } = await supabaseAdmin
         .from('documents')
-        .select('url_fichier, extracted_text, intelligence_pedagogique')
+        .select('url_fichier, extracted_text')
         .eq('id', job.pdf_id)
         .single();
 
-      if (docError || !document) throw new Error("Document introuvable");
+      if (docError || !document) {
+        console.error(`[Worker] Document introuvable pour pdf_id=${job.pdf_id}. Erreur Supabase:`, docError?.message);
+        throw new Error(`Document introuvable (pdf_id: ${job.pdf_id}). Vérifiez que le document existe dans la table 'documents'.`);
+      }
+
+      // 1b. Récupérer l'intelligence pédagogique séparément (la colonne peut ne pas exister en prod)
+      let existingIntelligenceFromDB: any = null;
+      try {
+        const { data: intellDoc } = await supabaseAdmin
+          .from('documents')
+          .select('intelligence_pedagogique')
+          .eq('id', job.pdf_id)
+          .single();
+        existingIntelligenceFromDB = intellDoc?.intelligence_pedagogique || null;
+      } catch (intellError: any) {
+        console.warn(`[Worker] Colonne intelligence_pedagogique inaccessible (probablement inexistante): ${intellError.message}. Continuation sans cache.`);
+      }
 
       let text = document.extracted_text;
       
@@ -102,7 +139,7 @@ export async function runWorker(workerUrlStr?: string) {
       const { generateStructuredJSON } = await import('@/lib/gemini');
 
       // 4. Vérifier la compatibilité de l'intelligence existante
-      const existingIntelligence = document.intelligence_pedagogique;
+      const existingIntelligence = existingIntelligenceFromDB;
       const isIntelligenceCompatible = existingIntelligence && 
                                       existingIntelligence._metadata && 
                                       existingIntelligence._metadata.engine_version === ENGINE_VERSION;
@@ -110,10 +147,6 @@ export async function runWorker(workerUrlStr?: string) {
       let generatedData: any = null;
 
       if (isIntelligenceCompatible) {
-         // OPTIMISATION FUTURE: Si l'intelligence existe déjà, on pourrait créer un prompt plus petit qui ne génère QUE les sections.
-         // Mais pour l'instant, le PEDAGOGICAL_MASTER_SCHEMA attend l'intelligence en retour.
-         // On force quand même la génération complète avec le schéma master actuel pour éviter les erreurs de format.
-         // On injectera l'intelligence_pedagogique_existante dans le prompt pour aider Gemini.
          console.log(`[Worker] Intelligence compatible (v${ENGINE_VERSION}) trouvée, injection dans le contexte...`);
       }
 
@@ -132,7 +165,7 @@ export async function runWorker(workerUrlStr?: string) {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
 
-      // 6. Sauvegarde de la super-intelligence avec le versionnement (on écrase ou met à jour)
+      // 6. Sauvegarde de la super-intelligence (si la colonne existe)
       const { PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
       const fullIntelligence = {
         _metadata: {
@@ -145,10 +178,15 @@ export async function runWorker(workerUrlStr?: string) {
         strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
       };
 
-      await supabaseAdmin
-        .from('documents')
-        .update({ intelligence_pedagogique: fullIntelligence })
-        .eq('id', job.pdf_id);
+      // Tentative de sauvegarde (non bloquante si la colonne n'existe pas)
+      try {
+        await supabaseAdmin
+          .from('documents')
+          .update({ intelligence_pedagogique: fullIntelligence })
+          .eq('id', job.pdf_id);
+      } catch (saveIntelError: any) {
+        console.warn(`[Worker] Impossible de sauvegarder l'intelligence pédagogique: ${saveIntelError.message}. Colonne probablement absente.`);
+      }
 
       // Heartbeat 2
       await supabaseAdmin.from('etude_cours').update({ heartbeat: new Date().toISOString() }).eq('id', job.id);
@@ -160,28 +198,36 @@ export async function runWorker(workerUrlStr?: string) {
           .insert({
             cours_id: job.id,
             titre: section.titre,
-            ordre: section.ordre
+            synthese: section.synthese || '',
+            ordre: section.ordre,
+            questions_cloture: section.questions_cloture_section || []
           })
           .select('id')
           .single();
 
-        if (secError) throw new Error("Erreur insertion section");
+        if (secError) {
+          console.error(`[Worker] Erreur insertion section: ${secError.message} (Code: ${secError.code})`);
+          throw new Error(`Erreur insertion section: ${secError.message}`);
+        }
 
         for (const theme of section.themes) {
           const { error: themeError } = await supabaseAdmin
             .from('etude_themes')
             .insert({
               section_id: sectionData.id,
-              cours_id: job.id,
               titre: theme.titre,
-              points_cles: theme.points_cles,
-              difficulte: theme.difficulte,
-              type_contenu: theme.type_contenu,
-              explication_pedagogique: theme.explication_pedagogique,
+              explication: theme.explication || '',
+              question_forme: theme.question_forme || {},
+              cas_pratique_fond: theme.cas_pratique_fond || {},
+              remediation_forme: theme.branches_remediation_forme || [],
+              remediation_fond: theme.branches_remediation_fond || [],
               ordre: theme.ordre
             });
 
-          if (themeError) throw new Error(`Erreur insertion thème: ${themeError.message}`);
+          if (themeError) {
+            console.error(`[Worker] Erreur insertion thème '${theme.titre}': ${themeError.message} (Code: ${themeError.code})`);
+            throw new Error(`Erreur insertion thème: ${themeError.message}`);
+          }
         }
       }
 

@@ -48,10 +48,10 @@ export async function POST(req: Request) {
        return NextResponse.json({ error: "Cours ou document associé introuvable." }, { status: 404 });
     }
 
-    // CACHE-FIRST : On récupère AUSSI le texte extrait pour éviter un re-téléchargement
+    // CACHE-FIRST : On récupère le texte extrait (colonnes garanties d'exister)
     const { data: document, error: docError } = await supabase
       .from('documents')
-      .select('id, url_fichier, intelligence_pedagogique, extracted_text')
+      .select('id, url_fichier, extracted_text')
       .eq('id', coursData.document_id)
       .single();
 
@@ -59,7 +59,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Document introuvable." }, { status: 404 });
     }
 
-    let intelligence = document.intelligence_pedagogique;
+    // Récupérer l'intelligence pédagogique séparément (colonne peut ne pas exister)
+    let intelligence: any = null;
+    try {
+      const { data: intellDoc } = await supabase
+        .from('documents')
+        .select('intelligence_pedagogique')
+        .eq('id', coursData.document_id)
+        .single();
+      intelligence = intellDoc?.intelligence_pedagogique || null;
+    } catch (intellErr) {
+      console.warn(`[API EVALUATE] Colonne intelligence_pedagogique inaccessible. Continuation sans cache.`);
+    }
+
     let extractedText = document.extracted_text || "";
     let pdfBase64 = "";
 
