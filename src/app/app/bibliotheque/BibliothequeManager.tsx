@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useTransition, useOptimistic } from 'react';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
@@ -8,7 +8,6 @@ import { Modal } from '@/components/ui/Modal/Modal';
 import { deleteDocument } from '@/app/actions/documents';
 import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 
 export default function BibliothequeManager({ 
   initialDocuments 
@@ -17,36 +16,14 @@ export default function BibliothequeManager({
 }) {
   const router = useRouter();
   
-  const [documents, setDocuments] = useState<any[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Écoute des changements en temps réel sur la table documents
-    const channel = supabase
-      .channel('realtime-documents')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'documents' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            // L'INSERT ne contient pas les jointures (matieres, cours). 
-            // On peut soit refetch, soit faire un optimistic update minimal, soit router.refresh()
-            // Pour être sûr d'avoir les relations, on déclenche un refresh serveur qui va maj initialDocuments
-            router.refresh();
-          } else if (payload.eventType === 'DELETE') {
-            setDocuments(prev => prev.filter(doc => doc.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setDocuments(prev => prev.map(doc => doc.id === payload.new.id ? { ...doc, ...payload.new } : doc));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [router]);
+  // Optimistic UI : On affiche instantanément la suppression sans attendre le serveur
+  const [optimisticDocuments, removeOptimisticDocument] = useOptimistic(
+    initialDocuments,
+    (state, idToRemove: string) => state.filter((doc) => doc.id !== idToRemove)
+  );
 
   // État pour la visionneuse PDF
   const [pdfUrlToView, setPdfUrlToView] = useState<string | null>(null);
@@ -56,11 +33,16 @@ export default function BibliothequeManager({
 
   const handleDelete = (id: string, url: string) => {
     if (confirm("Voulez-vous vraiment supprimer ce document ? Cela supprimera également les flashcards et quiz qui y sont liés.")) {
-      setDeletingId(id);
       startTransition(async () => {
+        setDeletingId(id);
+        removeOptimisticDocument(id); // Suppression visuelle instantanée
         const res = await deleteDocument(id, url);
-        if (res.error) toast.error(res.error);
-        else router.refresh();
+        if (res.error) {
+          toast.error(res.error);
+          router.refresh(); // Revert visuel en cas d'erreur
+        } else {
+          toast.success("Document supprimé !");
+        }
         setDeletingId(null);
       });
     }
@@ -80,7 +62,7 @@ export default function BibliothequeManager({
         </Button>
       </header>
 
-      {documents.length === 0 ? (
+      {optimisticDocuments.length === 0 ? (
         <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
           <span style={{ fontSize: '48px', marginBottom: 'var(--spacing-small)' }}>📚</span>
           <h3>Aucun document importé.</h3>
@@ -91,7 +73,7 @@ export default function BibliothequeManager({
         </Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 'var(--spacing-standard)' }}>
-          {documents.map(doc => (
+          {optimisticDocuments.map(doc => (
             <Card key={doc.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--spacing-standard)' }}>
                 <span style={{ fontSize: '40px' }}>📄</span>

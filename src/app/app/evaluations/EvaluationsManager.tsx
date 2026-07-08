@@ -14,28 +14,8 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
 
   const [quizList, setQuizList] = useState<any[]>(initialQuiz);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel('realtime-evaluations')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'evaluations' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            router.refresh();
-          } else if (payload.eventType === 'DELETE') {
-            setQuizList(prev => prev.filter(q => q.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setQuizList(prev => prev.map(q => q.id === payload.new.id ? { ...q, ...payload.new } : q));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [router]);
+  // L'abonnement Realtime a été supprimé pour économiser les WebSockets (Scalabilité SaaS).
+  // La synchronisation se fait désormais via router.refresh() (RSC) après chaque action (Génération/Validation).
 
   useEffect(() => {
     setQuizList(initialQuiz);
