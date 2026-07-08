@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { KeyRound, ChevronRight } from 'lucide-react';
 import styles from './page.module.css';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboard() {
   // Récupérer les codes pour calculer le MRR, Churn, etc.
   const { data: codes } = await supabaseAdmin.from('access_codes').select('*');

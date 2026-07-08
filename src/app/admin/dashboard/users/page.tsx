@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { Card } from '@/components/ui/Card/Card';
 import AccessCodeManager from './AccessCodeManager';
 
+export const dynamic = 'force-dynamic';
+
 export default async function UsersAdminPage() {
   // Récupérer tous les codes d'accès avec le client admin (sans RLS)
   const { data: codes, error } = await supabaseAdmin

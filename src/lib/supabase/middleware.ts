@@ -69,7 +69,17 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // 3. Empêcher l'utilisateur valide de retourner sur /login
+    // 3. Protection stricte des routes Administrateur
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      if (!isAdmin) {
+        // Un étudiant tente d'accéder à l'admin -> Redirection immédiate
+        const url = request.nextUrl.clone()
+        url.pathname = '/app/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
+
+    // 4. Empêcher l'utilisateur valide de retourner sur /login
     if (request.nextUrl.pathname === '/login') {
       const url = request.nextUrl.clone()
       url.pathname = isAdmin ? '/admin/dashboard' : '/app/dashboard'
