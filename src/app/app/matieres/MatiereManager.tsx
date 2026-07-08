@@ -32,29 +32,6 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
   );
 
   useEffect(() => {
-    const channel = supabase
-      .channel('realtime-matieres')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'matieres' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setMatieres(prev => [payload.new, ...prev.filter(m => m.id !== payload.new.id)]);
-          } else if (payload.eventType === 'DELETE') {
-            setMatieres(prev => prev.filter(m => m.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setMatieres(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  useEffect(() => {
     setMatieres(initialMatieres);
   }, [initialMatieres]);
 

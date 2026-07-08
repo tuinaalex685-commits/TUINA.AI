@@ -32,29 +32,6 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
   );
 
   useEffect(() => {
-    const channel = supabase
-      .channel('realtime-objectifs')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'objectifs' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setObjectifs(prev => [payload.new, ...prev.filter(o => o.id !== payload.new.id)]);
-          } else if (payload.eventType === 'DELETE') {
-            setObjectifs(prev => prev.filter(o => o.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setObjectifs(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  useEffect(() => {
     setObjectifs(initialObjectifs);
   }, [initialObjectifs]);
 
