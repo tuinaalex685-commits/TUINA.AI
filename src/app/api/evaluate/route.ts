@@ -48,9 +48,10 @@ export async function POST(req: Request) {
        return NextResponse.json({ error: "Cours ou document associé introuvable." }, { status: 404 });
     }
 
+    // CACHE-FIRST : On récupère AUSSI le texte extrait pour éviter un re-téléchargement
     const { data: document, error: docError } = await supabase
       .from('documents')
-      .select('id, url_fichier, intelligence_pedagogique')
+      .select('id, url_fichier, intelligence_pedagogique, extracted_text')
       .eq('id', coursData.document_id)
       .single();
 
@@ -59,54 +60,70 @@ export async function POST(req: Request) {
     }
 
     let intelligence = document.intelligence_pedagogique;
-
-    // --- FETCH PDF POUR L'ÉVALUATION ---
+    let extractedText = document.extracted_text || "";
     let pdfBase64 = "";
-    let buffer: Buffer | null = null;
-    try {
-      const response = await fetch(document.url_fichier);
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      pdfBase64 = buffer.toString('base64');
-    } catch (e) {
-      console.warn("Impossible de récupérer le PDF source pour l'évaluation", e);
+
+    // --- CACHE INTELLIGENT : Ne télécharger le PDF QUE si nécessaire ---
+    if (!extractedText) {
+      // Pas de texte en cache → télécharger et parser le PDF
+      console.log(`[API EVALUATE] Cache MISS pour extracted_text du document ${document.id}. Téléchargement...`);
+      try {
+        const response = await fetch(document.url_fichier);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        pdfBase64 = buffer.toString('base64');
+
+        // @ts-ignore
+        const pdfParse = (await import('pdf-parse')).default;
+        const pdfData = await pdfParse(buffer);
+        extractedText = pdfData.text;
+
+        // Sauvegarder en cache pour les futurs appels (déduplication)
+        await supabase.from('documents').update({ extracted_text: extractedText }).eq('id', document.id);
+        console.log(`[API EVALUATE] Texte extrait et mis en cache (${extractedText.length} chars).`);
+      } catch (e) {
+        console.warn("[API EVALUATE] Impossible de récupérer/parser le PDF source", e);
+      }
+    } else {
+      console.log(`[API EVALUATE] Cache HIT pour extracted_text du document ${document.id} (${extractedText.length} chars). PDF non téléchargé.`);
     }
 
-    // --- JUST-IN-TIME INTELLIGENCE ---
-    if (!intelligence && buffer) {
-      console.log(`[API EVALUATE] Just-In-Time Intelligence pour le document ${document.id}`);
+    // --- JUST-IN-TIME INTELLIGENCE (réutilisée par tous les utilisateurs du même doc) ---
+    if (!intelligence && extractedText) {
+      console.log(`[API EVALUATE] Cache MISS pour intelligence_pedagogique. Génération JIT...`);
       
-      // @ts-ignore
-      const pdfParse = (await import('pdf-parse')).default;
-      const pdfData = await pdfParse(buffer);
+      const { generateStructuredJSON } = await import('@/lib/gemini');
+      const { JIT_INTELLIGENCE_SCHEMA, getJitIntelligencePrompt, ENGINE_VERSION, PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
       
-      if (pdfData.numpages <= 100) {
-        const text = pdfData.text;
-
-        const { GoogleGenAI } = await import('@google/genai');
-        const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const { JIT_INTELLIGENCE_SCHEMA, getJitIntelligencePrompt } = await import('@/lib/prompts/pedagogicalEngine');
+      try {
+        const generatedData = await generateStructuredJSON(
+          "Tu es un expert en pédagogie juridique. Analyse le document et génère l'intelligence pédagogique.",
+          getJitIntelligencePrompt(extractedText.substring(0, 80000)),
+          JIT_INTELLIGENCE_SCHEMA,
+          undefined, // Pas de pdfBase64
+          { userId: user.id, feature: 'jit_intelligence', documentId: document.id }
+        );
         
-        const aiResponse = await genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: getJitIntelligencePrompt(text.substring(0, 80000)),
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: JIT_INTELLIGENCE_SCHEMA,
-            temperature: 0.2
-          }
-        });
-        
-        const generatedData = JSON.parse(aiResponse.text || "{}");
         if (generatedData && generatedData.intelligence_pedagogique) {
           intelligence = {
+            _metadata: {
+              engine_version: ENGINE_VERSION,
+              prompt_version: PROMPT_VERSION,
+              schema_version: SCHEMA_VERSION,
+              generated_at: new Date().toISOString()
+            },
             ...generatedData.intelligence_pedagogique,
             strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
           };
-          // Sauvegarder en DB pour les futurs appels
+          // Sauvegarder en DB pour TOUS les futurs utilisateurs de ce document
           await supabase.from('documents').update({ intelligence_pedagogique: intelligence }).eq('id', document.id);
+          console.log(`[API EVALUATE] Intelligence pédagogique générée et mise en cache (Version ${ENGINE_VERSION}).`);
         }
+      } catch (jitError: any) {
+        console.warn(`[API EVALUATE] JIT Intelligence échouée: ${jitError.message}. Continuation sans intelligence.`);
       }
+    } else if (intelligence) {
+      console.log(`[API EVALUATE] Cache HIT pour intelligence_pedagogique du document ${document.id}.`);
     }
     // ---------------------------------
 
@@ -163,9 +180,14 @@ export async function POST(req: Request) {
     Tâche : ${instruction}`;
     
     const intelligenceContext = intelligence ? `\n\nVoici l'intelligence pédagogique extraite du document (erreurs fréquentes, pièges, notions fondamentales) sur laquelle tu DOIS baser tes questions :\n${JSON.stringify(intelligence, null, 2)}` : "";
-    const prompt = `Analyse le document fourni comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce document.${intelligenceContext}`;
+    
+    // OPTIMISATION TOKENS : Si on a le texte extrait, on l'inclut dans le prompt (beaucoup moins de tokens qu'un PDF base64)
+    const textContext = extractedText ? `\n\nContenu du document :\n${extractedText.substring(0, 80000)}` : "";
+    const prompt = `Analyse le document fourni comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce document.${intelligenceContext}${textContext}`;
 
-    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfBase64, req.signal);
+    // On n'envoie le PDF base64 à Gemini QUE si on n'a pas le texte extrait (économie massive de tokens)
+    const pdfForGemini = extractedText ? undefined : (pdfBase64 || undefined);
+    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfForGemini, req.signal, { userId: user.id, feature: 'evaluate_qcm', documentId: document.id });
 
   } catch (err: any) {
     console.error("Evaluate Route Error:", err);

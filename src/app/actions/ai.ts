@@ -178,7 +178,9 @@ export async function generateFlashcardsAction(documentId: string, documentName:
         `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
         text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
         schema,
-        wasTruncated ? undefined : pdfBase64
+        // OPTIMISATION TOKENS : Si le texte est disponible, ne pas envoyer le PDF base64 (3-5x moins de tokens)
+        text ? undefined : pdfBase64,
+        { userId: user.id, feature: 'flashcards', documentId: documentId !== 'dummy' ? documentId : undefined }
       );
       debugLog(`[ACTION] generateJSON terminé avec succès.`);
     } catch (aiError: any) {

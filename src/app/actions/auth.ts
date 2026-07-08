@@ -124,11 +124,14 @@ export async function loginWithAccessCode(email: string, secret: string) {
         .eq('id', accessCode.id);
     }
 
-    // Vérifier si l'étudiant a déjà un compte Auth
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const userExists = existingUsers.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    // Vérifier si l'étudiant a déjà un compte Auth (recherche ciblée, PAS de listUsers global)
+    const { data: existingRole } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id')
+      .ilike('email', email)
+      .single();
 
-    if (!userExists) {
+    if (!existingRole) {
       // Création du compte étudiant
       const { data: newStudentData, error: studentSignUpError } = await supabaseAdmin.auth.admin.createUser({
         email: email,
@@ -148,7 +151,7 @@ export async function loginWithAccessCode(email: string, secret: string) {
     } else {
       // L'utilisateur existe mais signInWithPassword a échoué (probablement un nouveau code)
       // On met à jour son mot de passe avec ce nouveau code valide !
-      await supabaseAdmin.auth.admin.updateUserById(userExists.id, { password: secret });
+      await supabaseAdmin.auth.admin.updateUserById(existingRole.user_id, { password: secret });
     }
 
     // Finalement, on connecte l'étudiant

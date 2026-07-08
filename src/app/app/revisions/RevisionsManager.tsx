@@ -152,14 +152,20 @@ export default function RevisionsManager({
     setSessionFinished(false);
   };
 
-  const handleEvaluation = async (evaluation: 'mastered' | 'toReview' | 'hard') => {
+  const handleEvaluation = (evaluation: 'mastered' | 'toReview' | 'hard') => {
+    // Optimistic UI : Mise à jour immédiate de l'interface
     setSessionStats(prev => ({ ...prev, [evaluation]: prev[evaluation] + 1 }));
 
     if (flashcards[currentIndex]) {
       const cardId = flashcards[currentIndex].id;
-      await updateFlashcardReview(cardId, evaluation);
+      // Appel réseau non bloquant en arrière-plan
+      updateFlashcardReview(cardId, evaluation).catch((err) => {
+         console.error("Failed to sync flashcard review", err);
+         toast.error("Erreur de synchronisation serveur, mais votre progression est conservée.");
+      });
     }
 
+    // Passage instantané à la carte suivante
     if (currentIndex < flashcards.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setIsFlipped(false);

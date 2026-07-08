@@ -1,5 +1,11 @@
 import { Type, Schema } from '@google/genai';
 
+// --- VERSIONNEMENT DU MOTEUR PÉDAGOGIQUE ---
+export const ENGINE_VERSION = "1.0";
+export const PROMPT_VERSION = "2.5-flash-pedagogy-v1";
+export const SCHEMA_VERSION = "1.0";
+// -------------------------------------------
+
 export const PEDAGOGICAL_MASTER_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {

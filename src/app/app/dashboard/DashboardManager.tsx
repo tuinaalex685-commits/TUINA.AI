@@ -32,14 +32,21 @@ export default function DashboardManager({
   const router = useRouter();
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        router.refresh();
+        // Debounce pour éviter de spammer router.refresh()
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          router.refresh();
+        }, 1000);
       })
       .subscribe();
 
     return () => {
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, [router]);
@@ -134,9 +141,9 @@ export default function DashboardManager({
                   <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: 'var(--color-text-main)' }}>Entraînement de l'esprit</h4>
                   <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-secondary)' }}>Vous avez {flashcardsCount} flashcards qui vous attendent.</p>
                 </div>
-                <button className={styles.startSessionButton} onClick={() => router.push('/app/revisions')}>
+                <Link href="/app/revisions" prefetch={true} className={styles.startSessionButton}>
                   <Zap size={18} /> Lancer la session
-                </button>
+                </Link>
               </>
             ) : (
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', margin: 0 }}>

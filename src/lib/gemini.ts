@@ -1,4 +1,12 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import { supabaseAdmin } from './supabase/admin';
+
+// Interface pour le tracking des coûts et de l'usage
+export interface GeminiTrackingContext {
+  userId?: string;
+  feature: string;      // 'flashcards', 'evaluate_qcm', 'worker_master', etc.
+  documentId?: string;
+}
 
 // Définition d'une erreur IA personnalisée
 export class AIError extends Error {
@@ -10,6 +18,34 @@ export class AIError extends Error {
   }
 }
 
+// Fonction de log d'usage asynchrone (non bloquante)
+function trackSaaSUsage(
+  context: GeminiTrackingContext | undefined,
+  durationMs: number,
+  promptTokens: number,
+  completionTokens: number
+) {
+  if (!context) return;
+  
+  // Prix public Gemini 2.5 Flash: ~0.075$ / 1M prompt tokens et 0.30$ / 1M completion tokens
+  const costUsd = (promptTokens / 1_000_000) * 0.075 + (completionTokens / 1_000_000) * 0.30;
+  
+  console.log(`[SaaS METRICS] ${context.feature} | Tokens: ${promptTokens}+${completionTokens} | Coût: $${costUsd.toFixed(6)} | Temps: ${durationMs}ms`);
+  
+  // Insertion DB asynchrone (fire and forget)
+  supabaseAdmin.from('saas_metrics').insert({
+    user_id: context.userId || null,
+    feature: context.feature,
+    document_id: context.documentId || null,
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    cost_usd: costUsd,
+    duration_ms: durationMs
+  }).then(({ error }) => {
+    if (error) console.error("[SaaS METRICS ERROR] Impossible d'insérer les métriques:", error.message);
+  });
+}
+
 // Fonction utilitaire pour instancier le SDK
 function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -17,6 +53,39 @@ function getAIClient() {
     throw new AIError("Clé API Gemini non configurée ou manquante.", "MISSING_API_KEY");
   }
   return new GoogleGenAI({ apiKey });
+}
+
+// Détecte si une erreur Gemini est transitoire et mérite un retry
+function isRetryableError(error: any): boolean {
+  const message = (error.message || '').toLowerCase();
+  const status = error.status || error.httpStatusCode || 0;
+  // 429 = Rate limit, 500 = Internal error, 503 = Overloaded
+  if ([429, 500, 503].includes(status)) return true;
+  if (message.includes('429') || message.includes('rate limit') || message.includes('quota')) return true;
+  if (message.includes('500') || message.includes('internal')) return true;
+  if (message.includes('503') || message.includes('overloaded') || message.includes('unavailable')) return true;
+  if (message.includes('econnreset') || message.includes('etimedout') || message.includes('fetch failed')) return true;
+  return false;
+}
+
+// Retry avec backoff exponentiel (max 3 tentatives, délais : 1s, 3s, 9s)
+async function retryWithBackoff<T>(fn: () => Promise<T>, caller: string, maxRetries: number = 3): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      if (attempt < maxRetries - 1 && isRetryableError(error)) {
+        const delay = Math.pow(3, attempt) * 1000; // 1s, 3s, 9s
+        console.warn(`[IA_RETRY] ${caller} | Tentative ${attempt + 1}/${maxRetries} échouée (${error.message}). Retry dans ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Erreur non-retryable ou dernière tentative
+      }
+    }
+  }
+  throw lastError;
 }
 
 // Nettoyage JSON robuste (pour éviter les erreurs de parsing si l'IA ajoute des backticks)
@@ -40,9 +109,9 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
 /**
  * 1. GÉNÉRATION DE JSON (Pour les Server Actions comme les Flashcards)
  */
-export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string) {
+export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext) {
   const startTime = Date.now();
-  console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.0-flash`);
+  console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
 
   try {
@@ -60,17 +129,16 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     }
     contents.push({ text: prompt });
 
-    // Appel à l'API via le nouveau SDK
-    const response = await ai.models.generateContent({
+    // Appel à l'API avec retry automatique sur erreurs transitoires
+    const response = await retryWithBackoff(() => ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
-        // schema est un objet SchemaType du nouveau SDK
         responseSchema: schema
       }
-    });
+    }), 'generateStructuredJSON');
 
     const rawText = response.text || "";
     console.log(`[IA_RAW] Response length: ${rawText.length}`);
@@ -80,6 +148,16 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     const duration = Date.now() - startTime;
     console.log(`[IA_PERF] Success | Duration: ${duration}ms`);
     console.log(`[IA_JSON_PARSED] Sample: ${JSON.stringify(parsedJSON).substring(0, 100)}...`);
+    
+    // -- SaaS TRACKING --
+    if (response.usageMetadata) {
+      trackSaaSUsage(
+        trackingContext,
+        duration,
+        response.usageMetadata.promptTokenCount || 0,
+        response.usageMetadata.candidatesTokenCount || 0
+      );
+    }
     
     return parsedJSON;
 
@@ -98,7 +176,7 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
 /**
  * 2. STREAMING DE JSON (Pour les API Routes comme QCM et Rédaction)
  */
-export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal) {
+export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal, trackingContext?: GeminiTrackingContext) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: streamStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
@@ -117,7 +195,8 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
   contents.push({ text: prompt });
 
   try {
-    const stream = await ai.models.generateContentStream({
+    // Retry sur l'initialisation du stream (les erreurs 429/503 surviennent ici)
+    const stream = await retryWithBackoff(() => ai.models.generateContentStream({
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
@@ -125,14 +204,21 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
         responseMimeType: "application/json",
         responseSchema: schema
       }
-    });
+    }), 'streamStructuredJSON');
 
     // On retourne un ReadableStream pour l'API Route
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
           let chunkCount = 0;
+          let finalUsageMetadata: any = null;
+
           for await (const chunk of stream) {
+            // Capturer les métadonnées de consommation (généralement sur le dernier chunk)
+            if (chunk.usageMetadata) {
+              finalUsageMetadata = chunk.usageMetadata;
+            }
+
             // Memory leak prevention: if the client aborted the request, stop reading from the stream
             if (signal?.aborted) {
               console.log(`[IA_STREAM] Client aborted request. Breaking stream loop.`);
@@ -145,6 +231,17 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
           }
           const duration = Date.now() - startTime;
           console.log(`[IA_PERF] Stream Success | Duration: ${duration}ms | Chunks: ${chunkCount}`);
+
+          // -- SaaS TRACKING --
+          if (finalUsageMetadata) {
+            trackSaaSUsage(
+              trackingContext,
+              duration,
+              finalUsageMetadata.promptTokenCount || 0,
+              finalUsageMetadata.candidatesTokenCount || 0
+            );
+          }
+
         } catch (streamError: any) {
           console.error(`[IA_ERROR] Erreur pendant le stream:`, streamError);
           // On s'assure d'envoyer un JSON d'erreur STRICT que le frontend captera
