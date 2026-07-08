@@ -63,7 +63,7 @@ DROP POLICY IF EXISTS "Lecture autorisée pour tous" ON public.etude_sections;
 CREATE POLICY "Acces_Etude_Sections" ON public.etude_sections
 FOR SELECT
 USING (
-  etude_cours_id IN (
+  cours_id IN (
     SELECT ec.id FROM public.etude_cours ec
     JOIN public.documents d ON ec.pdf_id = d.id
     WHERE d.user_id = auth.uid()
@@ -79,7 +79,7 @@ FOR SELECT
 USING (
   section_id IN (
     SELECT es.id FROM public.etude_sections es
-    JOIN public.etude_cours ec ON es.etude_cours_id = ec.id
+    JOIN public.etude_cours ec ON es.cours_id = ec.id
     JOIN public.documents d ON ec.pdf_id = d.id
     WHERE d.user_id = auth.uid()
   )
