@@ -118,3 +118,11 @@ button {
 input, textarea {
   font-family: var(--font-inter);
 }
+
+/* Micro-interactions: Feedback tactile immédiat (Priorité 1) */
+button:active:not(:disabled),
+a:active:not(.no-scale):not(:disabled),
+.interactive-card:active {
+  transform: scale(0.97) !important;
+  transition: transform 50ms ease !important;
+}

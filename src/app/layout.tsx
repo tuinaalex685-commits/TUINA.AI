@@ -34,6 +34,8 @@ export const metadata: Metadata = {
   description: "Plateforme éducative premium pour les étudiants en droit francophones d'Afrique",
 };
 
+import NextTopLoader from 'nextjs-toploader';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,6 +44,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${inter.variable} ${outfit.variable} ${spaceMono.variable}`}>
       <body>
+        <NextTopLoader color="var(--color-accent)" showSpinner={false} shadow="0 0 10px var(--color-accent),0 0 5px var(--color-accent)" height={3} />
         <Toaster position="bottom-right" toastOptions={{ duration: 4000, style: { background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' } }} />
         {children}
       </body>
