@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useOptimistic } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
@@ -14,7 +14,22 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
   
   const [objectifs, setObjectifs] = useState<any[]>(initialObjectifs);
   const [isPending, startTransition] = useTransition();
-  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+
+  const [optimisticObjectifs, addOptimisticObjectif] = useOptimistic(
+    objectifs,
+    (state: any[], action: { type: 'add' | 'update' | 'delete', data: any }) => {
+      if (action.type === 'add') {
+        return [action.data, ...state];
+      }
+      if (action.type === 'update') {
+        return state.map(obj => obj.id === action.data.id ? { ...obj, ...action.data } : obj);
+      }
+      if (action.type === 'delete') {
+        return state.filter(obj => obj.id !== action.data.id);
+      }
+      return state;
+    }
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -24,7 +39,7 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
         { event: '*', schema: 'public', table: 'objectifs' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            router.refresh();
+            setObjectifs(prev => [payload.new, ...prev.filter(o => o.id !== payload.new.id)]);
           } else if (payload.eventType === 'DELETE') {
             setObjectifs(prev => prev.filter(o => o.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
@@ -37,7 +52,7 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     setObjectifs(initialObjectifs);
@@ -55,14 +70,22 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
     setLoading(true);
     setError('');
 
-    const res = await createObjectif(titre, type, cible);
+    // Optimistic UI update
+    const optimisticId = `temp-${Date.now()}`;
+    const newObj = { id: optimisticId, titre, type, cible, progression: 0, created_at: new Date().toISOString() };
+    
+    startTransition(() => {
+      addOptimisticObjectif({ type: 'add', data: newObj });
+    });
+    
+    setTitre('');
+    setCible(1);
+    setIsModalOpen(false);
+
+    const res = await createObjectif(newObj.titre, newObj.type, newObj.cible);
     if (res.error) {
       setError(res.error);
-    } else {
-      setTitre('');
-      setCible(1);
-      setIsModalOpen(false);
-      router.refresh();
+      router.refresh(); // revert on error
     }
     setLoading(false);
   };
@@ -72,19 +95,18 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
     if (newProgression < 0) newProgression = 0;
     if (newProgression > target) newProgression = target;
     
-    setActiveActionId(`${id}-update`);
     startTransition(async () => {
+      addOptimisticObjectif({ type: 'update', data: { id, progression: newProgression } });
       await updateObjectifProgress(id, newProgression);
-      setActiveActionId(null);
     });
   };
 
   const handleDelete = (id: string) => {
     if (!confirm('Supprimer cet objectif ?')) return;
-    setActiveActionId(`${id}-delete`);
+    
     startTransition(async () => {
+      addOptimisticObjectif({ type: 'delete', data: { id } });
       await deleteObjectif(id);
-      setActiveActionId(null);
     });
   };
 
@@ -100,7 +122,7 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
         <Button onClick={() => setIsModalOpen(true)}>Nouvel Objectif</Button>
       </header>
 
-      {objectifs.length === 0 ? (
+      {optimisticObjectifs.length === 0 ? (
         <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
           <span style={{ fontSize: '48px', marginBottom: 'var(--spacing-small)' }}>🎯</span>
           <h3>Aucun objectif défini</h3>
@@ -109,7 +131,7 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
         </Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)' }}>
-          {objectifs.map(obj => {
+          {optimisticObjectifs.map(obj => {
             const isCompleted = obj.progression >= obj.cible;
             const progressPercent = Math.min(100, Math.round((obj.progression / obj.cible) * 100));
             
@@ -132,12 +154,12 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
                   
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {!isCompleted && (
-                      <Button variant="secondary" onClick={() => handleUpdate(obj.id, obj.progression, obj.cible, 1)} disabled={isPending && activeActionId === `${obj.id}-update`} style={{ padding: '6px 12px' }}>
-                        {isPending && activeActionId === `${obj.id}-update` ? '⌛' : '+1'}
+                      <Button variant="secondary" onClick={() => handleUpdate(obj.id, obj.progression, obj.cible, 1)} disabled={isPending} style={{ padding: '6px 12px' }}>
+                        +1
                       </Button>
                     )}
-                    <Button variant="secondary" onClick={() => handleDelete(obj.id)} disabled={isPending && activeActionId === `${obj.id}-delete`} style={{ padding: '6px 12px', color: '#e53e3e', borderColor: '#fc8181' }}>
-                      {isPending && activeActionId === `${obj.id}-delete` ? 'Suppression...' : 'Supprimer'}
+                    <Button variant="secondary" onClick={() => handleDelete(obj.id)} disabled={isPending} style={{ padding: '6px 12px', color: '#e53e3e', borderColor: '#fc8181' }}>
+                      Supprimer
                     </Button>
                   </div>
                 </div>

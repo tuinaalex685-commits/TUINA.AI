@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useOptimistic } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Badge } from '@/components/ui/Badge/Badge';
@@ -17,7 +17,19 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
   
   const [matieres, setMatieres] = useState<any[]>(initialMatieres);
   const [isPending, startTransition] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [optimisticMatieres, addOptimisticMatiere] = useOptimistic(
+    matieres,
+    (state: any[], action: { type: 'add' | 'delete', data: any }) => {
+      if (action.type === 'add') {
+        return [action.data, ...state];
+      }
+      if (action.type === 'delete') {
+        return state.filter(m => m.id !== action.data.id);
+      }
+      return state;
+    }
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -27,7 +39,7 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
         { event: '*', schema: 'public', table: 'matieres' },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            router.refresh(); // Fetch the new record completely to get generated fields
+            setMatieres(prev => [payload.new, ...prev.filter(m => m.id !== payload.new.id)]);
           } else if (payload.eventType === 'DELETE') {
             setMatieres(prev => prev.filter(m => m.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
@@ -40,7 +52,7 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     setMatieres(initialMatieres);
@@ -57,14 +69,21 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
     setLoading(true);
     setError('');
 
-    const res = await createMatiere(titre, description);
+    const optimisticId = `temp-${Date.now()}`;
+    const newMatiere = { id: optimisticId, titre, description, created_at: new Date().toISOString() };
+
+    startTransition(() => {
+      addOptimisticMatiere({ type: 'add', data: newMatiere });
+    });
+
+    setTitre('');
+    setDescription('');
+    setIsModalOpen(false);
+
+    const res = await createMatiere(newMatiere.titre, newMatiere.description);
     if (res.error) {
       setError(res.error);
-    } else {
-      setTitre('');
-      setDescription('');
-      setIsModalOpen(false);
-      router.refresh();
+      router.refresh(); // revert on error
     }
     setLoading(false);
   };
@@ -79,12 +98,12 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
       </div>
 
       <div className={styles.grid}>
-        {matieres.length === 0 && (
+        {optimisticMatieres.length === 0 && (
           <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)' }}>
             <p>Vous n'avez pas encore de matière. Créez-en une pour commencer !</p>
           </div>
         )}
-        {matieres.map((matiere) => (
+        {optimisticMatieres.map((matiere) => (
           <Link href={`/app/matieres/${matiere.id}`} key={matiere.id} style={{ textDecoration: 'none' }}>
             <Card className={styles.matiereCard} style={{ cursor: 'pointer', height: '100%' }}>
               <div className={styles.cardHeader}>
@@ -100,15 +119,14 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
                   <Button variant="secondary" onClick={(e) => { 
                     e.preventDefault(); 
                     if(confirm('Voulez-vous vraiment supprimer cette matière et tout son contenu ?')) { 
-                      setDeletingId(matiere.id);
                       startTransition(async () => {
+                        addOptimisticMatiere({ type: 'delete', data: { id: matiere.id } });
                         const { deleteMatiere } = await import('@/app/actions/student');
                         await deleteMatiere(matiere.id); 
-                        setDeletingId(null);
                       });
                     } 
-                  }} disabled={isPending && deletingId === matiere.id} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
-                    {isPending && deletingId === matiere.id ? '⌛' : '🗑️'}
+                  }} disabled={isPending} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
+                    🗑️
                   </Button>
                 </div>
               </div>
