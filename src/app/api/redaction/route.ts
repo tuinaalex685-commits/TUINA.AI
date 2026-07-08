@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       note_globale: { type: Type.STRING, description: "Note sur 20 avec courte appréciation" }
     };
     
+    let propositionSchema: any = {};
     let systemInstruction = `SYSTEM :
 Tu es un correcteur de Faculté de Droit extrêmement exigeant. Ton but est de sanctionner les erreurs de méthodologie juridique et de pousser l'étudiant vers l'excellence.
 RÈGLE 1 (Rigueur du syllogisme) : Traque impitoyablement les erreurs de raisonnement, les problèmes de droit mal posés, ou les qualifications juridiques hâtives.
