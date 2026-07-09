@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type, Schema } from '@google/genai';
@@ -396,9 +397,11 @@ export async function POST(req: NextRequest) {
   const host = req.headers.get('host') || 'localhost:3000';
   const workerUrl = `${protocol}://${host}/api/worker/process`;
 
-  const result = await runWorker(workerUrl);
-  if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 500 });
-  }
-  return NextResponse.json(result);
+  // Utilisation de after() (Next.js 15+) pour exécuter le worker APRES avoir répondu au client.
+  // Cela empêche le proxy Vercel de tuer le processus à cause d'un timeout de connexion client (60s).
+  after(() => {
+    runWorker(workerUrl).catch(err => console.error("Worker after() error:", err));
+  });
+
+  return NextResponse.json({ message: "Worker démarré en arrière-plan avec succès" });
 }

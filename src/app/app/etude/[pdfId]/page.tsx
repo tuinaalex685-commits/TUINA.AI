@@ -2,6 +2,7 @@ import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import EtudeEngine from '@/components/etude/EtudeEngine';
+import UpgradeCourseUI from './UpgradeCourseUI';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,24 +37,9 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
     .eq('cours_id', cours.id)
     .order('ordre', { ascending: true });
 
-  // Sécurité anti-écran blanc : si le cours est "prêt" mais n'a aucune section (bug zombie cache), on l'intercepte.
+  // Sécurité anti-écran blanc : si le cours est "prêt" mais n'a aucune section (bug zombie cache ou V1), on l'intercepte.
   if (!sections || sections.length === 0) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', marginTop: '100px' }}>
-        <h2 style={{ color: '#FF3232', marginBottom: '20px' }}>Oups ! Ce cours est corrompu.</h2>
-        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '30px' }}>
-          Il semble que ce document ait été généré pendant une ancienne mise à jour (0 section trouvée).
-        </p>
-        <form action={`/app/etude`} method="GET">
-           <button 
-            type="submit"
-            style={{ padding: '12px 24px', background: 'var(--color-primary)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', border: 'none', fontWeight: 600 }}
-           >
-             Retour aux cours
-           </button>
-        </form>
-      </div>
-    );
+    return <UpgradeCourseUI pdfId={pdfId} />;
   }
 
   // Fetch all themes for these sections
