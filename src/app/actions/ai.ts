@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { generateStructuredJSON } from '@/lib/gemini';
 import { Type } from '@google/genai';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import crypto from 'crypto';
 const pdfParse = require('pdf-parse');
 
 // --- UTILITAIRE : Extraction du contenu source ---
@@ -171,6 +173,62 @@ export async function generateFlashcardsAction(documentId: string, documentName:
       }
     };
 
+    // --- 1. DÉDUPLICATION (CACHE GLOBAL) ---
+    const sourceHash = crypto.createHash('sha256').update(text || '').digest('hex');
+    const { data: cachedCards } = await supabaseAdmin
+      .from('flashcards')
+      .select('question, reponse')
+      .eq('source_hash', sourceHash)
+      .limit(count);
+      
+    if (cachedCards && cachedCards.length > 0) {
+      debugLog(`[ACTION] CACHE HIT: Flashcards existantes trouvées. Clonage...`);
+      const clonedCards = cachedCards.map(c => ({
+        ...c,
+        cours_id: coursId,
+        document_id: documentId !== 'dummy' ? documentId : null,
+        user_id: user.id,
+        statut: 'validated',
+        next_review: new Date().toISOString(),
+        source_hash: sourceHash
+      }));
+      await supabaseAdmin.from('flashcards').insert(clonedCards);
+      revalidatePath('/app/bibliotheque');
+      revalidatePath('/app/revisions');
+      return { success: true, wasTruncated, logs };
+    }
+
+    // --- 2. WAIT LOCK (SINGLE FLIGHT SYNCHRONE) ---
+    const { data: existingLock } = await supabaseAdmin.from('flashcards_locks').select('*').eq('hash', sourceHash).single();
+    
+    if (existingLock) {
+       debugLog(`[ACTION] WAIT LOCK: Génération en cours par un autre utilisateur. Mise en attente...`);
+       // Polling loop : on attend que l'autre ait fini (max 30s)
+       for (let i = 0; i < 15; i++) {
+         await new Promise(r => setTimeout(r, 2000));
+         const { data: newCachedCards } = await supabaseAdmin.from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
+         if (newCachedCards && newCachedCards.length > 0) {
+            debugLog(`[ACTION] WAIT LOCK RESOLVED: Clonage après attente.`);
+            const clonedCards = newCachedCards.map(c => ({
+              ...c,
+              cours_id: coursId,
+              document_id: documentId !== 'dummy' ? documentId : null,
+              user_id: user.id,
+              statut: 'validated',
+              next_review: new Date().toISOString(),
+              source_hash: sourceHash
+            }));
+            await supabaseAdmin.from('flashcards').insert(clonedCards);
+            revalidatePath('/app/bibliotheque');
+            revalidatePath('/app/revisions');
+            return { success: true, wasTruncated, logs };
+         }
+       }
+       debugLog(`[ACTION] WAIT LOCK TIMEOUT: On force la génération.`);
+    } else {
+       await supabaseAdmin.from('flashcards_locks').insert({ hash: sourceHash });
+    }
+
     debugLog(`[ACTION] Appel generateStructuredJSON...`);
     let flashcardsJson;
     try {
@@ -202,11 +260,15 @@ export async function generateFlashcardsAction(documentId: string, documentName:
       document_id: documentId !== 'dummy' ? documentId : null,
       user_id: user.id,
       statut: 'validated',
-      next_review: new Date().toISOString()
+      next_review: new Date().toISOString(),
+      source_hash: sourceHash
     }));
 
     debugLog(`[ACTION] Appel Supabase insert...`);
     const { error: dbError } = await supabase.from('flashcards').insert(flashcardsToInsert);
+    
+    // Libération du lock
+    await supabaseAdmin.from('flashcards_locks').delete().eq('hash', sourceHash);
     
     if (dbError) {
       debugLog(`[ACTION ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
