@@ -24,9 +24,9 @@ export default async function EvaluationsPage() {
     .eq('user_id', user.id);
 
   // On mappe pour rajouter un pseudo-titre si nécessaire
-  const formattedEvaluations = (evaluations || []).map(ev => ({
+  const formattedEvaluations = (evaluations || []).map((ev: any) => ({
     ...ev,
-    titre: ev.cours ? `Évaluation : ${ev.cours.titre}` : 'Évaluation',
+    titre: ev.cours ? `Évaluation : ${Array.isArray(ev.cours) ? ev.cours[0]?.titre : ev.cours.titre}` : 'Évaluation',
   }));
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
