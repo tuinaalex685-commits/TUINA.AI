@@ -301,20 +301,21 @@ export default function EtudeEngine({
     return (
       <div className={styles.engineContainer}>
         <div className={styles.loaderContainer}>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div style={{ textAlign: 'center', marginBottom: 20, width: '100%', maxWidth: '400px' }}>
             <div style={{ 
-              width: '100%', maxWidth: '500px', height: '12px', 
-              background: 'rgba(0,0,0,0.1)', borderRadius: '6px', 
+              width: '100%', height: '16px', 
+              background: 'var(--color-bg-secondary, rgba(0,0,0,0.05))', borderRadius: '8px', 
               overflow: 'hidden', margin: '10px auto',
-              border: '1px solid var(--color-border)'
+              border: '1px solid var(--color-border)',
+              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
             }}>
               <div style={{ 
                 width: `${progress}%`, height: '100%', 
-                background: 'linear-gradient(90deg, #4A90E2, #9013FE)', 
-                transition: 'width 0.3s ease', borderRadius: '6px' 
+                background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)', 
+                transition: 'width 0.3s ease', borderRadius: '8px' 
               }} />
             </div>
-            <p style={{ fontSize: '18px', color: 'var(--color-text-main)', fontWeight: 700, margin: '8px 0' }}>{progress}%</p>
+            <p style={{ fontSize: '24px', color: 'var(--color-text-main)', fontWeight: 800, margin: '12px 0' }}>{progress}%</p>
           </div>
           <p className={styles.loadingText}>
             {isQueued ? (

@@ -179,18 +179,39 @@ export async function runWorker(workerUrlStr?: string) {
         if (sourceDoc && sourceDoc.intelligence_pedagogique) {
            await supabaseAdmin.from('documents').update({ intelligence_pedagogique: sourceDoc.intelligence_pedagogique }).eq('id', job.pdf_id);
            
-           // 2. Cloner les chapitres
-           const { data: sourceChapitres } = await supabaseAdmin
-             .from('chapitres')
-             .select('titre, description, contenu_texte, ordre')
+           // 2. Cloner les sections et les thèmes (Nouvelle architecture Étude Guidée)
+           const { data: sourceSections } = await supabaseAdmin
+             .from('etude_sections')
+             .select('*')
              .eq('cours_id', cachedJob.id);
              
-           if (sourceChapitres && sourceChapitres.length > 0) {
-              const chapitresToInsert = sourceChapitres.map(c => ({
-                 ...c,
-                 cours_id: job.id
-              }));
-              await supabaseAdmin.from('chapitres').insert(chapitresToInsert);
+           if (sourceSections && sourceSections.length > 0) {
+              for (const sec of sourceSections) {
+                const { data: newSec } = await supabaseAdmin.from('etude_sections').insert({
+                  cours_id: job.id,
+                  titre: sec.titre,
+                  synthese: sec.synthese,
+                  ordre: sec.ordre,
+                  questions_cloture: sec.questions_cloture
+                }).select('id').single();
+                
+                if (newSec) {
+                  const { data: sourceThemes } = await supabaseAdmin.from('etude_themes').select('*').eq('section_id', sec.id);
+                  if (sourceThemes && sourceThemes.length > 0) {
+                    const themesToInsert = sourceThemes.map(t => ({
+                      section_id: newSec.id,
+                      titre: t.titre,
+                      ordre: t.ordre,
+                      explication_fondamentale: t.explication_fondamentale,
+                      question_forme: t.question_forme,
+                      remediation_forme: t.remediation_forme,
+                      cas_pratique_fond: t.cas_pratique_fond,
+                      remediation_fond: t.remediation_fond
+                    }));
+                    await supabaseAdmin.from('etude_themes').insert(themesToInsert);
+                  }
+                }
+              }
            }
 
            // Fin de traitement express
