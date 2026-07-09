@@ -198,44 +198,29 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         return;
       }
       
-      const response = await fetch('/api/redaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: activeRedaction.id })
-      });
-
-      let feedbackJson;
-      try {
-        feedbackJson = await response.json();
-        
-        if (feedbackJson.error) {
-          throw new Error(feedbackJson.error);
-        }
-      } catch (parseError: any) {
+      const { markRedactionAsProcessing } = await import('@/app/actions/redaction');
+      const processRes = await markRedactionAsProcessing(activeRedaction.id);
+      
+      if (processRes.error) {
         setIsAnalyzing(false);
-        toast.error(`L'IA a rencontré une erreur ou renvoyé un format invalide.`, { id: toastId });
+        toast.error("Erreur d'initialisation : " + processRes.error, { id: toastId });
         return;
       }
 
-      const { updateRedactionStatusAction } = await import('@/app/actions/redaction');
-      const res = await updateRedactionStatusAction(activeRedaction.id, feedbackJson);
+      // Appel fire-and-forget du Worker
+      fetch('/api/worker/redaction').catch(e => console.log("Worker trigger silencieux", e));
 
+      toast.success("L'IA corrige votre copie ! Vous pouvez fermer cette fenêtre, le résultat s'affichera ici.", { id: toastId, duration: 6000 });
+      
+      setActiveRedaction({ ...activeRedaction, statut: 'en_cours' });
+      setRedactionsList(prev => prev.map(r => r.id === activeRedaction.id ? { ...r, statut: 'en_cours' } : r));
+      setDailyUsage(prev => prev + 1);
+      
       setIsAnalyzing(false);
-
-      if (res.error) {
-        toast.error("Erreur d'enregistrement de l'analyse : " + res.error, { id: toastId });
-      } else {
-        toast.success("Analyse terminée ! Consultez le rapport IA.", { id: toastId });
-        // UPDATE LOCAL STATE SO IT DISPLAYS IMMEDIATELY
-        setActiveRedaction({ ...activeRedaction, rapport_analyse: feedbackJson, statut: 'analysé' });
-        setViewMode('analyse');
-        setDailyUsage(prev => prev + 1);
-        router.refresh();
-      }
 
     } catch (err: any) {
       setIsAnalyzing(false);
-      toast.error("Erreur système lors de l'analyse.", { id: toastId });
+      toast.error("Erreur système lors du lancement.", { id: toastId });
     }
   };
 

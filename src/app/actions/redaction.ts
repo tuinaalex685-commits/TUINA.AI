@@ -48,6 +48,19 @@ export async function updateRedactionContent(id: string, contenu: string) {
   return { success: true };
 }
 
+export async function markRedactionAsProcessing(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('redactions')
+    .update({ statut: 'en_cours' })
+    .eq('id', id);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/app/redaction');
+  return { success: true };
+}
+
 export async function saveRedactionVersion(redactionId: string, contenu: string) {
   const supabase = await createClient();
   
