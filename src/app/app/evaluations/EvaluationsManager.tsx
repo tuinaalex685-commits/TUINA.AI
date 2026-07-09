@@ -9,7 +9,7 @@ import { updateEvaluationScore } from '@/app/actions/student';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
-export default function EvaluationsManager({ initialQuiz, coursList }: { initialQuiz: any[], coursList: any[] }) {
+export default function EvaluationsManager({ initialQuiz, documentList }: { initialQuiz: any[], documentList: any[] }) {
   const router = useRouter();
 
   const [quizList, setQuizList] = useState<any[]>(initialQuiz);
@@ -22,7 +22,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
   }, [initialQuiz]);
 
   // --- GÉNÉRATION D'ÉVALUATION ---
-  const [selectedCoursId, setSelectedCoursId] = useState('');
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
   const [selectedType, setSelectedType] = useState<'qcm' | 'quiz' | 'vrai_faux' | 'juridique'>('qcm');
   const [isGenerating, setIsGenerating] = useState(false);
   const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -37,8 +37,8 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
   }, []);
 
   const handleGenerate = async () => {
-    if (!selectedCoursId) {
-      toast.error("Veuillez sélectionner un cours avant de générer l'évaluation.");
+    if (!selectedDocumentId) {
+      toast.error("Veuillez sélectionner un PDF avant de générer l'évaluation.");
       return;
     }
     setIsGenerating(true);
@@ -46,7 +46,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
     if (selectedType === 'qcm') count = 20; // max 20
     else count = 15; // max 15 pour quiz, etc.
 
-    const coursName = coursList.find(c => c.id === selectedCoursId)?.titre || '';
+    const documentName = documentList.find(d => d.id === selectedDocumentId)?.nom || '';
 
     try {
       const toastId = toast.loading('Création de l\'évaluation en cours...');
@@ -62,8 +62,8 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         headers: { 'Content-Type': 'application/json' },
         signal: abortControllerRef.current.signal,
         body: JSON.stringify({
-          coursName,
-          coursId: selectedCoursId,
+          documentName,
+          documentId: selectedDocumentId,
           type: selectedType,
           count
         })
@@ -128,9 +128,9 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
       const saveRes = await saveEvaluationAction({
         type: selectedType,
         meta_type: selectedType,
-        titre: `Évaluation - ${coursName || 'Cours'}`,
+        titre: `Évaluation - ${documentName || 'Document'}`,
         questions: questionsJson,
-        cours_id: selectedCoursId
+        document_id: selectedDocumentId
       });
 
       setIsGenerating(false);
@@ -384,14 +384,14 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
         <h2 style={{ margin: '0 0 var(--spacing-standard)', fontSize: '18px' }}>Générer une nouvelle évaluation</h2>
         <div style={{ display: 'flex', gap: 'var(--spacing-standard)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '250px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Source du cours (Obligatoire)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Source du document (Obligatoire)</label>
             <select
-              value={selectedCoursId}
-              onChange={e => setSelectedCoursId(e.target.value)}
+              value={selectedDocumentId}
+              onChange={e => setSelectedDocumentId(e.target.value)}
               style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}
             >
-              <option value="">-- Sélectionnez un cours --</option>
-              {coursList.map(c => <option key={c.id} value={c.id}>{c.titre}</option>)}
+              <option value="">-- Sélectionnez un PDF --</option>
+              {documentList.map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}
             </select>
           </div>
           <div style={{ flex: 1, minWidth: '200px' }}>
@@ -407,7 +407,7 @@ export default function EvaluationsManager({ initialQuiz, coursList }: { initial
               <option value="juridique">Cas Pratiques Juridiques (Max 15)</option>
             </select>
           </div>
-          <Button onClick={handleGenerate} disabled={isGenerating || !selectedCoursId} style={{ padding: '12px 24px', backgroundColor: '#10b981' }}>
+          <Button onClick={handleGenerate} disabled={isGenerating || !selectedDocumentId} style={{ padding: '12px 24px', backgroundColor: '#10b981' }}>
             {isGenerating ? 'Génération IA en cours...' : '? Générer l\'évaluation'}
           </Button>
         </div>

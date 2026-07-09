@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { type, count, coursId } = body;
+    const { type, count, documentId } = body;
 
     // 1. Authentification
     const { createClient } = await import('@/lib/supabase/server');
@@ -33,26 +33,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le nombre de questions doit être compris entre 1 et 20." }, { status: 400 });
     }
 
-    if (!coursId) {
-      return NextResponse.json({ error: "coursId est requis." }, { status: 400 });
-    }
-
-    // 3. Récupération du Document et de son Intelligence
-    const { data: coursData, error: coursError } = await supabase
-      .from('cours')
-      .select('document_id')
-      .eq('id', coursId)
-      .single();
-
-    if (coursError || !coursData?.document_id) {
-       return NextResponse.json({ error: "Cours ou document associé introuvable." }, { status: 404 });
+    if (!documentId) {
+      return NextResponse.json({ error: "documentId est requis." }, { status: 400 });
     }
 
     // CACHE-FIRST : On récupère le texte extrait (colonnes garanties d'exister)
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('id, url_fichier, extracted_text')
-      .eq('id', coursData.document_id)
+      .eq('id', documentId)
       .single();
 
     if (docError || !document) {
@@ -65,7 +54,7 @@ export async function POST(req: Request) {
       const { data: intellDoc } = await supabase
         .from('documents')
         .select('intelligence_pedagogique')
-        .eq('id', coursData.document_id)
+        .eq('id', documentId)
         .single();
       intelligence = intellDoc?.intelligence_pedagogique || null;
     } catch (intellErr) {

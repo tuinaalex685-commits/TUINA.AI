@@ -153,20 +153,53 @@ export async function loginWithAccessCode(email: string, secret: string) {
         role: 'student'
       }).select().single();
     } else {
+      console.log(`[AUTH] Utilisateur existant (role). Mise à jour Auth. uid: ${existingRole.user_id}`);
       // L'utilisateur existe mais signInWithPassword a échoué (probablement un nouveau code)
-      await supabaseAdmin.auth.admin.updateUserById(existingRole.user_id, { password: secret });
+      const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(existingRole.user_id, { 
+        password: secret,
+        ban_duration: "none" // Révoque tout ban précédent si le nouveau code est valide
+      });
+
+      if (updateAuthErr) {
+        console.error("[AUTH] Erreur updateUserById:", updateAuthErr);
+        // Si l'utilisateur a été supprimé de auth.users (User not found)
+        if (updateAuthErr.message.includes('not found')) {
+            console.log("[AUTH] Utilisateur introuvable dans auth.users. Recréation...");
+            // Il faut recréer l'utilisateur dans auth.users
+            const { data: recreatedUser, error: recreateErr } = await supabaseAdmin.auth.admin.createUser({
+                email: email,
+                password: secret,
+                email_confirm: true,
+            });
+            if (recreateErr || !recreatedUser.user) {
+                return { error: `Erreur de recréation du compte: ${recreateErr?.message}` };
+            }
+            // Mettre à jour user_roles avec le NOUVEAU user_id
+            await supabaseAdmin.from('user_roles').update({ user_id: recreatedUser.user.id }).eq('email', email);
+            // Mettre à jour les documents avec le NOUVEAU user_id
+            await supabaseAdmin.from('documents').update({ user_id: recreatedUser.user.id }).eq('user_id', existingRole.user_id);
+            console.log(`[AUTH] Compte recréé avec succès. Nouveau uid: ${recreatedUser.user.id}`);
+        } else {
+            return { error: `Erreur de restauration du compte: ${updateAuthErr.message}` };
+        }
+      } else {
+        console.log(`[AUTH] Mise à jour Auth réussie pour ${email}.`);
+      }
     }
 
     // Finalement, on connecte l'étudiant
-    const { error: finalSignInError } = await supabase.auth.signInWithPassword({
+    console.log(`[AUTH] Tentative de connexion finale avec email=${email}`);
+    const { data: finalAuthData, error: finalSignInError } = await supabase.auth.signInWithPassword({
       email,
       password: secret,
     });
 
     if (finalSignInError) {
-      return { error: "Impossible de se connecter après validation du code." };
+      console.error("[AUTH] Echec connexion finale:", finalSignInError);
+      return { error: `Impossible de se connecter après validation du code: ${finalSignInError.message}` };
     }
-
+    
+    console.log(`[AUTH] Connexion finale réussie pour ${email}`);
     return { success: true, role: 'student' };
 
   } catch (err: any) {

@@ -18,19 +18,19 @@ export default async function EvaluationsPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
-  const { data: cours } = await supabase
-    .from('cours')
-    .select('*');
+  const { data: documents } = await supabase
+    .from('documents')
+    .select('id, nom')
+    .eq('user_id', user.id);
 
-  // On mappe pour rajouter un pseudo-titre si nécessaire (ou utiliser le cours.titre)
+  // On mappe pour rajouter un pseudo-titre si nécessaire
   const formattedEvaluations = (evaluations || []).map(ev => ({
     ...ev,
     titre: ev.cours ? `Évaluation : ${ev.cours.titre}` : 'Évaluation',
   }));
-
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
-      <EvaluationsManager initialQuiz={formattedEvaluations} coursList={cours || []} />
+      <EvaluationsManager initialQuiz={formattedEvaluations} documentList={documents || []} />
     </div>
   );
 }

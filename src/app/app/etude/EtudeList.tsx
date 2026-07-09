@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { useRouter } from 'next/navigation';
@@ -8,6 +8,15 @@ import Link from 'next/link';
 
 export default function EtudeList({ documents, progressByPdf }: { documents: any[], progressByPdf: any }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
+
+  const handleNavigate = (docId: string) => {
+    setLoadingDocId(docId);
+    startTransition(() => {
+      router.push(`/app/etude/${docId}`);
+    });
+  };
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
@@ -55,11 +64,12 @@ export default function EtudeList({ documents, progressByPdf }: { documents: any
                 </div>
                 
                 <Button 
-                  onClick={() => router.push(`/app/etude/${doc.id}`)}
+                  onClick={() => handleNavigate(doc.id)}
                   style={{ width: '100%', padding: '10px' }}
                   variant={status === 'non_commence' ? 'primary' : 'secondary'}
+                  disabled={isPending && loadingDocId === doc.id}
                 >
-                  {status === 'non_commence' ? 'Commencer' : 'Continuer'}
+                  {(isPending && loadingDocId === doc.id) ? 'Chargement...' : (status === 'non_commence' ? 'Commencer' : 'Continuer')}
                 </Button>
               </Card>
             );

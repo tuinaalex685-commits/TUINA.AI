@@ -107,11 +107,16 @@ export async function runWorker(workerUrlStr?: string) {
         console.warn(`[Worker] Colonne intelligence_pedagogique inaccessible (probablement inexistante): ${intellError.message}. Continuation sans cache.`);
       }
 
+      let extractTime = 0;
+      let aiTime = 0;
+      let dbTime = 0;
+
       let text = document.extracted_text;
       
       // 2. Si le texte n'est pas en cache, on le télécharge et on le parse
       if (!text) {
         console.log(`[Worker] Cache MISS pour extracted_text. Téléchargement du PDF...`);
+        const tExtractStart = performance.now();
         const response = await fetch(document.url_fichier);
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -129,6 +134,8 @@ export async function runWorker(workerUrlStr?: string) {
         if (!text || text.trim().length < 100) {
           throw new Error("Ce PDF ne contient pas de texte exploitable (probablement un document scanné). Seuls les PDF textuels sont supportés.");
         }
+        
+        extractTime = performance.now() - tExtractStart;
         
         // 2b. NOUVEAU: Hash basé sur le TEXTE et non le fichier
         const textHash = crypto.createHash('sha256').update(text).digest('hex');
@@ -237,6 +244,7 @@ export async function runWorker(workerUrlStr?: string) {
       // 5. Génération (avec retry intégré via gemini.ts)
       const promptAddon = isIntelligenceCompatible ? `\n\nIntelligence pédagogique existante à réutiliser intégralement pour générer les sections :\n${JSON.stringify(existingIntelligence)}` : "";
       
+      const tAiStart = performance.now();
       generatedData = await generateStructuredJSON(
         "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
         getPedagogicalMasterPrompt(text.substring(0, 50000)) + promptAddon,
@@ -248,6 +256,7 @@ export async function runWorker(workerUrlStr?: string) {
       if (!generatedData || !generatedData.intelligence_pedagogique || !generatedData.sections) {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
+      aiTime = performance.now() - tAiStart;
 
       // 6. Sauvegarde de la super-intelligence (si la colonne existe)
       const { PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
@@ -275,6 +284,7 @@ export async function runWorker(workerUrlStr?: string) {
       // Heartbeat 2
       await supabaseAdmin.from('etude_cours').update({ heartbeat: new Date().toISOString() }).eq('id', job.id);
 
+      const tDbStart = performance.now();
       // 7. Sauvegarder les sections en DB (Pas de batch insert pour l'instant, on laisse tel quel)
       for (const section of generatedData.sections) {
         const { data: sectionData, error: secError } = await supabaseAdmin
@@ -314,9 +324,12 @@ export async function runWorker(workerUrlStr?: string) {
           }
         }
       }
+      dbTime = performance.now() - tDbStart;
 
       // Tout s'est bien passé
       const duration = Date.now() - startTime;
+      console.log(`[Worker Performance] Job ${job.id} | Extract: ${extractTime.toFixed(0)}ms | AI: ${aiTime.toFixed(0)}ms | DB: ${dbTime.toFixed(0)}ms | Total: ${duration}ms`);
+      
       await supabaseAdmin.from('etude_cours').update({ 
         statut_generation: 'pret',
         updated_at: new Date().toISOString(),

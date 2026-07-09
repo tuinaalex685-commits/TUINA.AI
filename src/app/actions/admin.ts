@@ -77,25 +77,6 @@ export async function updateAccessCodeStatus(id: string, status: 'active' | 'ina
 
     if (error) return { error: error.message };
 
-    // 2. Bannir ou Débannir instantanément l'utilisateur dans Supabase Auth
-    if (codeData?.email) {
-      const { data: roleData } = await supabaseAdmin
-        .from('user_roles')
-        .select('user_id')
-        .ilike('email', codeData.email)
-        .single();
-
-      if (roleData?.user_id) {
-        if (status === 'inactive' || status === 'blocked') {
-          // Banni pendant 100 ans = effet immédiat
-          await supabaseAdmin.auth.admin.updateUserById(roleData.user_id, { ban_duration: "876000h" });
-        } else {
-          // Débanni
-          await supabaseAdmin.auth.admin.updateUserById(roleData.user_id, { ban_duration: "none" });
-        }
-      }
-    }
-
     revalidatePath('/admin/dashboard/users');
     revalidatePath('/admin/dashboard');
     return { success: true };
@@ -115,21 +96,6 @@ export async function deleteAccessCode(id: string, email: string) {
       .eq('id', id);
 
     if (codeError) return { error: codeError.message };
-
-    if (email) {
-      const { data: roleData } = await supabaseAdmin
-        .from('user_roles')
-        .select('user_id')
-        .ilike('email', email)
-        .single();
-
-      if (roleData?.user_id) {
-        await supabaseAdmin.auth.admin.deleteUser(roleData.user_id);
-        // Nettoyage manuel au cas où la cascade n'est pas configurée
-        await supabaseAdmin.from('user_roles').delete().eq('user_id', roleData.user_id);
-        await supabaseAdmin.from('documents').delete().eq('user_id', roleData.user_id);
-      }
-    }
 
     revalidatePath('/admin/dashboard/users');
     revalidatePath('/admin/dashboard');

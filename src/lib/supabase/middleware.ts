@@ -55,14 +55,15 @@ export async function updateSession(request: NextRequest) {
 
     // 2. Si NON admin, on VÉRIFIE STRICTEMENT le code d'accès à CHAQUE REQUÊTE
     if (!isAdmin) {
-      const { data: accessCode } = await supabase
+      const { data: accessCodes } = await supabase
         .from('access_codes')
         .select('status')
         .ilike('email', user.email || '')
-        .single()
 
-      // Si le code n'existe plus ou n'est plus actif -> EJECTION DIRECTE
-      if (!accessCode || accessCode.status !== 'active') {
+      const hasActiveCode = accessCodes && accessCodes.some(code => code.status === 'active');
+
+      // Si aucun code actif trouvé -> EJECTION DIRECTE
+      if (!hasActiveCode) {
         const url = request.nextUrl.clone()
         url.pathname = '/app/logout'
         return NextResponse.redirect(url)

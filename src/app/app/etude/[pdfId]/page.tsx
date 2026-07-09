@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import EtudeEngine from '@/components/etude/EtudeEngine';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Étude en cours | Tuina.ai',
 };

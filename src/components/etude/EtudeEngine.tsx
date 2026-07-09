@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
 import styles from './EtudeEngine.module.css';
 
 export default function EtudeEngine({ 
@@ -16,6 +17,7 @@ export default function EtudeEngine({
   const [error, setError] = useState('');
   const [isQueued, setIsQueued] = useState(false);
   const [pollingCoursId, setPollingCoursId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0); // Nouveau state pour la barre de progression
   
   // State Machine logic simplified for the MVP
   // states: 'synthese' | 'explication' | 'question_forme' | 'cas_pratique' | 'cloture'
@@ -52,6 +54,20 @@ export default function EtudeEngine({
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
 
+  // Animation de la barre de progression (0 à 90% en ~25s)
+  useEffect(() => {
+    let progressInterval: any;
+    if (loading) {
+      progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 95) return prev; // Bloque à 95% maximum en attendant le serveur
+          return prev + 1; // 1% toutes les 250ms = ~25s pour 100%
+        });
+      }, 250);
+    }
+    return () => clearInterval(progressInterval);
+  }, [loading]);
+
   useEffect(() => {
     if (!coursId && !pollingCoursId) {
       // Trigger generation
@@ -59,27 +75,58 @@ export default function EtudeEngine({
     }
   }, [coursId]);
 
-  // Polling silencieux
+  // Bugfix React: Cacher le chargement dès que Next.js reçoit les données (suite à router.refresh())
+  useEffect(() => {
+    if (coursId && sections && sections.length > 0) {
+      setLoading(false);
+      setIsQueued(false);
+    }
+  }, [coursId, sections]);
+
+  // Realtime + Polling Fallback
   useEffect(() => {
     let interval: any;
+    let channel: any;
+    
     if (pollingCoursId) {
+      // ABONNEMENT REALTIME POUR LA MISE À JOUR AUTOMATIQUE DU STATUT(Mise à jour instantanée)
+      channel = supabase.channel(`etude_cours_${pollingCoursId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'etude_cours', filter: `id=eq.${pollingCoursId}` },
+          (payload) => {
+            if (payload.new.statut_generation === 'pret') {
+              console.log("[Realtime] Cours généré avec succès !");
+              router.refresh();
+            } else if (payload.new.statut_generation === 'erreur') {
+              setError("Erreur lors de la génération. Veuillez réessayer.");
+              setLoading(false);
+              setIsQueued(false);
+            }
+          }
+        )
+        .subscribe();
+
+      // 2. FALLBACK POLLING (Toutes les 10s au lieu de 5s, en cas de perte WebSocket)
       interval = setInterval(async () => {
         try {
           const res = await fetch(`/api/etude/status?coursId=${pollingCoursId}`);
           const data = await res.json();
           if (data.success && data.status === 'pret') {
-            clearInterval(interval);
             router.refresh();
           } else if (data.status === 'erreur') {
-            clearInterval(interval);
             setError("Erreur lors de la génération. Veuillez réessayer.");
             setLoading(false);
             setIsQueued(false);
           }
         } catch (err) {}
-      }, 5000); // Polling toutes les 5 secondes
+      }, 10000); 
     }
-    return () => clearInterval(interval);
+    
+    return () => {
+      if (interval) clearInterval(interval);
+      if (channel) channel.unsubscribe();
+    };
   }, [pollingCoursId, router]);
 
   const generateCourse = async (force: boolean = false) => {
@@ -99,6 +146,9 @@ export default function EtudeEngine({
         router.refresh();
       } else {
         setPollingCoursId(data.coursId);
+        // FORCE WAKEUP du Worker Asynchrone (Fire-And-Forget)
+        // Ceci garantit que le Worker démarre même si la fonction `after()` de Vercel/Next.js échoue silencieusement.
+        fetch('/api/worker/process', { method: 'POST' }).catch(e => console.log('Worker trigger silently failed:', e));
       }
     } catch (err: any) {
       setError(err.message);
@@ -251,13 +301,27 @@ export default function EtudeEngine({
     return (
       <div className={styles.engineContainer}>
         <div className={styles.loaderContainer}>
-          <div className={styles.spinner} />
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ 
+              width: '100%', maxWidth: '500px', height: '12px', 
+              background: 'rgba(0,0,0,0.1)', borderRadius: '6px', 
+              overflow: 'hidden', margin: '10px auto',
+              border: '1px solid var(--color-border)'
+            }}>
+              <div style={{ 
+                width: `${progress}%`, height: '100%', 
+                background: 'linear-gradient(90deg, #4A90E2, #9013FE)', 
+                transition: 'width 0.3s ease', borderRadius: '6px' 
+              }} />
+            </div>
+            <p style={{ fontSize: '18px', color: 'var(--color-text-main)', fontWeight: 700, margin: '8px 0' }}>{progress}%</p>
+          </div>
           <p className={styles.loadingText}>
             {isQueued ? (
               <>
                 Votre cours est dans la file d'attente de l'IA...<br/>
                 Cette opération peut prendre quelques minutes si l'application est très sollicitée.<br/>
-                Veuillez patienter, la page se rafraîchira automatiquement.
+                Veuillez patienter, l'affichage sera automatique.
               </>
             ) : (
               <>
