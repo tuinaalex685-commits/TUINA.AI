@@ -44,17 +44,12 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
         <p style={{ color: 'var(--color-text-secondary)', marginBottom: '30px' }}>
           Il semble que ce document ait été généré pendant une ancienne mise à jour (0 section trouvée).
         </p>
-        <form action={`/app/etude/${pdfId}`} method="GET">
+        <form action={`/app/etude`} method="GET">
            <button 
             type="submit"
-            onClick={async () => {
-              "use client";
-              // Petit hack pour forcer la regénération depuis le client si nécessaire, mais le plus simple
-              // est d'ajouter un bouton qui supprime le cours ou le force. On va juste faire un bouton qui recharge l'engine avec force.
-            }}
             style={{ padding: '12px 24px', background: 'var(--color-primary)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', border: 'none', fontWeight: 600 }}
            >
-             Retour
+             Retour aux cours
            </button>
         </form>
       </div>
