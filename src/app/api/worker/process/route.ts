@@ -121,9 +121,14 @@ export async function runWorker(workerUrlStr?: string) {
         await supabaseAdmin.from('etude_cours').update({ generation_hash: hash }).eq('id', job.id);
 
         const pdfData = await pdfParse(buffer);
-        if (pdfData.numpages > 100) throw new Error("PDF trop long");
+        if (pdfData.numpages > 50) throw new Error("PDF trop long (maximum 50 pages)");
 
         text = pdfData.text;
+        
+        // Validation : PDF scanné (image) = texte vide
+        if (!text || text.trim().length < 100) {
+          throw new Error("Ce PDF ne contient pas de texte exploitable (probablement un document scanné). Seuls les PDF textuels sont supportés.");
+        }
         
         // Sauvegarde en cache pour la suite
         await supabaseAdmin.from('documents').update({ extracted_text: text }).eq('id', job.pdf_id);
@@ -155,7 +160,7 @@ export async function runWorker(workerUrlStr?: string) {
       
       generatedData = await generateStructuredJSON(
         "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
-        getPedagogicalMasterPrompt(text.substring(0, 80000)) + promptAddon,
+        getPedagogicalMasterPrompt(text.substring(0, 50000)) + promptAddon,
         PEDAGOGICAL_MASTER_SCHEMA,
         undefined,
         { feature: 'worker_master', documentId: job.pdf_id } // Pour saas_metrics

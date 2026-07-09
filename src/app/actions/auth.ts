@@ -89,7 +89,6 @@ export async function loginWithAccessCode(email: string, secret: string) {
       .single();
 
     if (codeError || !accessCode) {
-      // Si signInWithPassword a échoué car l'utilisateur est banni, on veut renvoyer un message clair
       if (signInError && signInError.message.toLowerCase().includes('ban')) {
         return { error: "Votre compte a été banni." };
       }
@@ -112,7 +111,7 @@ export async function loginWithAccessCode(email: string, secret: string) {
       const { data: existingCodes } = await supabaseAdmin
         .from('access_codes')
         .select('id')
-        .ilike('email', email); // Recherche insensible à la casse
+        .ilike('email', email);
 
       if (existingCodes && existingCodes.length > 0) {
         return { error: "Vous possédez déjà un code d'accès. Si vous l'avez perdu, demandez à l'administrateur de le réinitialiser." };
@@ -127,8 +126,9 @@ export async function loginWithAccessCode(email: string, secret: string) {
         console.error("[AUTH] Erreur lors de l'assignation de l'email au code:", updateErr);
         return { error: "Erreur serveur lors de la validation du code." };
       }
+    }
 
-    // Vérifier si l'étudiant a déjà un compte Auth (recherche ciblée, PAS de listUsers global)
+    // Vérifier si l'étudiant a déjà un compte Auth
     const { data: existingRole } = await supabaseAdmin
       .from('user_roles')
       .select('user_id')
@@ -154,7 +154,6 @@ export async function loginWithAccessCode(email: string, secret: string) {
       }).select().single();
     } else {
       // L'utilisateur existe mais signInWithPassword a échoué (probablement un nouveau code)
-      // On met à jour son mot de passe avec ce nouveau code valide !
       await supabaseAdmin.auth.admin.updateUserById(existingRole.user_id, { password: secret });
     }
 
