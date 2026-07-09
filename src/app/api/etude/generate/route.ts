@@ -115,9 +115,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Si force = true, on réinitialise l'état
-    if (force) {
-      await supabaseAdmin.from('etude_cours').update({ statut_generation: 'pending' }).eq('id', coursEtude.id);
+    // 4. Si force = true OU si le statut est en erreur (pour débloquer la file), on réinitialise l'état
+    if (force || coursEtude.statut_generation === 'erreur') {
+      await supabaseAdmin.from('etude_cours').update({ 
+        statut_generation: 'pending',
+        next_retry: null,
+        retry_count: 0
+      }).eq('id', coursEtude.id);
     }
 
     // Déclencher le Worker en arrière-plan avec next/server after() pour Vercel

@@ -54,16 +54,17 @@ export default function EtudeEngine({
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
 
-  // Animation de la barre de progression (0 à 90% en ~25s)
+  // Animation de la barre de progression (0 à 95% en ~90s pour correspondre au temps réel de l'IA)
   useEffect(() => {
     let progressInterval: any;
     if (loading) {
       progressInterval = setInterval(() => {
         setProgress(prev => {
-          if (prev >= 95) return prev; // Bloque à 95% maximum en attendant le serveur
-          return prev + 1; // 1% toutes les 250ms = ~25s pour 100%
+          if (prev >= 95) return prev; 
+          // 1% toutes les 950ms = ~90s pour atteindre 95%
+          return prev + 1; 
         });
-      }, 250);
+      }, 950);
     }
     return () => clearInterval(progressInterval);
   }, [loading]);
@@ -317,19 +318,11 @@ export default function EtudeEngine({
             </div>
             <p style={{ fontSize: '24px', color: 'var(--color-text-main)', fontWeight: 800, margin: '12px 0' }}>{progress}%</p>
           </div>
-          <p className={styles.loadingText}>
-            {isQueued ? (
-              <>
-                Votre cours est dans la file d'attente de l'IA...<br/>
-                Cette opération peut prendre quelques minutes si l'application est très sollicitée.<br/>
-                Veuillez patienter, l'affichage sera automatique.
-              </>
-            ) : (
-              <>
-                L'IA découpe, analyse et prépare votre cours...<br/>
-                Connexion au cerveau juridique en cours...
-              </>
-            )}
+          <p className={styles.loadingText} style={{ fontSize: '18px', lineHeight: '1.6' }}>
+            {progress < 20 && <><b>Étape 1/4 :</b> Connexion au moteur d'intelligence juridique...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Veuillez patienter, cela peut prendre un instant.</span></>}
+            {progress >= 20 && progress < 50 && <><b>Étape 2/4 :</b> Analyse approfondie de votre document...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Extraction des concepts clés et des pièges.</span></>}
+            {progress >= 50 && progress < 80 && <><b>Étape 3/4 :</b> Élaboration de la stratégie pédagogique...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Création des questions de forme et de fond.</span></>}
+            {progress >= 80 && <><b>Étape 4/4 :</b> Finalisation et assemblage de votre cours interactif...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Encore quelques secondes, l'affichage sera automatique.</span></>}
           </p>
         </div>
       </div>
