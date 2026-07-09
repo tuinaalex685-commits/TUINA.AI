@@ -174,7 +174,20 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
   const [sessionFinished, setSessionFinished] = useState(false);
   const [responses, setResponses] = useState<any[]>([]);
 
-  const startSession = (quiz: any) => {
+  const startSession = async (quiz: any) => {
+    if (!quiz.questions) {
+      const toastId = toast.loading("Chargement des questions...");
+      try {
+        const { data, error } = await supabase.from('evaluations').select('questions').eq('id', quiz.id).single();
+        if (error || !data?.questions) throw new Error();
+        quiz.questions = data.questions;
+        toast.dismiss(toastId);
+      } catch (e) {
+        toast.error("Erreur lors du chargement des questions.", { id: toastId });
+        return;
+      }
+    }
+
     if (!quiz.questions || quiz.questions.length === 0) {
       alert("Ce quiz ne contient aucune question.");
       return;
