@@ -90,40 +90,17 @@ export async function POST(req: Request) {
     }
 
     // --- JUST-IN-TIME INTELLIGENCE (réutilisée par tous les utilisateurs du même doc) ---
+    // --- JUST-IN-TIME INTELLIGENCE ---
+    // DÉSACTIVÉ (Correction D) : La génération synchrone de l'intelligence prend trop de temps
+    // et provoque des "Erreur de génération" par Timeout réseau. L'évaluation se fera directement
+    // sur le texte du document, garantissant une stabilité et une vitesse optimales.
+    /*
     if (!intelligence && extractedText) {
       console.log(`[API EVALUATE] Cache MISS pour intelligence_pedagogique. Génération JIT...`);
-      
-      const { generateStructuredJSON } = await import('@/lib/gemini');
-      const { JIT_INTELLIGENCE_SCHEMA, getJitIntelligencePrompt, ENGINE_VERSION, PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
-      
-      try {
-        const generatedData = await generateStructuredJSON(
-          "Tu es un expert en pédagogie juridique. Analyse le document et génère l'intelligence pédagogique.",
-          getJitIntelligencePrompt(extractedText.substring(0, 80000)),
-          JIT_INTELLIGENCE_SCHEMA,
-          undefined, // Pas de pdfBase64
-          { userId: user.id, feature: 'jit_intelligence', documentId: document.id }
-        );
-        
-        if (generatedData && generatedData.intelligence_pedagogique) {
-          intelligence = {
-            _metadata: {
-              engine_version: ENGINE_VERSION,
-              prompt_version: PROMPT_VERSION,
-              schema_version: SCHEMA_VERSION,
-              generated_at: new Date().toISOString()
-            },
-            ...generatedData.intelligence_pedagogique,
-            strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
-          };
-          // Sauvegarder en DB pour TOUS les futurs utilisateurs de ce document
-          await supabase.from('documents').update({ intelligence_pedagogique: intelligence }).eq('id', document.id);
-          console.log(`[API EVALUATE] Intelligence pédagogique générée et mise en cache (Version ${ENGINE_VERSION}).`);
-        }
-      } catch (jitError: any) {
-        console.warn(`[API EVALUATE] JIT Intelligence échouée: ${jitError.message}. Continuation sans intelligence.`);
-      }
-    } else if (intelligence) {
+      // ... bloc JIT commenté pour la stabilité
+    }
+    */
+    if (intelligence) {
       console.log(`[API EVALUATE] Cache HIT pour intelligence_pedagogique du document ${document.id}.`);
     }
     // ---------------------------------
