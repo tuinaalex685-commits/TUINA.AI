@@ -118,11 +118,15 @@ export async function loginWithAccessCode(email: string, secret: string) {
         return { error: "Vous possédez déjà un code d'accès. Si vous l'avez perdu, demandez à l'administrateur de le réinitialiser." };
       }
 
-      await supabaseAdmin
+      const { error: updateErr } = await supabaseAdmin
         .from('access_codes')
         .update({ email: email })
         .eq('id', accessCode.id);
-    }
+        
+      if (updateErr) {
+        console.error("[AUTH] Erreur lors de l'assignation de l'email au code:", updateErr);
+        return { error: "Erreur serveur lors de la validation du code." };
+      }
 
     // Vérifier si l'étudiant a déjà un compte Auth (recherche ciblée, PAS de listUsers global)
     const { data: existingRole } = await supabaseAdmin

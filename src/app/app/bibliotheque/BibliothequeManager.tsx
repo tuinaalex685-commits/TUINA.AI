@@ -119,10 +119,18 @@ export default function BibliothequeManager({
       {/* Visionneuse PDF Intégrée (Plein Écran) */}
       {pdfUrlToView && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '16px', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#1f2937' }}>
-            <Button onClick={() => setPdfUrlToView(null)} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}>
-              Fermer le lecteur ✖
-            </Button>
+          <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', backgroundColor: '#1f2937', alignItems: 'center' }}>
+            <span style={{ color: 'white', fontSize: '14px', opacity: 0.8 }}>
+              Si le PDF ne s'affiche pas entièrement (bug mobile), utilisez le bouton ci-contre.
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button onClick={() => window.open(pdfUrlToView, '_blank')} style={{ backgroundColor: '#4f46e5', color: 'white', border: 'none' }}>
+                Ouvrir (Recommandé mobile)
+              </Button>
+              <Button onClick={() => setPdfUrlToView(null)} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}>
+                Fermer ✖
+              </Button>
+            </div>
           </div>
           <iframe 
             src={`${pdfUrlToView}#toolbar=0`} 
