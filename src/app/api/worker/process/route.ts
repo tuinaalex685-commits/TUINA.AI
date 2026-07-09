@@ -36,15 +36,15 @@ export async function runWorker(workerUrlStr?: string) {
       }
     }
 
-    // Limite stricte pour éviter le Rate Limit Google
+    // Limite élargie pour Vercel / File d'attente
     const { count, error: countError } = await supabaseAdmin
       .from('etude_cours')
       .select('id', { count: 'exact', head: true })
       .eq('statut_generation', 'en_cours');
       
     if (countError) throw new Error("Erreur de comptage");
-    if ((count || 0) >= 5) {
-      console.log("[Worker] Trop de jobs en cours. Retourne.");
+    if ((count || 0) >= 30) {
+      console.log("[Worker] File pleine (30 en cours). Retourne.");
       return { message: "File pleine" };
     }
     // Récupérer un job en attente OU en erreur (retry) si son temps de next_retry est passé
@@ -130,14 +130,93 @@ export async function runWorker(workerUrlStr?: string) {
           throw new Error("Ce PDF ne contient pas de texte exploitable (probablement un document scanné). Seuls les PDF textuels sont supportés.");
         }
         
+        // 2b. NOUVEAU: Hash basé sur le TEXTE et non le fichier
+        const textHash = crypto.createHash('sha256').update(text).digest('hex');
+        await supabaseAdmin.from('documents').update({ text_hash: textHash, extracted_text: text }).eq('id', job.pdf_id);
+        
+        // Mettre à jour le generation_hash avec le hash TEXTUEL
+        await supabaseAdmin.from('etude_cours').update({ generation_hash: textHash }).eq('id', job.id);
         // Sauvegarde en cache pour la suite
-        await supabaseAdmin.from('documents').update({ extracted_text: text }).eq('id', job.pdf_id);
       } else {
         console.log(`[Worker] Cache HIT pour extracted_text.`);
+        // S'assurer que le generation_hash textuel est bien mis à jour même si le texte était en cache
+        const textHash = crypto.createHash('sha256').update(text).digest('hex');
+        await supabaseAdmin.from('etude_cours').update({ generation_hash: textHash }).eq('id', job.id);
       }
 
       // Heartbeat pendant qu'on travaille
       await supabaseAdmin.from('etude_cours').update({ heartbeat: new Date().toISOString() }).eq('id', job.id);
+
+      // --- DÉBUT LOGIQUE DÉDUPLICATION (CACHE GLOBAL) ---
+      // On cherche un job existant avec le MÊME textHash qui est DÉJÀ terminé
+      const textHash = crypto.createHash('sha256').update(text).digest('hex');
+      const { data: cachedJob } = await supabaseAdmin
+        .from('etude_cours')
+        .select('id, pdf_id')
+        .eq('generation_hash', textHash)
+        .eq('statut_generation', 'pret')
+        .neq('id', job.id)
+        .limit(1)
+        .single();
+
+      if (cachedJob) {
+        console.log(`[Worker] CACHE GLOBAL HIT (Hash: ${textHash}). Clonage depuis le job ${cachedJob.id}...`);
+        
+        // 1. Récupérer l'intelligence de la DB
+        const { data: sourceDoc } = await supabaseAdmin
+          .from('documents')
+          .select('intelligence_pedagogique')
+          .eq('id', cachedJob.pdf_id)
+          .single();
+          
+        if (sourceDoc && sourceDoc.intelligence_pedagogique) {
+           await supabaseAdmin.from('documents').update({ intelligence_pedagogique: sourceDoc.intelligence_pedagogique }).eq('id', job.pdf_id);
+           
+           // 2. Cloner les chapitres
+           const { data: sourceChapitres } = await supabaseAdmin
+             .from('chapitres')
+             .select('titre, description, contenu_texte, ordre')
+             .eq('cours_id', cachedJob.id);
+             
+           if (sourceChapitres && sourceChapitres.length > 0) {
+              const chapitresToInsert = sourceChapitres.map(c => ({
+                 ...c,
+                 cours_id: job.id
+              }));
+              await supabaseAdmin.from('chapitres').insert(chapitresToInsert);
+           }
+
+           // Fin de traitement express
+           await supabaseAdmin.from('etude_cours').update({ 
+             statut_generation: 'pret',
+             updated_at: new Date().toISOString()
+           }).eq('id', job.id);
+           
+           console.log(`[Worker] Clonage terminé en 0s pour le job ${job.id}`);
+           return { message: "Job complété depuis le cache global" };
+        }
+      }
+
+      // 2. SINGLE FLIGHT GENERATION : Si un autre job génère déjà ce contenu, on attend.
+      const { data: processingJob } = await supabaseAdmin
+        .from('etude_cours')
+        .select('id')
+        .eq('generation_hash', textHash)
+        .eq('statut_generation', 'en_cours')
+        .neq('id', job.id)
+        .limit(1)
+        .single();
+        
+      if (processingJob) {
+        console.log(`[Worker] SINGLE FLIGHT: Un autre job (${processingJob.id}) génère déjà l'IA pour le hash ${textHash}. Mise en attente...`);
+        // On remet ce job en 'pending'. Il sera repris plus tard et profitera du cache au prochain essai !
+        await supabaseAdmin.from('etude_cours').update({ 
+          statut_generation: 'pending',
+          updated_at: new Date().toISOString()
+        }).eq('id', job.id);
+        return { message: "Mise en attente (Single Flight)" };
+      }
+      // --- FIN LOGIQUE DÉDUPLICATION ---
 
       // 3. Importer les éléments du moteur pédagogique
       const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt } = await import('@/lib/prompts/pedagogicalEngine');
