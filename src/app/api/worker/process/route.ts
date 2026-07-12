@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
 import crypto from 'crypto';
@@ -11,8 +10,6 @@ const supabaseAdmin = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function runWorker(workerUrlStr?: string) {
   try {
@@ -52,7 +49,7 @@ export async function runWorker(workerUrlStr?: string) {
     const { data: job, error: fetchError } = await supabaseAdmin
       .from('etude_cours')
       .select('id, pdf_id, retry_count')
-      .or('statut_generation.eq.pending,and(statut_generation.eq.erreur,next_retry.lte.now())')
+      .or('and(statut_generation.eq.pending,next_retry.is.null),and(statut_generation.eq.pending,next_retry.lte.now()),and(statut_generation.eq.erreur,next_retry.lte.now())')
       .order('created_at', { ascending: true })
       .limit(1)
       .single();
@@ -81,6 +78,7 @@ export async function runWorker(workerUrlStr?: string) {
     }
 
     const startTime = Date.now();
+    let genLockHash: string | null = null; // hash détenu par ce job (à libérer en fin de génération)
 
     try {
       // 1. Récupérer le document (colonnes de base garanties d'exister)
@@ -231,25 +229,26 @@ export async function runWorker(workerUrlStr?: string) {
         }
       }
 
-      // 2. SINGLE FLIGHT GENERATION : Si un autre job génère déjà ce contenu, on attend.
-      const { data: processingJob } = await supabaseAdmin
-        .from('etude_cours')
-        .select('id')
-        .eq('generation_hash', textHash)
-        .eq('statut_generation', 'en_cours')
-        .neq('id', job.id)
-        .limit(1)
-        .single();
-        
-      if (processingJob) {
-        console.log(`[Worker] SINGLE FLIGHT: Un autre job (${processingJob.id}) génère déjà l'IA pour le hash ${textHash}. Mise en attente...`);
-        // On remet ce job en 'pending'. Il sera repris plus tard et profitera du cache au prochain essai !
-        await supabaseAdmin.from('etude_cours').update({ 
+      // 2. SINGLE FLIGHT ATOMIQUE : garantit UN SEUL appel Gemini par contenu (hash).
+      //    Le job qui insère le hash (clé primaire) devient le générateur unique ; les autres
+      //    sont reportés (avec délai) et cloneront le résultat via le cache global au prochain essai.
+      const nowIsoSF = new Date().toISOString();
+      await supabaseAdmin.from('etude_generation_locks').delete().eq('hash', textHash).lt('expires_at', nowIsoSF);
+      const { error: genLockError } = await supabaseAdmin
+        .from('etude_generation_locks')
+        .insert({ hash: textHash, expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() });
+
+      if (genLockError) {
+        console.log(`[Worker] SINGLE FLIGHT ATOMIQUE: génération déjà en cours pour ${textHash}. Report du job ${job.id}.`);
+        // Report de 6s (via next_retry) : évite le busy-loop et laisse le cache global se remplir.
+        await supabaseAdmin.from('etude_cours').update({
           statut_generation: 'pending',
+          next_retry: new Date(Date.now() + 6000).toISOString(),
           updated_at: new Date().toISOString()
         }).eq('id', job.id);
-        return { message: "Mise en attente (Single Flight)" };
+        return { message: "Report (single flight atomique)" };
       }
+      genLockHash = textHash; // ce job détient le verrou → il devra le libérer
       // --- FIN LOGIQUE DÉDUPLICATION ---
 
       // 3. Importer les éléments du moteur pédagogique
@@ -357,11 +356,16 @@ export async function runWorker(workerUrlStr?: string) {
       const duration = Date.now() - startTime;
       console.log(`[Worker Performance] Job ${job.id} | Extract: ${extractTime.toFixed(0)}ms | AI: ${aiTime.toFixed(0)}ms | DB: ${dbTime.toFixed(0)}ms | Total: ${duration}ms`);
       
-      await supabaseAdmin.from('etude_cours').update({ 
+      await supabaseAdmin.from('etude_cours').update({
         statut_generation: 'pret',
         updated_at: new Date().toISOString(),
-        last_error: null 
+        last_error: null
       }).eq('id', job.id);
+
+      // Libération du verrou de génération → les jobs identiques reportés cloneront via le cache.
+      if (genLockHash) {
+        await supabaseAdmin.from('etude_generation_locks').delete().eq('hash', genLockHash);
+      }
 
       // Relancer un appel HTTP pour le job suivant (évite le timeout récursif de Vercel)
       if (workerUrlStr) {
@@ -384,7 +388,12 @@ export async function runWorker(workerUrlStr?: string) {
         next_retry: nextRetry,
         updated_at: new Date().toISOString()
       }).eq('id', job.id);
-      
+
+      // Libération du verrou en cas d'échec (sinon les jobs identiques attendraient jusqu'au TTL).
+      if (genLockHash) {
+        await supabaseAdmin.from('etude_generation_locks').delete().eq('hash', genLockHash).then(() => {}, () => {});
+      }
+
       if (workerUrlStr) {
         fetch(workerUrlStr, { method: 'POST' }).catch(() => {});
       }
