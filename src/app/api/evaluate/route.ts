@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { Type } from '@google/genai';
 import { streamStructuredJSON } from '@/lib/gemini';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import crypto from 'crypto';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -173,9 +175,49 @@ Tâche : ${instruction}`;
     
     const prompt = `Analyse le document fourni comme un professeur préparant ses partiels, repère les notions fondamentales et les pièges, puis génère l'évaluation strictement basée sur ce document.${intelligenceContext}${textContext}`;
 
+    // --- CACHE D'ÉVALUATIONS : mutualise les jeux identiques (source_hash, type, count) ---
+    // On ne peut hasher que si on a le texte extrait (contenu déterministe).
+    const sourceHash = extractedText ? crypto.createHash('sha256').update(extractedText).digest('hex') : null;
+
+    if (sourceHash) {
+      const { data: cached } = await supabaseAdmin
+        .from('evaluation_cache')
+        .select('questions')
+        .eq('source_hash', sourceHash)
+        .eq('type', type)
+        .eq('count', safeCount)
+        .maybeSingle();
+
+      if (cached?.questions) {
+        console.log(`[API EVALUATE] CACHE HIT évaluation (${type}/${safeCount}) → 0 appel Gemini.`);
+        // Même format que le stream : le client accumule puis JSON.parse.
+        return new Response(JSON.stringify(cached.questions), {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' }
+        });
+      }
+    }
+
+    // Callback de mise en cache (fire-and-forget) exécuté à la fin d'un stream RÉUSSI uniquement.
+    const onComplete = sourceHash ? (fullText: string) => {
+      try {
+        let clean = fullText.trim();
+        if (clean.startsWith('```json')) clean = clean.slice(7);
+        else if (clean.startsWith('```')) clean = clean.slice(3);
+        if (clean.endsWith('```')) clean = clean.slice(0, -3);
+        const parsed = JSON.parse(clean.trim());
+        // On ne cache qu'un résultat valide (tableau non vide), jamais un objet d'erreur.
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          supabaseAdmin.from('evaluation_cache').upsert(
+            { source_hash: sourceHash, type, count: safeCount, questions: parsed },
+            { onConflict: 'source_hash,type,count', ignoreDuplicates: true }
+          ).then(({ error }) => { if (error) console.warn('[API EVALUATE] cache store échoué:', error.message); });
+        }
+      } catch { /* résultat non parsable → on ne cache pas */ }
+    } : undefined;
+
     // On n'envoie le PDF base64 à Gemini QUE si on n'a pas le texte extrait (économie massive de tokens)
     const pdfForGemini = extractedText ? undefined : (pdfBase64 || undefined);
-    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfForGemini, req.signal, { userId: user.id, feature: 'evaluate_qcm', documentId: document.id });
+    return await streamStructuredJSON(systemInstruction, prompt, schema, pdfForGemini, req.signal, { userId: user.id, feature: 'evaluate_qcm', documentId: document.id }, onComplete);
 
   } catch (err: any) {
     console.error("Evaluate Route Error:", err);

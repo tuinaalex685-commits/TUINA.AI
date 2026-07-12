@@ -196,7 +196,7 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
 /**
  * 2. STREAMING DE JSON (Pour les API Routes comme QCM et Rédaction)
  */
-export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal, trackingContext?: GeminiTrackingContext) {
+export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal, trackingContext?: GeminiTrackingContext, onComplete?: (fullText: string) => void) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: streamStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
@@ -274,6 +274,11 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
                 finalUsageMetadata.promptTokenCount || 0,
                 finalUsageMetadata.candidatesTokenCount || 0
               );
+            }
+
+            // Callback de fin (ex: mise en cache du résultat) — jamais bloquant, jamais fatal.
+            if (onComplete) {
+              try { onComplete(buffer); } catch (cbErr) { console.error('[IA_STREAM] onComplete error:', cbErr); }
             }
           }
 
