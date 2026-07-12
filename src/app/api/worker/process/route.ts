@@ -311,43 +311,55 @@ export async function runWorker(workerUrlStr?: string) {
       await supabaseAdmin.from('etude_cours').update({ heartbeat: new Date().toISOString() }).eq('id', job.id);
 
       const tDbStart = performance.now();
-      // 7. Sauvegarder les sections en DB (Pas de batch insert pour l'instant, on laisse tel quel)
+      // 7. Sauvegarde en DB par BATCH (au lieu de N aller-retours séquentiels lents/fragiles).
+      // Idempotent : on purge d'abord les sections existantes de ce job (retry après kill partiel
+      // = pas de doublon). ON DELETE CASCADE nettoie les thèmes liés.
+      await supabaseAdmin.from('etude_sections').delete().eq('cours_id', job.id);
+
+      // 7a. Insertion de TOUTES les sections en un seul appel, avec récupération des ids par ordre.
+      const sectionsPayload = generatedData.sections.map((section: any) => ({
+        cours_id: job.id,
+        titre: section.titre,
+        synthese: section.synthese || '',
+        ordre: section.ordre,
+        questions_cloture: section.questions_cloture_section || []
+      }));
+
+      const { data: insertedSections, error: secError } = await supabaseAdmin
+        .from('etude_sections')
+        .insert(sectionsPayload)
+        .select('id, ordre');
+
+      if (secError || !insertedSections) {
+        throw new Error(`Erreur insertion sections (batch): ${secError?.message}`);
+      }
+
+      // 7b. Construction de TOUS les thèmes, puis insertion en un seul appel.
+      const ordreToId = new Map<number, string>();
+      for (const s of insertedSections) ordreToId.set(s.ordre, s.id);
+
+      const themesPayload: any[] = [];
       for (const section of generatedData.sections) {
-        const { data: sectionData, error: secError } = await supabaseAdmin
-          .from('etude_sections')
-          .insert({
-            cours_id: job.id,
-            titre: section.titre,
-            synthese: section.synthese || '',
-            ordre: section.ordre,
-            questions_cloture: section.questions_cloture_section || []
-          })
-          .select('id')
-          .single();
-
-        if (secError) {
-          console.error(`[Worker] Erreur insertion section: ${secError.message} (Code: ${secError.code})`);
-          throw new Error(`Erreur insertion section: ${secError.message}`);
+        const sectionId = ordreToId.get(section.ordre);
+        if (!sectionId) continue;
+        for (const theme of section.themes || []) {
+          themesPayload.push({
+            section_id: sectionId,
+            titre: theme.titre,
+            explication: theme.explication || '',
+            question_forme: theme.question_forme || {},
+            cas_pratique_fond: theme.cas_pratique_fond || {},
+            remediation_forme: theme.branches_remediation_forme || [],
+            remediation_fond: theme.branches_remediation_fond || [],
+            ordre: theme.ordre
+          });
         }
+      }
 
-        for (const theme of section.themes) {
-          const { error: themeError } = await supabaseAdmin
-            .from('etude_themes')
-            .insert({
-              section_id: sectionData.id,
-              titre: theme.titre,
-              explication: theme.explication || '',
-              question_forme: theme.question_forme || {},
-              cas_pratique_fond: theme.cas_pratique_fond || {},
-              remediation_forme: theme.branches_remediation_forme || [],
-              remediation_fond: theme.branches_remediation_fond || [],
-              ordre: theme.ordre
-            });
-
-          if (themeError) {
-            console.error(`[Worker] Erreur insertion thème '${theme.titre}': ${themeError.message} (Code: ${themeError.code})`);
-            throw new Error(`Erreur insertion thème: ${themeError.message}`);
-          }
+      if (themesPayload.length > 0) {
+        const { error: themeError } = await supabaseAdmin.from('etude_themes').insert(themesPayload);
+        if (themeError) {
+          throw new Error(`Erreur insertion thèmes (batch): ${themeError.message}`);
         }
       }
       dbTime = performance.now() - tDbStart;
