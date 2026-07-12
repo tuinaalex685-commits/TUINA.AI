@@ -27,6 +27,13 @@ export function DocumentUploader({ chapitreId, matiereId, coursId, onUploadCompl
       return;
     }
 
+    // Limite de taille : un PDF trop lourd fait planter (OOM/timeout) le worker pdf-parse + Gemini.
+    const MAX_SIZE_MB = 25;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setError(`Le fichier est trop volumineux (max ${MAX_SIZE_MB} Mo). Réduisez ou scindez votre PDF.`);
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
 
@@ -79,7 +86,11 @@ export function DocumentUploader({ chapitreId, matiereId, coursId, onUploadCompl
       console.log("4. Contenu retourné par Supabase (Succès):", insertData);
       console.log("=====================");
 
-      if (dbError) throw new Error("Erreur base de données : " + dbError.message);
+      if (dbError) {
+        // Éviter un fichier orphelin dans le Storage si l'insertion en base échoue.
+        await supabase.storage.from('documents').remove([fileName]).catch(() => {});
+        throw new Error("Erreur base de données : " + dbError.message);
+      }
 
       // Succès
       if (fileInputRef.current) fileInputRef.current.value = '';

@@ -121,7 +121,12 @@ export async function runWorker(workerUrlStr?: string) {
         const response = await fetch(document.url_fichier);
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        
+
+        // Garde mémoire : un PDF trop lourd ferait OOM/timeout la fonction serverless.
+        if (buffer.length > 25 * 1024 * 1024) {
+          throw new Error("PDF trop volumineux (max 25 Mo).");
+        }
+
         // Hash (déduplication)
         const hash = crypto.createHash('sha256').update(buffer).digest('hex');
         await supabaseAdmin.from('etude_cours').update({ generation_hash: hash }).eq('id', job.id);

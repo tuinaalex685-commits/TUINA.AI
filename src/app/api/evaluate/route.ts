@@ -72,6 +72,9 @@ export async function POST(req: Request) {
         const response = await fetch(document.url_fichier);
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+        if (buffer.length > 25 * 1024 * 1024) {
+          throw new Error("PDF trop volumineux (max 25 Mo).");
+        }
         pdfBase64 = buffer.toString('base64');
 
         // @ts-ignore
