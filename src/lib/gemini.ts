@@ -68,8 +68,22 @@ function isRetryableError(error: any): boolean {
   return false;
 }
 
-// Retry avec backoff exponentiel (max 3 tentatives, délais : 1s, 3s, 9s)
-async function retryWithBackoff<T>(fn: () => Promise<T>, caller: string, maxRetries: number = 3): Promise<T> {
+// Extrait le délai suggéré par Gemini (RESOURCE_EXHAUSTED renvoie souvent "retryDelay": "12s")
+function extractServerRetryMs(error: any): number | null {
+  try {
+    const raw = (error.message || '') + ' ' + JSON.stringify(error.details || error.error || {});
+    const m = raw.match(/retry(?:Delay|-after)["':\s]*"?(\d+(?:\.\d+)?)(m?s)?/i);
+    if (m) {
+      const val = parseFloat(m[1]);
+      return m[2] === 's' || !m[2] ? Math.round(val * 1000) : Math.round(val);
+    }
+  } catch {}
+  return null;
+}
+
+// Retry avec backoff exponentiel + FULL JITTER (anti thundering herd sous burst 429).
+// Le jitter désynchronise les retries de centaines de requêtes qui 429 en même temps.
+async function retryWithBackoff<T>(fn: () => Promise<T>, caller: string, maxRetries: number = 5): Promise<T> {
   let lastError: any;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -77,7 +91,12 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, caller: string, maxRetr
     } catch (error: any) {
       lastError = error;
       if (attempt < maxRetries - 1 && isRetryableError(error)) {
-        const delay = Math.pow(3, attempt) * 1000; // 1s, 3s, 9s
+        // Base exponentielle (1s, 2s, 4s, 8s...) plafonnée à 20s, puis FULL JITTER [0, base].
+        const expBase = Math.min(20000, 1000 * Math.pow(2, attempt));
+        const jittered = Math.floor(Math.random() * expBase);
+        // Si le serveur suggère un délai (429), on prend le plus prudent des deux.
+        const serverMs = extractServerRetryMs(error);
+        const delay = Math.max(jittered, serverMs ? Math.min(serverMs, 30000) : 0) || 500;
         console.warn(`[IA_RETRY] ${caller} | Tentative ${attempt + 1}/${maxRetries} échouée (${error.message}). Retry dans ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
