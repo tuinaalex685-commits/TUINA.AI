@@ -12,8 +12,11 @@ const supabaseAdmin = createSupabaseClient(
 
 export async function runWorker(workerUrlStr?: string) {
   try {
-    // NETTOYAGE DES JOBS ZOMBIES : Si un job est en 'en_cours' depuis + de 15 min sans heartbeat récent, on le remet en 'pending'
-    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    // NETTOYAGE DES JOBS ZOMBIES : un job 'en_cours' dont le heartbeat date de + de 3 min est
+    // considéré mort (worker tué par déconnexion client ou crash) et remis en 'pending'.
+    // 3 min > durée max entre deux heartbeats d'un worker vivant (l'appel Gemini ~90-120s),
+    // donc aucun job vivant n'est réinitialisé à tort.
+    const fifteenMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
     const { data: zombieJobs } = await supabaseAdmin
       .from('etude_cours')
       .select('id')
@@ -425,6 +428,16 @@ export async function POST(req: NextRequest) {
   // Exécution INLINE (awaitée) : le handler dispose de maxDuration (300s) de CPU réel.
   // after() n'obtenait qu'un budget minime après la réponse (mort avant l'appel Gemini).
   // Le frontend appelle ce endpoint en fire-and-forget → bloquer ici ne gèle jamais l'UI.
+  const result = await runWorker(workerUrl);
+  return NextResponse.json(result ?? { message: "Worker terminé" });
+}
+
+// Déclenché par Vercel Cron (toutes les minutes) : traitement serveur GARANTI, jamais lié à un
+// client (donc jamais tué par un rechargement de page). C'est le filet de sécurité qui vide la file.
+export async function GET(req: NextRequest) {
+  const protocol = req.headers.get('x-forwarded-proto') || 'https';
+  const host = req.headers.get('host') || 'localhost:3000';
+  const workerUrl = `${protocol}://${host}/api/worker/process`;
   const result = await runWorker(workerUrl);
   return NextResponse.json(result ?? { message: "Worker terminé" });
 }

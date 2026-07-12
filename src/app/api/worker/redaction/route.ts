@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
 import { Type } from '@google/genai';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateStructuredJSON } from '@/lib/gemini';
@@ -7,7 +6,7 @@ import { generateStructuredJSON } from '@/lib/gemini';
 export const maxDuration = 300; // 5 minutes (nécessite plan Vercel Pro pour être effectif)
 export const dynamic = 'force-dynamic';
 
-const LOCK_TTL_MS = 15 * 60 * 1000; // 15 min : au-delà, un job verrouillé est considéré zombie.
+const LOCK_TTL_MS = 3 * 60 * 1000; // 3 min : au-delà, un job verrouillé est considéré zombie (worker tué).
 
 // Détecte une erreur "colonne inexistante" (migration redaction_worker_hardening.sql pas encore passée).
 function isMissingColumnError(error: any): boolean {
@@ -237,15 +236,12 @@ export async function runRedactionWorker(workerUrlStr?: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
+  const protocol = req.headers.get('x-forwarded-proto') || 'https';
   const host = req.headers.get('host') || 'localhost:3000';
   const workerUrl = `${protocol}://${host}/api/worker/redaction`;
 
-  // after() (Next.js 15+) : on traite APRÈS avoir répondu au client. Le frontend appelle ce worker
-  // en fire-and-forget puis peut fermer l'onglet → sans after(), le proxy Vercel tuerait le process.
-  after(() => {
-    runRedactionWorker(workerUrl).catch(err => console.error("Worker Redaction after() error:", err));
-  });
-
-  return NextResponse.json({ message: "Worker de correction démarré en arrière-plan." });
+  // Exécution INLINE (awaitée) : full CPU jusqu'à maxDuration. Déclenché par le frontend (fire-and-forget)
+  // ET par Vercel Cron (toutes les minutes) → traitement serveur garanti, insensible aux rechargements.
+  const result = await runRedactionWorker(workerUrl);
+  return NextResponse.json(result ?? { message: "Worker de correction terminé." });
 }
