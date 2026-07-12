@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import styles from './EtudeEngine.module.css';
+import EtudeLoadingScreen from './EtudeLoadingScreen';
 
 export default function EtudeEngine({ 
   pdfId, 
@@ -301,30 +302,7 @@ export default function EtudeEngine({
   if (loading) {
     return (
       <div className={styles.engineContainer}>
-        <div className={styles.loaderContainer}>
-          <div style={{ textAlign: 'center', marginBottom: 20, width: '100%', maxWidth: '400px' }}>
-            <div style={{ 
-              width: '100%', height: '16px', 
-              background: 'var(--color-bg-secondary, rgba(0,0,0,0.05))', borderRadius: '8px', 
-              overflow: 'hidden', margin: '10px auto',
-              border: '1px solid var(--color-border)',
-              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-              <div style={{ 
-                width: `${progress}%`, height: '100%', 
-                background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)', 
-                transition: 'width 0.3s ease', borderRadius: '8px' 
-              }} />
-            </div>
-            <p style={{ fontSize: '24px', color: 'var(--color-text-main)', fontWeight: 800, margin: '12px 0' }}>{progress}%</p>
-          </div>
-          <p className={styles.loadingText} style={{ fontSize: '18px', lineHeight: '1.6' }}>
-            {progress < 20 && <><b>Étape 1/4 :</b> Connexion au moteur d'intelligence juridique...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Veuillez patienter, cela peut prendre un instant.</span></>}
-            {progress >= 20 && progress < 50 && <><b>Étape 2/4 :</b> Analyse approfondie de votre document...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Extraction des concepts clés et des pièges.</span></>}
-            {progress >= 50 && progress < 80 && <><b>Étape 3/4 :</b> Élaboration de la stratégie pédagogique...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Création des questions de forme et de fond.</span></>}
-            {progress >= 80 && <><b>Étape 4/4 :</b> Finalisation et assemblage de votre cours interactif...<br/><span style={{fontSize: '14px', opacity: 0.7}}>Encore quelques secondes, l'affichage sera automatique.</span></>}
-          </p>
-        </div>
+        <EtudeLoadingScreen progress={progress} />
       </div>
     );
   }
