@@ -14,7 +14,7 @@ export default async function EvaluationsPage() {
 
   const { data: evaluations } = await supabase
     .from('evaluations')
-    .select('id, type, meta_type, score, total_questions, created_at, document_id, cours(titre)')
+    .select('id, type, meta_type, score, created_at, document_id, cours(titre)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
