@@ -182,7 +182,7 @@ export async function getDailyRedactionUsage() {
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .eq('statut', 'analyse')
-    .gte('created_at', startOfDay.toISOString());
+    .gte('date_creation', startOfDay.toISOString());
     
   return count || 0;
 }

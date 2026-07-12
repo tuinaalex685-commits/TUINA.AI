@@ -16,7 +16,7 @@ export default async function RedactionPage() {
     .from('redactions')
     .select('*, redaction_versions(*)')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('date_creation', { ascending: false });
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>

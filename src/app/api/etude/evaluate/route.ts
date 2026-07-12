@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient } from '@/lib/supabase/server';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { Type, Schema } from '@google/genai';
+import { generateStructuredJSON } from '@/lib/gemini';
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -62,17 +61,16 @@ Ta tâche : ÉVALUATION ADAPTATIVE ET PROGRESSIVE
    - Si correct = false : Génère un TOUT NOUVEAU cas pratique abordant la notion sous un autre angle pour retenter sa chance.
    - Si correct = true : Mets null.`;
 
-    const aiResponse = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.3
-      }
-    });
-
-    const generatedData = JSON.parse(aiResponse.text || "{}");
+    // Passe par le helper mutualisé : retry + backoff sur 429/500/503, parsing JSON robuste,
+    // et tracking SaaS. Température 0.3 préservée pour une correction déterministe.
+    const generatedData = await generateStructuredJSON(
+      "Tu es un Maître de Conférences en Droit exigeant. Tu corriges de façon adaptative la réponse d'un étudiant à un cas pratique.",
+      prompt,
+      RESPONSE_SCHEMA,
+      undefined,
+      { userId: user.id, feature: 'etude_evaluate' },
+      0.3
+    );
 
     return NextResponse.json(generatedData);
 

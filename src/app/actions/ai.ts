@@ -198,95 +198,108 @@ export async function generateFlashcardsAction(documentId: string, documentName:
       return { success: true, wasTruncated, logs };
     }
 
-    // --- 2. WAIT LOCK (SINGLE FLIGHT SYNCHRONE) ---
-    const { data: existingLock } = await supabaseAdmin.from('flashcards_locks').select('*').eq('hash', sourceHash).single();
-    
-    if (existingLock) {
-       debugLog(`[ACTION] WAIT LOCK: Génération en cours par un autre utilisateur. Mise en attente...`);
-       // Polling loop : on attend que l'autre ait fini (max 30s)
-       for (let i = 0; i < 15; i++) {
-         await new Promise(r => setTimeout(r, 2000));
-         const { data: newCachedCards } = await supabaseAdmin.from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
-         if (newCachedCards && newCachedCards.length > 0) {
-            debugLog(`[ACTION] WAIT LOCK RESOLVED: Clonage après attente.`);
-            const clonedCards = newCachedCards.map(c => ({
-              ...c,
-              cours_id: coursId,
-              document_id: documentId !== 'dummy' ? documentId : null,
-              user_id: user.id,
-              statut: 'validated',
-              next_review: new Date().toISOString(),
-              source_hash: sourceHash
-            }));
-            await supabaseAdmin.from('flashcards').insert(clonedCards);
-            revalidatePath('/app/bibliotheque');
-            revalidatePath('/app/revisions');
-            return { success: true, wasTruncated, logs };
-         }
-       }
-       debugLog(`[ACTION] WAIT LOCK TIMEOUT: On force la génération.`);
-    } else {
-       await supabaseAdmin.from('flashcards_locks').insert({ hash: sourceHash });
+    // --- 2. ACQUISITION DU LOCK (SINGLE FLIGHT ATOMIQUE + AUTO-GUÉRISON TTL) ---
+    const nowIso = new Date().toISOString();
+    // Purge des locks expirés : auto-guérison si une génération précédente a crashé (TTL 2 min du schéma).
+    await supabaseAdmin.from('flashcards_locks').delete().eq('hash', sourceHash).lt('expires_at', nowIso);
+
+    // Acquisition atomique : la clé primaire 'hash' sérialise les concurrents (anti thundering herd).
+    // Un conflit de clé primaire (23505) signifie qu'un autre process possède déjà le lock actif.
+    const { error: lockError } = await supabaseAdmin
+      .from('flashcards_locks')
+      .insert({ hash: sourceHash, expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString() });
+    const iOwnLock = !lockError;
+
+    if (!iOwnLock) {
+      debugLog(`[ACTION] WAIT LOCK: Génération déjà en cours (lock actif). Mise en attente...`);
+      // Polling : on attend que le possesseur du lock ait fini (max 30s), puis on clone son résultat.
+      for (let i = 0; i < 15; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const { data: newCachedCards } = await supabaseAdmin.from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
+        if (newCachedCards && newCachedCards.length > 0) {
+          debugLog(`[ACTION] WAIT LOCK RESOLVED: Clonage après attente.`);
+          const clonedCards = newCachedCards.map(c => ({
+            ...c,
+            cours_id: coursId,
+            document_id: documentId !== 'dummy' ? documentId : null,
+            user_id: user.id,
+            statut: 'validated',
+            next_review: new Date().toISOString(),
+            source_hash: sourceHash
+          }));
+          await supabaseAdmin.from('flashcards').insert(clonedCards);
+          revalidatePath('/app/bibliotheque');
+          revalidatePath('/app/revisions');
+          return { success: true, wasTruncated, logs };
+        }
+      }
+      debugLog(`[ACTION] WAIT LOCK TIMEOUT: On force la génération (sans posséder le lock).`);
     }
 
-    debugLog(`[ACTION] Appel generateStructuredJSON...`);
-    let flashcardsJson;
+    // --- 3. GÉNÉRATION (le possesseur du lock DOIT le libérer quoi qu'il arrive → finally) ---
     try {
-      flashcardsJson = await generateStructuredJSON(
-        `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
-        text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
-        schema,
-        // OPTIMISATION TOKENS : Si le texte est disponible, ne pas envoyer le PDF base64 (3-5x moins de tokens)
-        text ? undefined : pdfBase64,
-        { userId: user.id, feature: 'flashcards', documentId: documentId !== 'dummy' ? documentId : undefined }
-      );
-      debugLog(`[ACTION] generateJSON terminé avec succès.`);
-    } catch (aiError: any) {
-      debugLog(`[ACTION ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
-      return { error: `Erreur IA: ${aiError.message}`, logs };
+      debugLog(`[ACTION] Appel generateStructuredJSON...`);
+      let flashcardsJson;
+      try {
+        flashcardsJson = await generateStructuredJSON(
+          `Tu es un professeur de droit. Tu dois extraire les concepts clés du document fourni et générer exactement ${count} flashcards.`,
+          text ? `Génère ${count} flashcards à partir de ce contenu :\n\n${text}` : `Génère ${count} flashcards à partir de ce PDF.`,
+          schema,
+          // OPTIMISATION TOKENS : Si le texte est disponible, ne pas envoyer le PDF base64 (3-5x moins de tokens)
+          text ? undefined : pdfBase64,
+          { userId: user.id, feature: 'flashcards', documentId: documentId !== 'dummy' ? documentId : undefined }
+        );
+        debugLog(`[ACTION] generateJSON terminé avec succès.`);
+      } catch (aiError: any) {
+        debugLog(`[ACTION ERROR] Erreur generateJSON: ${aiError.message}\n${aiError.stack}`);
+        return { error: `Erreur IA: ${aiError.message}`, logs };
+      }
+
+      if (!Array.isArray(flashcardsJson)) {
+        debugLog(`[ACTION ERROR] Format JSON invalide retourné par IA: ${JSON.stringify(flashcardsJson).substring(0, 50)}...`);
+        return { error: "L'IA n'a pas retourné un tableau valide", logs };
+      }
+
+      debugLog(`[ACTION] Préparation de l'insertion de ${flashcardsJson.length} flashcards...`);
+
+      const flashcardsToInsert = flashcardsJson.map((fc: any) => ({
+        question: fc.question,
+        reponse: fc.reponse,
+        cours_id: coursId,
+        document_id: documentId !== 'dummy' ? documentId : null,
+        user_id: user.id,
+        statut: 'validated',
+        next_review: new Date().toISOString(),
+        source_hash: sourceHash
+      }));
+
+      debugLog(`[ACTION] Appel Supabase insert...`);
+      const { error: dbError } = await supabase.from('flashcards').insert(flashcardsToInsert);
+
+      if (dbError) {
+        debugLog(`[ACTION ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
+        return { error: `Erreur BDD: ${dbError.message}`, logs };
+      }
+
+      debugLog(`[ACTION] Insertion réussie. Appel revalidatePath...`);
+      try {
+        revalidatePath('/app/bibliotheque');
+        revalidatePath('/app/revisions');
+        debugLog(`[ACTION] revalidatePath OK.`);
+      } catch (revError: any) {
+        debugLog(`[ACTION ERROR] revalidatePath a échoué: ${revError.message}`);
+        // On ne bloque pas si revalidatePath échoue, c'est cosmétique
+      }
+
+      debugLog(`[ACTION] Fin de l'action serveur avec succès.`);
+      return { success: true, wasTruncated, logs };
+    } finally {
+      // Libération du lock GARANTIE (succès, erreur IA, erreur DB, exception) — plus jamais de lock zombie.
+      if (iOwnLock) {
+        const { error: unlockError } = await supabaseAdmin.from('flashcards_locks').delete().eq('hash', sourceHash);
+        if (unlockError) debugLog(`[ACTION WARN] Échec libération lock (sera purgé par TTL): ${unlockError.message}`);
+      }
     }
-
-    if (!Array.isArray(flashcardsJson)) {
-      debugLog(`[ACTION ERROR] Format JSON invalide retourné par IA: ${JSON.stringify(flashcardsJson).substring(0, 50)}...`);
-      return { error: "L'IA n'a pas retourné un tableau valide", logs };
-    }
-    
-    debugLog(`[ACTION] Préparation de l'insertion de ${flashcardsJson.length} flashcards...`);
-
-    const flashcardsToInsert = flashcardsJson.map((fc: any) => ({
-      question: fc.question,
-      reponse: fc.reponse,
-      cours_id: coursId,
-      document_id: documentId !== 'dummy' ? documentId : null,
-      user_id: user.id,
-      statut: 'validated',
-      next_review: new Date().toISOString(),
-      source_hash: sourceHash
-    }));
-
-    debugLog(`[ACTION] Appel Supabase insert...`);
-    const { error: dbError } = await supabase.from('flashcards').insert(flashcardsToInsert);
-    
-    // Libération du lock
-    await supabaseAdmin.from('flashcards_locks').delete().eq('hash', sourceHash);
-    
-    if (dbError) {
-      debugLog(`[ACTION ERROR] Erreur insertion Supabase : ${dbError.message} (Code: ${dbError.code})`);
-      return { error: `Erreur BDD: ${dbError.message}`, logs };
-    }
-
-    debugLog(`[ACTION] Insertion réussie. Appel revalidatePath...`);
-    try {
-      revalidatePath('/app/bibliotheque');
-      revalidatePath('/app/revisions');
-      debugLog(`[ACTION] revalidatePath OK.`);
-    } catch (revError: any) {
-      debugLog(`[ACTION ERROR] revalidatePath a échoué: ${revError.message}`);
-      // On ne bloque pas si revalidatePath échoue, c'est cosmétique
-    }
-
-    debugLog(`[ACTION] Fin de l'action serveur avec succès.`);
-    return { success: true, wasTruncated, logs };
   } catch (globalError: any) {
     debugLog(`[ACTION FATAL] Exception non interceptée: ${globalError.message}\n${globalError.stack}`);
     return { error: `Erreur Serveur Fatale: ${globalError.message}`, logs, fatal: true };

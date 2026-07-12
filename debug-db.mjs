@@ -12,7 +12,7 @@ async function run() {
     console.log(JSON.stringify(e.questions, null, 2));
   });
 
-  const { data: redactions } = await supabase.from('redactions').select('*').order('created_at', { ascending: false }).limit(3);
+  const { data: redactions } = await supabase.from('redactions').select('*').order('date_creation', { ascending: false }).limit(3);
   console.log("=== REDACTIONS ===");
   redactions.forEach(r => {
     console.log(`ID: ${r.id}`);

@@ -38,19 +38,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Document introuvable ou accès refusé" }, { status: 404 });
     }
 
-    // 1.5 Rate Limiting : Max 5 générations par heure par utilisateur
+    // 1.5 Rate Limiting : Max 5 générations par heure par utilisateur.
+    // etude_cours n'a pas de user_id direct → on relie via les pdf_id des documents de l'utilisateur.
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    
-    // On compte le nombre de documents du user pour lesquels une étude a été générée récemment
-    const { count: rateLimitCount, error: rateLimitError } = await supabaseAdmin
-      .from('etude_cours')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', oneHourAgo); 
-      // Note: Idealement, il faudrait filtrer par user_id dans etude_cours, mais etude_cours n'a pas de user_id direct.
-      // On fera le lien via le document, ou on peut utiliser un tableau dédié.
-      // Pour éviter une requête complexe, on va juste laisser passer pour l'instant si on ne peut pas filtrer par user.
-      
-    // A REVOIR: La table etude_cours n'a pas de user_id ! Il faut vérifier via le pdf_id.
+
     const { data: recentDocs } = await supabase
       .from('documents')
       .select('id')

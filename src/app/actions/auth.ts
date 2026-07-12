@@ -117,14 +117,22 @@ export async function loginWithAccessCode(email: string, secret: string) {
         return { error: "Vous possédez déjà un code d'accès. Si vous l'avez perdu, demandez à l'administrateur de le réinitialiser." };
       }
 
-      const { error: updateErr } = await supabaseAdmin
+      // Claim ATOMIQUE : n'assigne l'email que si le code est encore vierge (email IS NULL).
+      // Empêche deux étudiants de réclamer le même code simultanément (race condition).
+      const { data: claimedCode, error: updateErr } = await supabaseAdmin
         .from('access_codes')
         .update({ email: email })
-        .eq('id', accessCode.id);
-        
+        .eq('id', accessCode.id)
+        .is('email', null)
+        .select()
+        .maybeSingle();
+
       if (updateErr) {
         console.error("[AUTH] Erreur lors de l'assignation de l'email au code:", updateErr);
         return { error: "Erreur serveur lors de la validation du code." };
+      }
+      if (!claimedCode) {
+        return { error: "Ce code d'accès vient d'être assigné à un autre étudiant." };
       }
     }
 

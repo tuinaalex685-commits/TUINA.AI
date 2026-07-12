@@ -109,7 +109,7 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
 /**
  * 1. GÉNÉRATION DE JSON (Pour les Server Actions comme les Flashcards)
  */
-export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext) {
+export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
@@ -136,7 +136,8 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
-        responseSchema: schema
+        responseSchema: schema,
+        ...(temperature !== undefined ? { temperature } : {})
       }
     }), 'generateStructuredJSON');
 
@@ -206,13 +207,18 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
       }
     }), 'streamStructuredJSON');
 
-    // On retourne un ReadableStream pour l'API Route
+    // On retourne un ReadableStream pour l'API Route.
+    // Protocole "buffer + heartbeat" : on accumule le JSON du modèle côté serveur et on n'émet que
+    // des espaces (keep-alive anti-timeout proxy) tant que la génération n'est pas terminée. On flushe
+    // le JSON complet en une seule fois à la fin (succès) OU un objet d'erreur PROPRE (échec).
+    // Cela empêche de corrompre le flux en collant un {error} à un JSON partiel non refermé.
     const readableStream = new ReadableStream({
       async start(controller) {
+        let buffer = "";
+        let chunkCount = 0;
+        let finalUsageMetadata: any = null;
+        let aborted = false;
         try {
-          let chunkCount = 0;
-          let finalUsageMetadata: any = null;
-
           for await (const chunk of stream) {
             // Capturer les métadonnées de consommation (généralement sur le dernier chunk)
             if (chunk.usageMetadata) {
@@ -222,29 +228,40 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
             // Memory leak prevention: if the client aborted the request, stop reading from the stream
             if (signal?.aborted) {
               console.log(`[IA_STREAM] Client aborted request. Breaking stream loop.`);
+              aborted = true;
               break;
             }
             if (chunk.text) {
-              controller.enqueue(chunk.text);
+              buffer += chunk.text;
               chunkCount++;
+              // Heartbeat : un espace maintient la connexion ouverte sans polluer le JSON final
+              // (JSON.parse tolère les espaces de tête et le client fait un .trim()).
+              controller.enqueue(" ");
             }
           }
-          const duration = Date.now() - startTime;
-          console.log(`[IA_PERF] Stream Success | Duration: ${duration}ms | Chunks: ${chunkCount}`);
 
-          // -- SaaS TRACKING --
-          if (finalUsageMetadata) {
-            trackSaaSUsage(
-              trackingContext,
-              duration,
-              finalUsageMetadata.promptTokenCount || 0,
-              finalUsageMetadata.candidatesTokenCount || 0
-            );
+          if (!aborted) {
+            const duration = Date.now() - startTime;
+            console.log(`[IA_PERF] Stream Success | Duration: ${duration}ms | Chunks: ${chunkCount}`);
+
+            // Flush du JSON complet en une seule fois → toujours parsable côté client.
+            controller.enqueue(buffer);
+
+            // -- SaaS TRACKING --
+            if (finalUsageMetadata) {
+              trackSaaSUsage(
+                trackingContext,
+                duration,
+                finalUsageMetadata.promptTokenCount || 0,
+                finalUsageMetadata.candidatesTokenCount || 0
+              );
+            }
           }
 
         } catch (streamError: any) {
           console.error(`[IA_ERROR] Erreur pendant le stream:`, streamError);
-          // On s'assure d'envoyer un JSON d'erreur STRICT que le frontend captera
+          // Seuls des espaces ont été émis jusqu'ici → on peut envoyer un JSON d'erreur PROPRE
+          // que le frontend saura parser (il détecte la clé .error).
           const errorJson = JSON.stringify({ error: `Stream interruption: ${streamError.message}`, code: "STREAM_ERROR" });
           controller.enqueue(errorJson);
         } finally {
