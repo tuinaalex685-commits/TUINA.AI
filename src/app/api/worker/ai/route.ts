@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Type } from '@google/genai';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { generateStructuredJSON } from '@/lib/gemini';
+import { generateStructuredJSON, isRetryableError } from '@/lib/gemini';
 import crypto from 'crypto';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
@@ -9,13 +9,48 @@ import pdfParse from 'pdf-parse';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-const LEASE_MS = 5 * 60 * 1000;   // Bail : un job 'processing' plus vieux que ça = worker mort → repris.
-const MAX_ATTEMPTS = 3;
+// ---------------------------------------------------------------------------
+// CYCLE DE VIE CANONIQUE : pending → processing → generating → saving → completed → failed
+// - pending    : en file (ou en attente d'un retry via next_attempt_at)
+// - processing : leasé, préparation (texte, cache, verrou single-flight)
+// - generating : appel Gemini en cours
+// - saving     : écriture du résultat en base
+// - completed  : terminé
+// - failed     : échec définitif (tentatives épuisées OU erreur permanente)
+// Le frontend n'affiche QUE ces états réels (progress 0..100). Jamais de 95% figé.
+// ---------------------------------------------------------------------------
+const IN_FLIGHT = ['processing', 'generating', 'saving'];
+const LEASE_MS = 5 * 60 * 1000;         // bail : un job in-flight plus vieux = worker mort → repris.
+const MAX_TRANSIENT_ATTEMPTS = 8;       // erreurs transitoires (503/429/réseau) : on persévère (auto-guérison).
+const MAX_PERMANENT_ATTEMPTS = 2;       // erreurs permanentes (PDF illisible, JSON invalide) : abandon rapide.
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s || '').digest('hex');
+const nowIso = () => new Date().toISOString();
+const leaseIso = () => new Date(Date.now() + LEASE_MS).toISOString();
+
+// Colonnes ajoutées par la migration canonique. Écrites en best-effort : si la migration n'est pas
+// encore appliquée, on réécrit SANS elles (les transitions de statut critiques restent garanties).
+// → le déploiement du code est indépendant de l'ordre d'application du SQL (aucune fenêtre de casse).
+const EXTENDED_COLS = ['progress', 'phase', 'next_attempt_at', 'last_error', 'result_ref'];
 
 async function patchJob(id: string, patch: Record<string, any>) {
-  await supabaseAdmin.from('ai_jobs').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+  const full: Record<string, any> = { ...patch, updated_at: nowIso() };
+  const { error } = await supabaseAdmin.from('ai_jobs').update(full).eq('id', id);
+  if (error) {
+    const core: Record<string, any> = {};
+    for (const k of Object.keys(full)) if (!EXTENDED_COLS.includes(k)) core[k] = full[k];
+    await supabaseAdmin.from('ai_jobs').update(core).eq('id', id).then(() => {}, () => {});
+  }
+}
+
+// Contexte passé à chaque processeur : marque l'état réel (status/progress/phase) ET renouvelle le bail,
+// pour que l'UI reflète la vérité backend et que le job ne soit jamais considéré mort pendant qu'il travaille.
+interface JobCtx { mark: (status: string, progress: number, phase: string) => Promise<void>; }
+function makeCtx(jobId: string): JobCtx {
+  return {
+    mark: (status, progress, phase) =>
+      patchJob(jobId, { status, progress, phase, lease_until: leaseIso() }),
+  };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -140,7 +175,7 @@ Tâche : ${instruction}`;
 // ---------------------------------------------------------------------------
 // TRAITEMENT : ÉVALUATION (phases idempotentes via job.result)
 // ---------------------------------------------------------------------------
-async function processEvaluation(job: any): Promise<any> {
+async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
   const p = job.payload || {};
   const type = ['qcm', 'vrai_faux', 'juridique', 'ouvertes', 'quiz'].includes(p.type) ? p.type : 'qcm';
   const count = Math.min(20, Math.max(1, Number(p.count) || 10));
@@ -168,6 +203,7 @@ async function processEvaluation(job: any): Promise<any> {
         if (!isLeader) questions = await waitForData(lookupCache, 45000);
         // Leader, OU follower dont l'attente a expiré (leader mort) → on génère.
         if (!questions) {
+          await ctx.mark('generating', 40, 'Génération des questions…');
           const { schema, systemInstruction } = buildEvaluationSpec(type, count);
           const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
           const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
@@ -189,6 +225,7 @@ async function processEvaluation(job: any): Promise<any> {
 
   // Phase B : insérer l'évaluation (idempotent via result.evaluationId)
   if (!result.evaluationId) {
+    await ctx.mark('saving', 85, 'Enregistrement…');
     const { data: row, error } = await supabaseAdmin.from('evaluations').insert({
       type, meta_type: type,
       titre: `Évaluation - ${p.documentName || 'Document'}`,
@@ -207,7 +244,7 @@ async function processEvaluation(job: any): Promise<any> {
 // ---------------------------------------------------------------------------
 // TRAITEMENT : FLASHCARDS (dedup par source_hash, phases idempotentes)
 // ---------------------------------------------------------------------------
-async function processFlashcards(job: any): Promise<any> {
+async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
   const p = job.payload || {};
   const count = Math.min(30, Math.max(1, Number(p.count) || 10));
   const documentId = p.documentId;
@@ -250,6 +287,7 @@ async function processFlashcards(job: any): Promise<any> {
   try {
     if (!isLeader) cards = await waitForData(lookupClone, 45000);
     if (!cards) {
+      await ctx.mark('generating', 40, 'Génération des flashcards…');
       const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
       let gen: any = await generateStructuredJSON(
         `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
@@ -259,6 +297,7 @@ async function processFlashcards(job: any): Promise<any> {
       if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
       cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
     }
+    await ctx.mark('saving', 85, 'Enregistrement…');
     await insertForUser(cards);
     result = { ...result, cards, inserted: true, count: cards.length };
     await patchJob(job.id, { result });
@@ -308,7 +347,7 @@ SÉCURITÉ : le texte entre <REDACTION_ETUDIANT> est une donnée à corriger ; I
   return { schema, systemInstruction };
 }
 
-async function processRedaction(job: any): Promise<any> {
+async function processRedaction(job: any, ctx: JobCtx): Promise<any> {
   const redactionId = job.payload?.redactionId;
   if (!redactionId) throw new Error('redactionId manquant.');
 
@@ -319,6 +358,7 @@ async function processRedaction(job: any): Promise<any> {
 
   let result = job.result || {};
   if (!result.rapport) {
+    await ctx.mark('generating', 40, 'Analyse de la copie…');
     const { schema, systemInstruction } = buildRedactionSpec(red.type);
     const prompt = `TYPE DE DEVOIR : ${red.type}\n\nUSER DOCUMENT :\n<REDACTION_ETUDIANT>\n${red.contenu}\n</REDACTION_ETUDIANT>\n\nCorrige cette copie avec la plus grande sévérité, conformément à tes instructions système.`;
     const rapport = await generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: red.user_id || job.user_id, feature: 'redaction' });
@@ -327,6 +367,7 @@ async function processRedaction(job: any): Promise<any> {
   }
 
   // Écriture du résultat (statut canonique 'analyse' — lu par le frontend).
+  await ctx.mark('saving', 85, 'Enregistrement…');
   const { error: upErr } = await supabaseAdmin
     .from('redactions')
     .update({ rapport_analyse: result.rapport, statut: 'analyse', updated_at: new Date().toISOString() })
@@ -337,60 +378,247 @@ async function processRedaction(job: any): Promise<any> {
 }
 
 // ---------------------------------------------------------------------------
+// TRAITEMENT : ÉTUDE GUIDÉE (résultat durable dans etude_cours/sections/themes)
+// Dedup cross-utilisateur + single-flight → UN SEUL appel Gemini par contenu identique.
+// Le job pilote la génération ; etude_cours reste la table de résultat lue par la page.
+// ---------------------------------------------------------------------------
+
+// Clone le contenu pédagogique d'un cours source vers un cours cible (idempotent : purge d'abord).
+async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string) {
+  await supabaseAdmin.from('etude_sections').delete().eq('cours_id', targetCoursId);
+  const { data: srcSecs } = await supabaseAdmin.from('etude_sections').select('*').eq('cours_id', sourceCoursId).order('ordre', { ascending: true });
+  for (const sec of srcSecs || []) {
+    const { data: newSec } = await supabaseAdmin.from('etude_sections').insert({
+      cours_id: targetCoursId, titre: sec.titre, synthese: sec.synthese, ordre: sec.ordre, questions_cloture: sec.questions_cloture
+    }).select('id').single();
+    if (!newSec) continue;
+    const { data: srcThemes } = await supabaseAdmin.from('etude_themes').select('*').eq('section_id', sec.id).order('ordre', { ascending: true });
+    if (srcThemes && srcThemes.length > 0) {
+      await supabaseAdmin.from('etude_themes').insert(srcThemes.map((t: any) => ({
+        section_id: newSec.id, titre: t.titre, ordre: t.ordre,
+        explication: t.explication, question_forme: t.question_forme, cas_pratique_fond: t.cas_pratique_fond,
+        remediation_forme: t.remediation_forme, remediation_fond: t.remediation_fond
+      })));
+    }
+  }
+}
+
+// Existe-t-il un cours DÉJÀ prêt (avec sections) pour ce hash de contenu, autre que le cours courant ?
+async function findReadyEtudeByHash(textHash: string, excludeCoursId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('etude_cours').select('id').eq('generation_hash', textHash).eq('statut_generation', 'pret')
+    .neq('id', excludeCoursId).limit(1).maybeSingle();
+  if (!data) return null;
+  const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', data.id);
+  return (count || 0) > 0 ? data.id : null;
+}
+
+async function processEtude(job: any, ctx: JobCtx): Promise<any> {
+  const documentId = job.payload?.documentId;
+  if (!documentId) throw new Error('documentId manquant.');
+
+  // 1. Cours de résultat (get-or-create, tolérant à la concurrence via UNIQUE(pdf_id)).
+  let { data: cours } = await supabaseAdmin
+    .from('etude_cours').select('id, statut_generation, generation_hash').eq('pdf_id', documentId).maybeSingle();
+  if (!cours) {
+    const { data: created, error: cErr } = await supabaseAdmin
+      .from('etude_cours').insert({ pdf_id: documentId, statut_generation: 'en_cours' })
+      .select('id, statut_generation, generation_hash').single();
+    if (cErr) {
+      // Race : un autre worker a créé la ligne → on la relit.
+      const { data: existing } = await supabaseAdmin
+        .from('etude_cours').select('id, statut_generation, generation_hash').eq('pdf_id', documentId).maybeSingle();
+      if (!existing) throw new Error(`Création etude_cours impossible: ${cErr.message}`);
+      cours = existing;
+    } else {
+      cours = created;
+    }
+  }
+  const coursId = cours.id;
+
+  // 2. Idempotence : déjà prêt avec du contenu → rien à refaire.
+  if (cours.statut_generation === 'pret') {
+    const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', coursId);
+    if ((count || 0) > 0) return { coursId };
+  }
+
+  // 3. Texte + hash de contenu.
+  const { text } = await getDocumentText(documentId);
+  const textHash = sha256(text);
+
+  const finalize = async () => {
+    await supabaseAdmin.from('etude_cours').update({
+      statut_generation: 'pret', generation_hash: textHash, last_error: null, updated_at: nowIso()
+    }).eq('id', coursId);
+    await patchJob(job.id, { result_ref: coursId });
+    return { coursId };
+  };
+
+  // 4. Dedup cross-utilisateur : un cours identique déjà prêt existe → on clone (0 appel Gemini).
+  const readyTwin = await findReadyEtudeByHash(textHash, coursId);
+  if (readyTwin) {
+    await ctx.mark('saving', 85, 'Récupération d’un cours identique…');
+    await cloneEtudeContent(readyTwin, coursId);
+    return await finalize();
+  }
+
+  // 5. Single-flight par contenu : un seul leader génère ; les autres attendent puis clonent.
+  const lockKey = `etude:${textHash}`;
+  const isLeader = await acquireContentLock(lockKey);
+  try {
+    if (!isLeader) {
+      await ctx.mark('generating', 40, 'Génération en cours (mutualisée)…');
+      const twin = await waitForData(() => findReadyEtudeByHash(textHash, coursId), 240000, 3000);
+      if (twin) {
+        await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
+        await cloneEtudeContent(twin, coursId);
+        return await finalize();
+      }
+      // L'attente a expiré (leader mort) → on devient générateur de secours.
+    }
+
+    // 6. LEADER : génération Gemini du prompt maître.
+    await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
+    const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt } = await import('@/lib/prompts/pedagogicalEngine');
+    const generatedData: any = await generateStructuredJSON(
+      "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
+      getPedagogicalMasterPrompt(text.substring(0, 50000)),
+      PEDAGOGICAL_MASTER_SCHEMA,
+      undefined,
+      { userId: job.user_id, feature: 'worker_master', documentId }
+    );
+    if (!generatedData || !generatedData.intelligence_pedagogique || !generatedData.sections) {
+      throw new Error("Impossible de générer un JSON valide pour le cours.");
+    }
+
+    // 7. Sauvegarde (batch, idempotent : purge d'abord les sections de ce cours).
+    await ctx.mark('saving', 85, 'Enregistrement du cours…');
+    try {
+      const { PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
+      const fullIntelligence = {
+        _metadata: { engine_version: ENGINE_VERSION, prompt_version: PROMPT_VERSION, schema_version: SCHEMA_VERSION, generated_at: nowIso() },
+        ...generatedData.intelligence_pedagogique,
+        strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
+      };
+      await supabaseAdmin.from('documents').update({ intelligence_pedagogique: fullIntelligence }).eq('id', documentId);
+    } catch { /* colonne intelligence absente → non bloquant */ }
+
+    await supabaseAdmin.from('etude_sections').delete().eq('cours_id', coursId);
+    const sectionsPayload = generatedData.sections.map((s: any) => ({
+      cours_id: coursId, titre: s.titre, synthese: s.synthese || '', ordre: s.ordre, questions_cloture: s.questions_cloture_section || []
+    }));
+    const { data: insertedSections, error: secError } = await supabaseAdmin
+      .from('etude_sections').insert(sectionsPayload).select('id, ordre');
+    if (secError || !insertedSections) throw new Error(`Insertion sections: ${secError?.message}`);
+
+    const ordreToId = new Map<number, string>();
+    for (const s of insertedSections) ordreToId.set(s.ordre, s.id);
+    const themesPayload: any[] = [];
+    for (const section of generatedData.sections) {
+      const sectionId = ordreToId.get(section.ordre);
+      if (!sectionId) continue;
+      for (const theme of section.themes || []) {
+        themesPayload.push({
+          section_id: sectionId, titre: theme.titre, ordre: theme.ordre,
+          explication: theme.explication || '', question_forme: theme.question_forme || {},
+          cas_pratique_fond: theme.cas_pratique_fond || {},
+          remediation_forme: theme.branches_remediation_forme || [], remediation_fond: theme.branches_remediation_fond || []
+        });
+      }
+    }
+    if (themesPayload.length > 0) {
+      const { error: themeError } = await supabaseAdmin.from('etude_themes').insert(themesPayload);
+      if (themeError) throw new Error(`Insertion thèmes: ${themeError.message}`);
+    }
+
+    return await finalize();
+  } finally {
+    if (isLeader) await releaseContentLock(lockKey);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // BOUCLE WORKER : lease atomique → dispatch → done/retry → chaînage
 // ---------------------------------------------------------------------------
 export async function runAiWorker(workerUrl?: string): Promise<any> {
-  const nowIso = new Date().toISOString();
+  const now = nowIso();
 
-  // 1. Candidat : plus ancien job 'queued' OU 'processing' dont le bail a expiré (worker mort).
-  const staleIso = new Date(Date.now() - LEASE_MS).toISOString();
-  const { data: candidate } = await supabaseAdmin
-    .from('ai_jobs')
-    .select('id')
-    .or(`status.eq.queued,and(status.eq.processing,lease_until.lt.${nowIso})`)
-    .lte('created_at', nowIso)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  // 1. Candidat : job 'pending' prêt à tourner (next_attempt_at échu) OU job in-flight au bail expiré
+  //    (worker mort → reprise automatique). 'queued' toléré comme alias de 'pending' (transition).
+  let candidate: { id: string } | null = null;
+  const canonicalFilter =
+    `and(status.in.(pending,queued),or(next_attempt_at.is.null,next_attempt_at.lte.${now})),` +
+    `and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`;
+  const sel = await supabaseAdmin
+    .from('ai_jobs').select('id').or(canonicalFilter)
+    .order('created_at', { ascending: true }).limit(1).maybeSingle();
+  if (sel.error) {
+    // Migration pas encore appliquée (next_attempt_at absent) → requête legacy équivalente.
+    const legacy = await supabaseAdmin
+      .from('ai_jobs').select('id')
+      .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
+      .order('created_at', { ascending: true }).limit(1).maybeSingle();
+    candidate = legacy.data;
+  } else {
+    candidate = sel.data;
+  }
 
   if (!candidate) return { message: 'Aucun job en attente' };
 
-  // 2. Lease ATOMIQUE : un seul worker peut passer queued/expiré → processing.
-  const leaseUntil = new Date(Date.now() + LEASE_MS).toISOString();
+  // 2. Lease ATOMIQUE : un seul worker flippe le candidat vers 'processing' (même seuil `now` que la
+  //    sélection → pas de zone morte où un candidat éligible échoue systématiquement le lease).
+  //    Update réduit aux colonnes cœur (toujours présentes) → indépendant de l'ordre du SQL.
   const { data: leased } = await supabaseAdmin
     .from('ai_jobs')
-    .update({ status: 'processing', lease_until: leaseUntil, updated_at: nowIso })
+    .update({ status: 'processing', lease_until: leaseIso(), updated_at: now })
     .eq('id', candidate.id)
-    .or(`status.eq.queued,and(status.eq.processing,lease_until.lt.${staleIso})`)
+    .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
     .select('*')
     .maybeSingle();
 
   if (!leased) return { message: 'Job déjà pris' };
 
-  // 3. Incrémenter attempts (compteur de tentatives)
+  // 3. Compteur de tentatives (borne les retries → jamais de boucle infinie) + marquage best-effort.
   const attempts = (leased.attempts || 0) + 1;
-  await patchJob(leased.id, { attempts });
+  await patchJob(leased.id, { attempts, progress: 10, phase: 'Préparation…', next_attempt_at: null });
+  const ctx = makeCtx(leased.id);
 
   try {
     let result: any;
-    if (leased.type === 'evaluation') result = await processEvaluation(leased);
-    else if (leased.type === 'flashcards') result = await processFlashcards(leased);
-    else if (leased.type === 'redaction') result = await processRedaction(leased);
+    if (leased.type === 'evaluation') result = await processEvaluation(leased, ctx);
+    else if (leased.type === 'flashcards') result = await processFlashcards(leased, ctx);
+    else if (leased.type === 'redaction') result = await processRedaction(leased, ctx);
+    else if (leased.type === 'etude') result = await processEtude(leased, ctx);
     else throw new Error(`Type de job inconnu: ${leased.type}`);
 
-    await patchJob(leased.id, { status: 'done', result, error: null, lease_until: null });
+    await patchJob(leased.id, {
+      status: 'completed', progress: 100, phase: 'Terminé',
+      result, error: null, last_error: null, lease_until: null, next_attempt_at: null
+    });
     if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
-    const retryable = attempts < MAX_ATTEMPTS;
-    await patchJob(leased.id, {
-      status: retryable ? 'queued' : 'error',
-      error: err?.message || String(err),
-      lease_until: null
-    });
-    console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec (tentative ${attempts}/${MAX_ATTEMPTS}): ${err?.message}`);
+    const message = err?.message || String(err);
+    const transient = isRetryableError(err);
+    const maxAttempts = transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
+    const willRetry = attempts < maxAttempts;
+
+    if (willRetry) {
+      // Backoff : transitoire = court et croissant (auto-guérison, l'UI reste en 'pending' donc jamais
+      // d'écran d'erreur ni de blocage) ; permanent = bref (l'erreur ne s'auto-guérira pas).
+      const delayMs = transient ? Math.min(90000, 15000 * attempts) : 20000 * attempts;
+      await patchJob(leased.id, {
+        status: 'pending', phase: transient ? 'Reprise imminente…' : 'Nouvelle tentative…',
+        last_error: message, lease_until: null,
+        next_attempt_at: new Date(Date.now() + delayMs).toISOString()
+      });
+    } else {
+      // Épuisement → échec définitif (le frontend affiche un vrai message d'erreur).
+      await patchJob(leased.id, { status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null });
+    }
+    console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
     if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
-    return { error: err?.message, jobId: leased.id, retryable };
+    return { error: message, jobId: leased.id, retryable: willRetry };
   }
 }
 

@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export type JobStatus = 'queued' | 'processing' | 'done' | 'error';
+// Cycle de vie canonique du backend. Le frontend n'affiche QUE ces états réels.
+export type JobStatus =
+  | 'pending' | 'processing' | 'generating' | 'saving' | 'completed' | 'failed'
+  // alias hérités tolérés le temps de la transition de vocabulaire :
+  | 'queued' | 'done' | 'error';
+
+const RUNNING = new Set<JobStatus>(['pending', 'processing', 'generating', 'saving', 'queued']);
+const isDone = (s: string) => s === 'completed' || s === 'done';
+const isFailed = (s: string) => s === 'failed' || s === 'error';
 
 interface UseJobOptions {
   onDone?: (result: any) => void;
@@ -11,22 +19,24 @@ interface UseJobOptions {
 }
 
 /**
- * Observe un job IA par POLLING (primaire, sans dépendance Realtime).
- * Le frontend n'attend jamais Gemini : il interroge l'état du job jusqu'à done/error.
+ * Observe un job IA par POLLING (source de vérité = backend, aucune dépendance à un rendu React fragile).
+ * Le frontend n'attend jamais Gemini : il lit l'état réel (status/progress/phase) jusqu'à completed/failed.
  * Passer jobId=null désactive le polling.
  */
 export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
   const { onDone, onError, intervalMs = 2500 } = opts;
   const [status, setStatus] = useState<JobStatus | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<string | null>(null);
   const cbRef = useRef({ onDone, onError });
   cbRef.current = { onDone, onError };
 
   useEffect(() => {
-    if (!jobId) { setStatus(null); return; }
+    if (!jobId) { setStatus(null); setProgress(0); setPhase(null); return; }
 
     let stopped = false;
     let timer: any;
-    setStatus('queued');
+    setStatus('pending');
 
     const poll = async () => {
       try {
@@ -35,16 +45,17 @@ export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
         const job = await res.json();
         if (stopped) return;
         setStatus(job.status);
-        if (job.status === 'done') { stopped = true; cbRef.current.onDone?.(job.result); return; }
-        if (job.status === 'error') { stopped = true; cbRef.current.onError?.(job.error || 'Échec de la génération'); return; }
-      } catch { /* réseau : on retente au prochain tick */ }
+        if (typeof job.progress === 'number') setProgress(job.progress);
+        if (job.phase) setPhase(job.phase);
+        if (isDone(job.status)) { stopped = true; setProgress(100); cbRef.current.onDone?.(job.result); return; }
+        if (isFailed(job.status)) { stopped = true; cbRef.current.onError?.(job.error || 'Échec de la génération'); return; }
+      } catch { /* réseau : on retente au prochain tick (jamais d'échec définitif côté client) */ }
       if (!stopped) timer = setTimeout(poll, intervalMs);
     };
 
-    // Premier poll rapide, puis à intervalle régulier.
     timer = setTimeout(poll, 600);
     return () => { stopped = true; clearTimeout(timer); };
   }, [jobId, intervalMs]);
 
-  return { status, isRunning: status === 'queued' || status === 'processing' };
+  return { status, progress, phase, isRunning: status ? RUNNING.has(status) : false };
 }

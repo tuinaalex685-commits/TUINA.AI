@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
-export type AiJobType = 'evaluation' | 'flashcards' | 'redaction';
+export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude';
 
 /**
  * Crée un job IA et le renvoie immédiatement (le frontend ne fait qu'observer ensuite).
@@ -21,7 +21,7 @@ export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>
 
   const { data: job, error } = await supabaseAdmin
     .from('ai_jobs')
-    .insert({ user_id: user.id, type, status: 'queued', payload, content_hash })
+    .insert({ user_id: user.id, type, status: 'pending', payload, content_hash })
     .select('id, status')
     .single();
 

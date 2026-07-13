@@ -55,16 +55,22 @@ function getAIClient() {
   return new GoogleGenAI({ apiKey });
 }
 
-// Détecte si une erreur Gemini est transitoire et mérite un retry
-function isRetryableError(error: any): boolean {
-  const message = (error.message || '').toLowerCase();
-  const status = error.status || error.httpStatusCode || 0;
+// Timeout dur par tentative d'appel Gemini (ms). Au-delà, on abandonne CETTE tentative et on retente
+// (le retry a son propre timeout). Empêche un appel qui "pend" de bloquer le lease du worker 5 min.
+export const GEMINI_TIMEOUT_MS = 90_000;
+
+// Détecte si une erreur Gemini est transitoire et mérite un retry. Exporté = source de vérité unique
+// pour le worker (distinction transitoire/permanent) → cohérence garantie entre gemini.ts et le worker.
+export function isRetryableError(error: any): boolean {
+  const message = (error?.message || String(error) || '').toLowerCase();
+  const status = error?.status || error?.httpStatusCode || 0;
   // 429 = Rate limit, 500 = Internal error, 503 = Overloaded
   if ([429, 500, 503].includes(status)) return true;
   if (message.includes('429') || message.includes('rate limit') || message.includes('quota')) return true;
   if (message.includes('500') || message.includes('internal')) return true;
   if (message.includes('503') || message.includes('overloaded') || message.includes('unavailable')) return true;
   if (message.includes('econnreset') || message.includes('etimedout') || message.includes('fetch failed')) return true;
+  if (message.includes('timeout') || message.includes('abort') || message.includes('socket hang')) return true;
   return false;
 }
 
@@ -148,17 +154,30 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     }
     contents.push({ text: prompt });
 
-    // Appel à l'API avec retry automatique sur erreurs transitoires
-    const response = await retryWithBackoff(() => ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        ...(temperature !== undefined ? { temperature } : {})
+    // Un appel avec TIMEOUT DUR (timeout natif SDK + AbortController de secours). Chaque tentative
+    // du retry obtient son propre timeout → un appel bloqué ne gèle jamais le worker.
+    const callOnce = async () => {
+      const controller = new AbortController();
+      const killer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS + 5000);
+      try {
+        return await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: contents,
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema: schema,
+            httpOptions: { timeout: GEMINI_TIMEOUT_MS },
+            abortSignal: controller.signal,
+            ...(temperature !== undefined ? { temperature } : {})
+          }
+        });
+      } finally {
+        clearTimeout(killer);
       }
-    }), 'generateStructuredJSON');
+    };
+    // Appel à l'API avec retry automatique (backoff expo + jitter) sur erreurs transitoires.
+    const response = await retryWithBackoff(callOnce, 'generateStructuredJSON');
 
     const rawText = response.text || "";
     console.log(`[IA_RAW] Response length: ${rawText.length}`);

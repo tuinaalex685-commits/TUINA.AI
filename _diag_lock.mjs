@@ -1,0 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local', quiet: true });
+const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const h = 'DIAGTEST_' + Date.now();
+const r1 = await admin.from('etude_generation_locks').insert({ hash: h, expires_at: new Date(Date.now()+600000).toISOString() });
+console.log('insert 1:', r1.error ? r1.error.code + ' ' + r1.error.message : 'OK');
+const r2 = await admin.from('etude_generation_locks').insert({ hash: h, expires_at: new Date(Date.now()+600000).toISOString() });
+console.log('insert 2 (meme hash):', r2.error ? r2.error.code + ' ' + r2.error.message : 'OK (PAS DE CONTRAINTE UNIQUE!)');
+await admin.from('etude_generation_locks').delete().eq('hash', h);
+console.log('nettoye.');
