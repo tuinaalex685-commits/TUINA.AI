@@ -454,15 +454,26 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
   const { text } = await getDocumentText(documentId);
   const textHash = sha256(text);
 
-  // Finalise le cours : garantit qu'il contient bien des sections AVANT de le marquer 'pret'
-  // (jamais d'écran vide), et LÈVE en cas d'échec d'UPDATE (le job retentera).
-  const finalize = async () => {
+  // Finalise le cours : garantit des sections AVANT 'pret' (jamais d'écran vide). Seul le GÉNÉRATEUR
+  // enregistre generation_hash — il existe une contrainte UNIQUE(generation_hash) : un seul cours
+  // "canonique" par contenu. Les CLONES finalisent SANS hash. Tolère le 23505 (un twin détient déjà
+  // le hash à cause d'une race de leaders) → finalise quand même en clone. Jamais d'échec de finalize
+  // pour cette raison ; LÈVE seulement sur une vraie erreur d'écriture (le job retentera).
+  const finalize = async (registerHash: boolean) => {
     const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', coursId);
     if ((count || 0) === 0) throw new Error('Finalisation refusée : cours sans section (anti écran vide).');
-    const { error: upErr } = await supabaseAdmin.from('etude_cours').update({
-      statut_generation: 'pret', generation_hash: textHash, last_error: null, updated_at: nowIso()
-    }).eq('id', coursId);
-    if (upErr) throw new Error(`Finalisation etude_cours: ${upErr.message}`);
+    const base: Record<string, any> = { statut_generation: 'pret', last_error: null, updated_at: nowIso() };
+    const { error: upErr } = await supabaseAdmin.from('etude_cours')
+      .update(registerHash ? { ...base, generation_hash: textHash } : base).eq('id', coursId);
+    if (upErr) {
+      const dup = upErr.code === '23505' || /duplicate|unique/i.test(upErr.message || '');
+      if (registerHash && dup) {
+        const { error: e2 } = await supabaseAdmin.from('etude_cours').update(base).eq('id', coursId);
+        if (e2) throw new Error(`Finalisation etude_cours: ${e2.message}`);
+      } else {
+        throw new Error(`Finalisation etude_cours: ${upErr.message}`);
+      }
+    }
     await patchJob(job.id, { result_ref: coursId });
     return { coursId };
   };
@@ -472,7 +483,7 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
   if (readyTwin) {
     await ctx.mark('saving', 85, 'Récupération d’un cours identique…');
     await cloneEtudeContent(readyTwin, coursId);
-    return await finalize();
+    return await finalize(false);
   }
 
   // 5. Single-flight par contenu : un seul leader génère ; les autres attendent puis clonent.
@@ -484,13 +495,15 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
       // une fois si le cours mutualisé est prêt → clone ; sinon se re-programme dans quelques secondes
       // (le worker le repiochera). Borné par le TTL du verrou : si le leader meurt, le verrou expire et
       // ce follower deviendra leader au prochain passage → auto-guérison, jamais de blocage.
-      const twin = await findReadyEtudeByHash(textHash, coursId);
+      await ctx.mark('generating', 40, 'Génération mutualisée en cours…');
+      // Attente COURTE en fonction (≤18s) : borne le held-time ET le nombre de requeues (~leader/18s),
+      // indépendamment de la migration next_attempt_at. Puis clone si prêt, sinon requeue (libère la fn).
+      const twin = await waitForData(() => findReadyEtudeByHash(textHash, coursId), 18000, 3000);
       if (twin) {
         await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
         await cloneEtudeContent(twin, coursId);
-        return await finalize();
+        return await finalize(false);
       }
-      await ctx.mark('generating', 40, 'Génération mutualisée en cours…');
       return { __requeueMs: 4000 };
     }
 
@@ -548,7 +561,7 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
       if (themeError) throw new Error(`Insertion thèmes: ${themeError.message}`);
     }
 
-    return await finalize();
+    return await finalize(true); // le générateur enregistre le hash canonique (source de dédup)
   } finally {
     if (isLeader) await releaseContentLock(lockKey);
   }
