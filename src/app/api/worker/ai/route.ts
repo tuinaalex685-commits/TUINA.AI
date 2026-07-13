@@ -384,23 +384,31 @@ async function processRedaction(job: any, ctx: JobCtx): Promise<any> {
 // ---------------------------------------------------------------------------
 
 // Clone le contenu pédagogique d'un cours source vers un cours cible (idempotent : purge d'abord).
-async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string) {
+// LÈVE une erreur en cas d'échec d'insertion → le job retentera au lieu de "compléter" un cours VIDE
+// (intégrité des données : on ne finalise jamais un cours sans son contenu). Renvoie le nb de sections.
+async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string): Promise<number> {
   await supabaseAdmin.from('etude_sections').delete().eq('cours_id', targetCoursId);
-  const { data: srcSecs } = await supabaseAdmin.from('etude_sections').select('*').eq('cours_id', sourceCoursId).order('ordre', { ascending: true });
-  for (const sec of srcSecs || []) {
-    const { data: newSec } = await supabaseAdmin.from('etude_sections').insert({
+  const { data: srcSecs, error: selErr } = await supabaseAdmin.from('etude_sections').select('*').eq('cours_id', sourceCoursId).order('ordre', { ascending: true });
+  if (selErr) throw new Error(`Clone (lecture sections source): ${selErr.message}`);
+  if (!srcSecs || srcSecs.length === 0) throw new Error('Clone impossible : cours source sans section.');
+  let n = 0;
+  for (const sec of srcSecs) {
+    const { data: newSec, error: secErr } = await supabaseAdmin.from('etude_sections').insert({
       cours_id: targetCoursId, titre: sec.titre, synthese: sec.synthese, ordre: sec.ordre, questions_cloture: sec.questions_cloture
     }).select('id').single();
-    if (!newSec) continue;
+    if (secErr || !newSec) throw new Error(`Clone (insertion section): ${secErr?.message || 'insert vide'}`);
+    n++;
     const { data: srcThemes } = await supabaseAdmin.from('etude_themes').select('*').eq('section_id', sec.id).order('ordre', { ascending: true });
     if (srcThemes && srcThemes.length > 0) {
-      await supabaseAdmin.from('etude_themes').insert(srcThemes.map((t: any) => ({
+      const { error: thErr } = await supabaseAdmin.from('etude_themes').insert(srcThemes.map((t: any) => ({
         section_id: newSec.id, titre: t.titre, ordre: t.ordre,
         explication: t.explication, question_forme: t.question_forme, cas_pratique_fond: t.cas_pratique_fond,
         remediation_forme: t.remediation_forme, remediation_fond: t.remediation_fond
       })));
+      if (thErr) throw new Error(`Clone (insertion thèmes): ${thErr.message}`);
     }
   }
+  return n;
 }
 
 // Existe-t-il un cours DÉJÀ prêt (avec sections) pour ce hash de contenu, autre que le cours courant ?
@@ -446,10 +454,15 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
   const { text } = await getDocumentText(documentId);
   const textHash = sha256(text);
 
+  // Finalise le cours : garantit qu'il contient bien des sections AVANT de le marquer 'pret'
+  // (jamais d'écran vide), et LÈVE en cas d'échec d'UPDATE (le job retentera).
   const finalize = async () => {
-    await supabaseAdmin.from('etude_cours').update({
+    const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', coursId);
+    if ((count || 0) === 0) throw new Error('Finalisation refusée : cours sans section (anti écran vide).');
+    const { error: upErr } = await supabaseAdmin.from('etude_cours').update({
       statut_generation: 'pret', generation_hash: textHash, last_error: null, updated_at: nowIso()
     }).eq('id', coursId);
+    if (upErr) throw new Error(`Finalisation etude_cours: ${upErr.message}`);
     await patchJob(job.id, { result_ref: coursId });
     return { coursId };
   };
@@ -467,14 +480,18 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
   const isLeader = await acquireContentLock(lockKey);
   try {
     if (!isLeader) {
-      await ctx.mark('generating', 40, 'Génération en cours (mutualisée)…');
-      const twin = await waitForData(() => findReadyEtudeByHash(textHash, coursId), 240000, 3000);
+      // Follower SCALABLE : ne bloque JAMAIS la fonction serverless (clé pour 300→5000 users). Vérifie
+      // une fois si le cours mutualisé est prêt → clone ; sinon se re-programme dans quelques secondes
+      // (le worker le repiochera). Borné par le TTL du verrou : si le leader meurt, le verrou expire et
+      // ce follower deviendra leader au prochain passage → auto-guérison, jamais de blocage.
+      const twin = await findReadyEtudeByHash(textHash, coursId);
       if (twin) {
         await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
         await cloneEtudeContent(twin, coursId);
         return await finalize();
       }
-      // L'attente a expiré (leader mort) → on devient générateur de secours.
+      await ctx.mark('generating', 40, 'Génération mutualisée en cours…');
+      return { __requeueMs: 4000 };
     }
 
     // 6. LEADER : génération Gemini du prompt maître.
@@ -590,6 +607,17 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     else if (leased.type === 'redaction') result = await processRedaction(leased, ctx);
     else if (leased.type === 'etude') result = await processEtude(leased, ctx);
     else throw new Error(`Type de job inconnu: ${leased.type}`);
+
+    // Re-programmation coopérative (ex: follower single-flight en attente) : le processeur demande à être
+    // repioché plus tard SANS bloquer la fonction ni compter comme un échec. Auto-guérison, pas de blocage.
+    if (result && result.__requeueMs) {
+      await patchJob(leased.id, {
+        status: 'pending', lease_until: null,
+        next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
+      });
+      if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
+      return { requeued: leased.id, type: leased.type };
+    }
 
     await patchJob(leased.id, {
       status: 'completed', progress: 100, phase: 'Terminé',

@@ -46,3 +46,5 @@ _scenarios.mjs
 _scenarios.log
 _diag_*.mjs
 _loadtest*.mjs
+_smoke*.mjs
+_smoke*.log

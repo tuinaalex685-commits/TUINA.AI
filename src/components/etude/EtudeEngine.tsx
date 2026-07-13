@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import styles from './EtudeEngine.module.css';
 import EtudeLoadingScreen from './EtudeLoadingScreen';
+import { useJob } from '@/lib/hooks/useJob';
 
 export default function EtudeEngine({ 
   pdfId, 
@@ -17,9 +17,25 @@ export default function EtudeEngine({
   const [loading, setLoading] = useState(!coursId);
   const [error, setError] = useState('');
   const [isQueued, setIsQueued] = useState(false);
-  const [pollingCoursId, setPollingCoursId] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0); // Nouveau state pour la barre de progression
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const detectedPretRef = React.useRef(false);
+
+  // Observation du job de génération = SOURCE DE VÉRITÉ backend (polling). Complétion et erreur
+  // increvables : plus aucune dépendance à la propagation des props React (cause des blocages à 95%).
+  const job = useJob(jobId, {
+    onDone: () => {
+      if (detectedPretRef.current) return;
+      detectedPretRef.current = true;
+      setProgress(100);
+      setTimeout(() => window.location.reload(), 300); // page.tsx re-rend le cours (etude_cours prêt)
+    },
+    onError: (e: string) => {
+      setError(e || 'Erreur lors de la génération. Veuillez réessayer.');
+      setLoading(false);
+      setIsQueued(false);
+    },
+  });
   
   // State Machine logic simplified for the MVP
   // states: 'synthese' | 'explication' | 'question_forme' | 'cas_pratique' | 'cloture'
@@ -56,78 +72,36 @@ export default function EtudeEngine({
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
 
-  // Barre de progression : ~120s pour atteindre 95% (aligné sur le temps réel de génération mesuré).
+  // Barre de progression PILOTÉE PAR LA PROGRESSION RÉELLE du job (backend), avec un léger lissage
+  // borné par la phase courante (pending/processing/generating/saving). Elle ne peut jamais rester
+  // figée : à la complétion RÉELLE, useJob déclenche onDone → reload. Plus de barre factice.
+  const ceilingForStatus = (s?: string | null) =>
+    s === 'saving' ? 97 : s === 'generating' ? 80 : s === 'processing' ? 40 : s === 'pending' ? 20 : 15;
   useEffect(() => {
-    let progressInterval: any;
-    if (loading) {
-      progressInterval = setInterval(() => {
-        setProgress(prev => (prev >= 95 ? prev : prev + 1));
-      }, 1300);
-    }
-    return () => clearInterval(progressInterval);
-  }, [loading]);
+    if (!loading) return;
+    const id = setInterval(() => {
+      setProgress(prev => {
+        const target = Math.max(prev, job.progress || 0);
+        const ceil = ceilingForStatus(job.status);
+        return target < ceil ? Math.min(ceil, target + 1) : target;
+      });
+    }, 1200);
+    return () => clearInterval(id);
+  }, [loading, job.progress, job.status]);
 
+  // Déclenchement UNIQUE de la génération quand le cours n'est pas encore prêt.
+  const startedGenRef = React.useRef(false);
   useEffect(() => {
-    if (!coursId && !pollingCoursId) generateCourse();
+    if (!coursId && !startedGenRef.current) { startedGenRef.current = true; generateCourse(); }
   }, [coursId]);
 
-  // Dès que les sections arrivent (via router.refresh), on bascule sur l'affichage du cours.
+  // Dès que les sections arrivent (après reload), on bascule sur l'affichage du cours.
   useEffect(() => {
     if (coursId && sections && sections.length > 0) {
-      console.log(`[ETUDE ${new Date().toISOString()}] Sections reçues (${sections.length}) → affichage du cours.`);
       setLoading(false);
       setIsQueued(false);
     }
   }, [coursId, sections]);
-
-  // Détection de fin INCREVABLE : dès que le job est 'pret', on recharge la page.
-  // page.tsx re-tourne côté serveur et rend le cours (le propriétaire peut le lire).
-  // Aucune dépendance à la propagation des props React (source des blocages à 95%).
-  const handlePret = React.useCallback(() => {
-    if (detectedPretRef.current) return;
-    detectedPretRef.current = true;
-    setProgress(100);
-    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'pret' détecté → rechargement pour afficher le cours.`);
-    // Petit délai pour laisser la barre atteindre 100% visuellement, puis reload dur.
-    setTimeout(() => { window.location.reload(); }, 300);
-  }, []);
-
-  const handleErreur = React.useCallback(() => {
-    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'erreur' détecté.`);
-    setError("Erreur lors de la génération. Veuillez réessayer.");
-    setLoading(false);
-    setIsQueued(false);
-  }, []);
-
-  // Observation du job : POLLING rapide (2.5s) primaire + Realtime en accélérateur.
-  useEffect(() => {
-    if (!pollingCoursId) return;
-    let interval: any;
-    let channel: any;
-    const startedAt = Date.now();
-    console.log(`[ETUDE ${new Date().toISOString()}] Début observation du cours ${pollingCoursId}`);
-
-    channel = supabase.channel(`etude_cours_${pollingCoursId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'etude_cours', filter: `id=eq.${pollingCoursId}` },
-        (payload: any) => {
-          console.log(`[ETUDE ${new Date().toISOString()}] Realtime: statut=${payload.new.statut_generation}`);
-          if (payload.new.statut_generation === 'pret') handlePret();
-          else if (payload.new.statut_generation === 'erreur') handleErreur();
-        })
-      .subscribe();
-
-    interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/etude/status?coursId=${pollingCoursId}`, { cache: 'no-store' });
-        const data = await res.json();
-        console.log(`[ETUDE ${new Date().toISOString()}] Poll t+${((Date.now() - startedAt) / 1000).toFixed(0)}s: statut=${data.status}`);
-        if (data.status === 'pret') handlePret();
-        else if (data.status === 'erreur') handleErreur();
-      } catch (err) { /* réseau : retry au prochain tick */ }
-    }, 2500);
-
-    return () => { if (interval) clearInterval(interval); if (channel) channel.unsubscribe(); };
-  }, [pollingCoursId, handlePret, handleErreur]);
 
   const generateCourse = async (force: boolean = false) => {
     try {
@@ -144,14 +118,20 @@ export default function EtudeEngine({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur de génération");
-      console.log(`[ETUDE ${new Date().toISOString()}] generate répond en ${Date.now() - tClick}ms: status=${data.status}, coursId=${data.coursId}`);
+      console.log(`[ETUDE ${new Date().toISOString()}] generate répond en ${Date.now() - tClick}ms: status=${data.status}, jobId=${data.jobId}`);
 
-      if (data.status === 'pret') {
-        handlePret();
+      // Déjà prêt (cours existant OU aucun job nécessaire) → on affiche immédiatement via reload.
+      if (data.status === 'completed' || data.status === 'pret' || !data.jobId) {
+        if (!detectedPretRef.current) {
+          detectedPretRef.current = true;
+          setProgress(100);
+          setTimeout(() => window.location.reload(), 300);
+        }
       } else {
-        setPollingCoursId(data.coursId);
-        // Réveil immédiat du worker (best-effort). Le cron garantit le traitement sinon.
-        fetch('/api/worker/process', { method: 'POST' }).catch(e => console.log('Worker trigger silently failed:', e));
+        // Observation du job (source de vérité backend). useJob → onDone/onError.
+        setJobId(data.jobId);
+        // Réveil immédiat du worker unifié (best-effort). Le cron garantit le traitement sinon.
+        fetch('/api/worker/ai', { method: 'POST' }).catch(() => {});
       }
     } catch (err: any) {
       setError(err.message);

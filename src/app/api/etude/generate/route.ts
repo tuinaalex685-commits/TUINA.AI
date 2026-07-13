@@ -1,131 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-export const maxDuration = 300;
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 const supabaseAdmin = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const ACTIVE = ['pending', 'processing', 'generating', 'saving', 'queued'];
+
+// Génération d'une Étude Guidée = job IA unifié (type 'etude'). Le résultat durable reste dans
+// etude_cours/sections/themes ; ce endpoint ne fait qu'ENQUEUE puis renvoyer un jobId à observer.
+// Ne bloque jamais sur Gemini. Idempotent : réutilise un job actif ou un cours déjà prêt.
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-    if (!user) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    const { documentId, force } = await req.json();
+    if (!documentId) return NextResponse.json({ error: "ID de document manquant" }, { status: 400 });
+
+    // 1. Appartenance stricte du document (filtre user_id explicite, indépendant de la RLS).
+    const { data: document } = await supabaseAdmin
+      .from('documents').select('id').eq('id', documentId).eq('user_id', user.id).maybeSingle();
+    if (!document) return NextResponse.json({ error: "Document introuvable ou accès refusé" }, { status: 404 });
+
+    // 2. Déjà généré et prêt → ouverture instantanée (aucun job).
+    const { data: cours } = await supabaseAdmin
+      .from('etude_cours').select('id, statut_generation').eq('pdf_id', documentId).maybeSingle();
+    if (cours && cours.statut_generation === 'pret' && !force) {
+      const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', cours.id);
+      if ((count || 0) > 0) {
+        return NextResponse.json({ success: true, status: 'completed', coursId: cours.id, jobId: null });
+      }
     }
 
-    const body = await req.json();
-    const { documentId, force } = body;
-
-    if (!documentId) {
-      return NextResponse.json({ error: "ID de document manquant" }, { status: 400 });
-    }
-
-    // 1. Vérifier si le document existe ET appartient à l'utilisateur
-    const { data: document, error: docError } = await supabase
-      .from('documents')
-      .select('id')
-      .eq('id', documentId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (docError || !document) {
-      return NextResponse.json({ error: "Document introuvable ou accès refusé" }, { status: 404 });
-    }
-
-    // 1.5 Rate Limiting : Max 5 générations par heure par utilisateur.
-    // etude_cours n'a pas de user_id direct → on relie via les pdf_id des documents de l'utilisateur.
+    // 3. Rate limiting : max 5 générations Étude par heure par utilisateur (via ai_jobs).
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
-    const { data: recentDocs } = await supabase
-      .from('documents')
-      .select('id')
-      .eq('user_id', user.id);
-      
-    if (recentDocs && recentDocs.length > 0) {
-      const docIds = recentDocs.map(d => d.id);
-      const { count: recentGenerations } = await supabaseAdmin
-        .from('etude_cours')
-        .select('id', { count: 'exact', head: true })
-        .in('pdf_id', docIds)
-        .gte('created_at', oneHourAgo);
-        
-      if (recentGenerations !== null && recentGenerations >= 5) {
-        return NextResponse.json({ error: "Limite atteinte : Vous ne pouvez générer que 5 études par heure. Veuillez patienter." }, { status: 429 });
-      }
+    const { count: recent } = await supabaseAdmin
+      .from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('type', 'etude').gte('created_at', oneHourAgo);
+    if ((recent || 0) >= 5 && !force) {
+      return NextResponse.json({ error: "Limite atteinte : 5 études par heure maximum. Réessayez plus tard." }, { status: 429 });
     }
 
-    // 2. Vérifier si une génération existe déjà
-    let { data: coursEtude } = await supabaseAdmin
-      .from('etude_cours')
-      .select('*')
-      .eq('pdf_id', documentId)
-      .single();
-
-    if (coursEtude) {
-      if (coursEtude.statut_generation === 'pret') {
-        return NextResponse.json({ success: true, message: "Déjà généré", coursId: coursEtude.id, status: 'pret' });
-      }
-      if (coursEtude.statut_generation === 'en_cours' || coursEtude.statut_generation === 'pending') {
-        if (!force) {
-          // On renvoie 'pending' ou 'en_cours' au front-end pour qu'il commence le polling
-          return NextResponse.json({ success: true, status: coursEtude.statut_generation, coursId: coursEtude.id });
-        }
-      }
-    } else {
-      // 3. Créer une nouvelle entrée dans etude_cours (Safe concurrency)
-      const { data: newCours, error: insertError } = await supabaseAdmin
-        .from('etude_cours')
-        .insert({ pdf_id: documentId, statut_generation: 'pending' })
-        .select()
-        .single();
-
-      if (insertError) {
-        // En cas de conflit de concurrence (Race condition gérée par la contrainte UNIQUE)
-        if (insertError.code === '23505' || insertError.message?.includes('unique')) {
-          const { data: existingCours } = await supabaseAdmin
-            .from('etude_cours')
-            .select('*')
-            .eq('pdf_id', documentId)
-            .single();
-          if (existingCours) {
-            coursEtude = existingCours;
-          } else {
-            throw new Error("Erreur création etude_cours (conflit irrésolu) : " + insertError.message);
-          }
-        } else {
-          throw new Error("Erreur création etude_cours : " + insertError.message);
-        }
-      } else {
-        coursEtude = newCours;
-      }
+    // 4. Idempotence : un job Étude déjà actif pour CE document → on le réutilise (pas de doublon).
+    const { data: existing } = await supabaseAdmin
+      .from('ai_jobs').select('id, status')
+      .eq('user_id', user.id).eq('type', 'etude')
+      .filter('payload->>documentId', 'eq', documentId)
+      .in('status', ACTIVE)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (existing && !force) {
+      triggerWorker(req);
+      return NextResponse.json({ success: true, status: existing.status, jobId: existing.id, coursId: cours?.id ?? null });
     }
 
-    // 4. Si force = true OU si le statut est en erreur (pour débloquer la file), on réinitialise l'état
-    if (force || coursEtude.statut_generation === 'erreur') {
-      await supabaseAdmin.from('etude_cours').update({ 
-        statut_generation: 'pending',
-        next_retry: null,
-        retry_count: 0
-      }).eq('id', coursEtude.id);
-    }
+    // 5. Enqueue d'un nouveau job.
+    const { data: job, error } = await supabaseAdmin
+      .from('ai_jobs')
+      .insert({ user_id: user.id, type: 'etude', status: 'pending', payload: { documentId } })
+      .select('id').single();
+    if (error || !job) return NextResponse.json({ error: error?.message || "Création du job impossible" }, { status: 500 });
 
-    // Déclencher le Worker en arrière-plan avec next/server after() pour Vercel
-    after(() => {
-      import('@/app/api/worker/process/route').then((m) => {
-        m.runWorker().catch((err: any) => console.error("Erreur de lancement du worker:", err));
-      });
-    });
-
-    return NextResponse.json({ success: true, status: 'pending', coursId: coursEtude.id });
+    triggerWorker(req);
+    return NextResponse.json({ success: true, status: 'pending', jobId: job.id, coursId: cours?.id ?? null });
 
   } catch (error: any) {
     console.error("API Generer Etude Error:", error);
     return NextResponse.json({ error: "Erreur serveur interne: " + (error.message || String(error)) }, { status: 500 });
   }
+}
+
+// Réveil immédiat du worker unifié (best-effort). Le cron /api/worker/ai garantit le traitement sinon.
+function triggerWorker(req: NextRequest) {
+  try {
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('host');
+    if (host) fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST' }).catch(() => {});
+  } catch { /* non bloquant */ }
 }
