@@ -390,15 +390,37 @@ export async function runWorker(workerUrlStr?: string) {
 
     } catch (processError: any) {
       console.error("Worker Error:", processError);
-      
-      const isRetryable = (job.retry_count || 0) < 2;
-      const nextStatus = isRetryable ? 'erreur' : 'erreur'; // Reste dans l'état erreur, mais avec un next_retry
-      const nextRetry = isRetryable ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : null; // Retry dans 5 minutes
-      
-      await supabaseAdmin.from('etude_cours').update({ 
+
+      // Distinction erreur TRANSITOIRE (Gemini 503 surchargé / 429 / réseau) vs PERMANENTE (PDF illisible,
+      // JSON invalide, document introuvable). C'est la cause n°1 des écrans figés à 95% : un simple 503
+      // Gemini renvoyait le job en 'erreur' + next_retry à +5 min → l'utilisateur voyait un écran bloqué
+      // pendant des minutes. Désormais une erreur transitoire repasse le job en 'pending' (le frontend
+      // continue d'afficher la progression, PAS d'écran d'erreur) avec un backoff COURT et croissant
+      // (15s→90s) et davantage de tentatives → auto-guérison en 1-2 min dès que Gemini se libère.
+      const msg = (processError.message || '').toLowerCase();
+      const isTransient = /(503|overloaded|unavailable|429|rate limit|quota|internal error|econnreset|etimedout|fetch failed|timeout|socket hang)/.test(msg);
+      const rc = job.retry_count || 0;
+      const maxRetries = isTransient ? 8 : 2; // une erreur permanente ne s'auto-guérit pas → abandon rapide
+      const isRetryable = rc < maxRetries;
+
+      let nextStatus: string;
+      let nextRetry: string | null;
+      if (isRetryable) {
+        // Transitoire → 'pending' : l'UI garde sa barre de progression (le status endpoint relance le
+        // worker sur 'pending'). Permanent → 'erreur' (message immédiat) mais avec un court next_retry.
+        nextStatus = isTransient ? 'pending' : 'erreur';
+        const delayMs = isTransient ? Math.min(90000, 15000 * (rc + 1)) : 30000 * (rc + 1);
+        nextRetry = new Date(Date.now() + delayMs).toISOString();
+      } else {
+        nextStatus = 'erreur'; // abandon définitif
+        nextRetry = null;
+      }
+      console.log(`[Worker] Job ${job.id} échec ${isTransient ? 'TRANSITOIRE' : 'PERMANENT'} (tentative ${rc + 1}/${maxRetries}) → statut=${nextStatus}, next_retry=${nextRetry ? new Date(nextRetry).toISOString() : 'abandon'} | ${processError.message?.slice(0, 120)}`);
+
+      await supabaseAdmin.from('etude_cours').update({
         statut_generation: nextStatus,
         last_error: processError.message,
-        retry_count: (job.retry_count || 0) + 1,
+        retry_count: rc + 1,
         next_retry: nextRetry,
         updated_at: new Date().toISOString()
       }).eq('id', job.id);
