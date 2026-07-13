@@ -55,6 +55,15 @@ function makeCtx(jobId: string): JobCtx {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// HEARTBEAT DE LEASE : pendant une opération longue (appel Gemini pouvant enchaîner des retries 503
+// jusqu'à plusieurs minutes), on renouvelle lease_until toutes les 60s. Sans ça, une génération longue
+// dépasserait le bail → un 2e worker re-leaserait le MÊME job → double génération. Le heartbeat garantit
+// qu'un job vivant n'est jamais repris (et un worker MORT cesse de battre → repris en ≤ LEASE_MS).
+async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
+  const iv = setInterval(() => { patchJob(jobId, { lease_until: leaseIso() }).catch(() => {}); }, 60_000);
+  try { return await fn(); } finally { clearInterval(iv); }
+}
+
 // SINGLE-FLIGHT PAR CONTENU : le 1er job qui insère le hash devient "leader" (génère) ;
 // les autres sont "followers" (attendent le cache puis clonent). Anti thundering herd.
 async function acquireContentLock(hash: string): Promise<boolean> {
@@ -207,7 +216,7 @@ async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
           const { schema, systemInstruction } = buildEvaluationSpec(type, count);
           const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
           const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
-          let gen: any = await generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId });
+          let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId }));
           if (!Array.isArray(gen)) gen = gen?.questions || gen?.quiz || (gen ? [gen] : []);
           if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de questions valides.");
           questions = gen;
@@ -289,11 +298,11 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
     if (!cards) {
       await ctx.mark('generating', 40, 'Génération des flashcards…');
       const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
-      let gen: any = await generateStructuredJSON(
+      let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
         `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
         `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
         schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
-      );
+      ));
       if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
       cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
     }
@@ -361,7 +370,7 @@ async function processRedaction(job: any, ctx: JobCtx): Promise<any> {
     await ctx.mark('generating', 40, 'Analyse de la copie…');
     const { schema, systemInstruction } = buildRedactionSpec(red.type);
     const prompt = `TYPE DE DEVOIR : ${red.type}\n\nUSER DOCUMENT :\n<REDACTION_ETUDIANT>\n${red.contenu}\n</REDACTION_ETUDIANT>\n\nCorrige cette copie avec la plus grande sévérité, conformément à tes instructions système.`;
-    const rapport = await generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: red.user_id || job.user_id, feature: 'redaction' });
+    const rapport = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: red.user_id || job.user_id, feature: 'redaction' }));
     result = { ...result, rapport };
     await patchJob(job.id, { result });
   }
@@ -514,13 +523,13 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
     let leaderResult = job.result || {};
     if (!leaderResult.generated) {
       await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
-      const gen: any = await generateStructuredJSON(
+      const gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
         "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
         getPedagogicalMasterPrompt(text.substring(0, 50000)),
         PEDAGOGICAL_MASTER_SCHEMA,
         undefined,
         { userId: job.user_id, feature: 'worker_master', documentId }
-      );
+      ));
       if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
