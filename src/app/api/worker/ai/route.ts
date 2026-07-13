@@ -507,24 +507,31 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
       return { __requeueMs: 4000 };
     }
 
-    // 6. LEADER : génération Gemini du prompt maître.
-    await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
-    const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt } = await import('@/lib/prompts/pedagogicalEngine');
-    const generatedData: any = await generateStructuredJSON(
-      "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
-      getPedagogicalMasterPrompt(text.substring(0, 50000)),
-      PEDAGOGICAL_MASTER_SCHEMA,
-      undefined,
-      { userId: job.user_id, feature: 'worker_master', documentId }
-    );
-    if (!generatedData || !generatedData.intelligence_pedagogique || !generatedData.sections) {
-      throw new Error("Impossible de générer un JSON valide pour le cours.");
+    // 6. LEADER : génération Gemini du prompt maître — IDEMPOTENTE via job.result.generated.
+    //    Le résultat est persisté AVANT toute étape faillible (sauvegarde/finalize) : un retry ne relance
+    //    donc JAMAIS Gemini (fin des doubles générations sous retry). Un seul appel Gemini par contenu.
+    const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt, PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
+    let leaderResult = job.result || {};
+    if (!leaderResult.generated) {
+      await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
+      const gen: any = await generateStructuredJSON(
+        "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
+        getPedagogicalMasterPrompt(text.substring(0, 50000)),
+        PEDAGOGICAL_MASTER_SCHEMA,
+        undefined,
+        { userId: job.user_id, feature: 'worker_master', documentId }
+      );
+      if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
+        throw new Error("Impossible de générer un JSON valide pour le cours.");
+      }
+      leaderResult = { ...leaderResult, generated: gen };
+      await patchJob(job.id, { result: leaderResult }); // persistance immédiate → retry sans re-génération
     }
+    const generatedData: any = leaderResult.generated;
 
     // 7. Sauvegarde (batch, idempotent : purge d'abord les sections de ce cours).
     await ctx.mark('saving', 85, 'Enregistrement du cours…');
     try {
-      const { PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
       const fullIntelligence = {
         _metadata: { engine_version: ENGINE_VERSION, prompt_version: PROMPT_VERSION, schema_version: SCHEMA_VERSION, generated_at: nowIso() },
         ...generatedData.intelligence_pedagogique,
