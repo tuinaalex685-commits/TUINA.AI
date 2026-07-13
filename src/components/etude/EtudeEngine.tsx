@@ -19,6 +19,9 @@ export default function EtudeEngine({
   const [isQueued, setIsQueued] = useState(false);
   const [pollingCoursId, setPollingCoursId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0); // Nouveau state pour la barre de progression
+  const loadingRef = React.useRef(loading);
+  React.useEffect(() => { loadingRef.current = loading; }, [loading]);
+  const detectedPretRef = React.useRef(false);
   
   // State Machine logic simplified for the MVP
   // states: 'synthese' | 'explication' | 'question_forme' | 'cas_pratique' | 'cloture'
@@ -55,87 +58,90 @@ export default function EtudeEngine({
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
 
-  // Animation de la barre de progression (0 à 95% en ~90s pour correspondre au temps réel de l'IA)
+  // Barre de progression : ~120s pour atteindre 95% (aligné sur le temps réel de génération mesuré).
   useEffect(() => {
     let progressInterval: any;
     if (loading) {
       progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) return prev; 
-          // 1% toutes les 950ms = ~90s pour atteindre 95%
-          return prev + 1; 
-        });
-      }, 950);
+        setProgress(prev => (prev >= 95 ? prev : prev + 1));
+      }, 1300);
     }
     return () => clearInterval(progressInterval);
   }, [loading]);
 
   useEffect(() => {
-    if (!coursId && !pollingCoursId) {
-      // Trigger generation
-      generateCourse();
-    }
+    if (!coursId && !pollingCoursId) generateCourse();
   }, [coursId]);
 
-  // Bugfix React: Cacher le chargement dès que Next.js reçoit les données (suite à router.refresh())
+  // Dès que les sections arrivent (via router.refresh), on bascule sur l'affichage du cours.
   useEffect(() => {
     if (coursId && sections && sections.length > 0) {
+      console.log(`[ETUDE ${new Date().toISOString()}] Sections reçues (${sections.length}) → affichage du cours.`);
       setLoading(false);
       setIsQueued(false);
     }
   }, [coursId, sections]);
 
-  // Realtime + Polling Fallback
+  // Détection de fin GARANTIE : refresh + filet de sécurité (reload dur si l'écran ne bascule pas en 4s).
+  const handlePret = React.useCallback(() => {
+    if (detectedPretRef.current) return;
+    detectedPretRef.current = true;
+    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'pret' détecté → router.refresh()`);
+    setProgress(100);
+    router.refresh();
+    setTimeout(() => {
+      if (loadingRef.current) {
+        console.log(`[ETUDE ${new Date().toISOString()}] Écran non basculé après refresh → reload dur (filet de sécurité).`);
+        window.location.reload();
+      }
+    }, 4000);
+  }, [router]);
+
+  const handleErreur = React.useCallback(() => {
+    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'erreur' détecté.`);
+    setError("Erreur lors de la génération. Veuillez réessayer.");
+    setLoading(false);
+    setIsQueued(false);
+  }, []);
+
+  // Observation du job : POLLING rapide (2.5s) primaire + Realtime en accélérateur.
   useEffect(() => {
+    if (!pollingCoursId) return;
     let interval: any;
     let channel: any;
-    
-    if (pollingCoursId) {
-      // ABONNEMENT REALTIME POUR LA MISE À JOUR AUTOMATIQUE DU STATUT(Mise à jour instantanée)
-      channel = supabase.channel(`etude_cours_${pollingCoursId}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'etude_cours', filter: `id=eq.${pollingCoursId}` },
-          (payload) => {
-            if (payload.new.statut_generation === 'pret') {
-              console.log("[Realtime] Cours généré avec succès !");
-              router.refresh();
-            } else if (payload.new.statut_generation === 'erreur') {
-              setError("Erreur lors de la génération. Veuillez réessayer.");
-              setLoading(false);
-              setIsQueued(false);
-            }
-          }
-        )
-        .subscribe();
+    const startedAt = Date.now();
+    console.log(`[ETUDE ${new Date().toISOString()}] Début observation du cours ${pollingCoursId}`);
 
-      // 2. FALLBACK POLLING (Toutes les 10s au lieu de 5s, en cas de perte WebSocket)
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/etude/status?coursId=${pollingCoursId}`);
-          const data = await res.json();
-          if (data.success && data.status === 'pret') {
-            router.refresh();
-          } else if (data.status === 'erreur') {
-            setError("Erreur lors de la génération. Veuillez réessayer.");
-            setLoading(false);
-            setIsQueued(false);
-          }
-        } catch (err) {}
-      }, 10000); 
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-      if (channel) channel.unsubscribe();
-    };
-  }, [pollingCoursId, router]);
+    channel = supabase.channel(`etude_cours_${pollingCoursId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'etude_cours', filter: `id=eq.${pollingCoursId}` },
+        (payload: any) => {
+          console.log(`[ETUDE ${new Date().toISOString()}] Realtime: statut=${payload.new.statut_generation}`);
+          if (payload.new.statut_generation === 'pret') handlePret();
+          else if (payload.new.statut_generation === 'erreur') handleErreur();
+        })
+      .subscribe();
+
+    interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/etude/status?coursId=${pollingCoursId}`, { cache: 'no-store' });
+        const data = await res.json();
+        console.log(`[ETUDE ${new Date().toISOString()}] Poll t+${((Date.now() - startedAt) / 1000).toFixed(0)}s: statut=${data.status}`);
+        if (data.status === 'pret') handlePret();
+        else if (data.status === 'erreur') handleErreur();
+      } catch (err) { /* réseau : retry au prochain tick */ }
+    }, 2500);
+
+    return () => { if (interval) clearInterval(interval); if (channel) channel.unsubscribe(); };
+  }, [pollingCoursId, handlePret, handleErreur]);
 
   const generateCourse = async (force: boolean = false) => {
     try {
+      detectedPretRef.current = false;
       setLoading(true);
       setError('');
       setIsQueued(true);
+      const tClick = Date.now();
+      console.log(`[ETUDE ${new Date().toISOString()}] Clic Générer → POST /api/etude/generate (force=${force})`);
       const res = await fetch('/api/etude/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,13 +149,13 @@ export default function EtudeEngine({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur de génération");
-      
+      console.log(`[ETUDE ${new Date().toISOString()}] generate répond en ${Date.now() - tClick}ms: status=${data.status}, coursId=${data.coursId}`);
+
       if (data.status === 'pret') {
-        router.refresh();
+        handlePret();
       } else {
         setPollingCoursId(data.coursId);
-        // FORCE WAKEUP du Worker Asynchrone (Fire-And-Forget)
-        // Ceci garantit que le Worker démarre même si la fonction `after()` de Vercel/Next.js échoue silencieusement.
+        // Réveil immédiat du worker (best-effort). Le cron garantit le traitement sinon.
         fetch('/api/worker/process', { method: 'POST' }).catch(e => console.log('Worker trigger silently failed:', e));
       }
     } catch (err: any) {
