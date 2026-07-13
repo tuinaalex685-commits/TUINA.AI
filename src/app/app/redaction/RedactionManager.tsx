@@ -9,6 +9,7 @@ import { createRedaction, updateRedactionContent, saveRedactionVersion, getDaily
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { useJob } from '@/lib/hooks/useJob';
 import styles from './redaction.module.css';
 
 export default function RedactionManager({ initialRedactions }: { initialRedactions: any[] }) {
@@ -71,6 +72,23 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Observation du job d'analyse (le frontend n'attend jamais Gemini, il observe le job).
+  const [redactionJobId, setRedactionJobId] = useState<string | null>(null);
+  const redactionToastRef = useRef<string | undefined>(undefined);
+  useJob(redactionJobId, {
+    onDone: () => {
+      setIsAnalyzing(false);
+      setRedactionJobId(null);
+      toast.success('Analyse prête !', { id: redactionToastRef.current });
+      router.refresh();
+    },
+    onError: (err) => {
+      setIsAnalyzing(false);
+      setRedactionJobId(null);
+      toast.error(`Échec de l'analyse : ${err}`, { id: redactionToastRef.current });
+    },
+  });
 
   // --- AUTO-SAVE toutes les 15 secondes ---
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -188,8 +206,10 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
     if (!confirm(`Il vous reste ${remaining} générations pour aujourd'hui. Voulez-vous utiliser une génération pour ce texte ?`)) return;
 
+    if (isAnalyzing || redactionJobId) return; // anti double-clic
     setIsAnalyzing(true);
-    const toastId = toast.loading('Analyse de votre rédaction par l\'IA en cours...');
+    const toastId = toast.loading('Mise en file de votre copie…');
+    redactionToastRef.current = toastId;
     try {
       const saveRes = await updateRedactionContent(activeRedaction.id, contenu);
       if (saveRes.error) {
@@ -197,27 +217,21 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
         toast.error("Erreur de sauvegarde avant analyse : " + saveRes.error, { id: toastId });
         return;
       }
-      
-      const { markRedactionAsProcessing } = await import('@/app/actions/redaction');
-      const processRes = await markRedactionAsProcessing(activeRedaction.id);
-      
-      if (processRes.error) {
+
+      const { enqueueAiJob } = await import('@/app/actions/jobs');
+      const res: any = await enqueueAiJob('redaction', { redactionId: activeRedaction.id });
+      if (res.error || !res.jobId) {
         setIsAnalyzing(false);
-        toast.error("Erreur d'initialisation : " + processRes.error, { id: toastId });
+        toast.error(res.error || "Impossible de lancer l'analyse.", { id: toastId });
         return;
       }
 
-      // Appel fire-and-forget du Worker
-      fetch('/api/worker/redaction').catch(e => console.log("Worker trigger silencieux", e));
-
-      toast.success("L'IA corrige votre copie ! Vous pouvez fermer cette fenêtre, le résultat s'affichera ici.", { id: toastId, duration: 6000 });
-      
+      // Le backend exécute ; on observe. Fermer/recharger ne perd rien.
+      toast.loading("L'IA corrige votre copie… (vous pouvez fermer cette fenêtre)", { id: toastId });
       setActiveRedaction({ ...activeRedaction, statut: 'en_cours' });
       setRedactionsList(prev => prev.map(r => r.id === activeRedaction.id ? { ...r, statut: 'en_cours' } : r));
       setDailyUsage(prev => prev + 1);
-      
-      setIsAnalyzing(false);
-
+      setRedactionJobId(res.jobId);
     } catch (err: any) {
       setIsAnalyzing(false);
       toast.error("Erreur système lors du lancement.", { id: toastId });

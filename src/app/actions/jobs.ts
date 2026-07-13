@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
-export type AiJobType = 'evaluation' | 'flashcards';
+export type AiJobType = 'evaluation' | 'flashcards' | 'redaction';
 
 /**
  * Crée un job IA et le renvoie immédiatement (le frontend ne fait qu'observer ensuite).
