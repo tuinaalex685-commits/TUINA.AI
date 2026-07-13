@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 loadtest.mjs
+
+# Harnais de test/diagnostic locaux (jamais commités)
+_scenarios.mjs
+_scenarios.log
+_diag_*.mjs
+_loadtest*.mjs
