@@ -8,6 +8,7 @@ import { updateEvaluationScore } from '@/app/actions/student';
 
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { useJob } from '@/lib/hooks/useJob';
 
 export default function EvaluationsManager({ initialQuiz, documentList }: { initialQuiz: any[], documentList: any[] }) {
   const router = useRouter();
@@ -27,6 +28,23 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
   const [isGenerating, setIsGenerating] = useState(false);
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
+  // Observation du job async : le frontend n'attend jamais Gemini, il observe l'état du job.
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const pendingToastRef = React.useRef<string | undefined>(undefined);
+  useJob(activeJobId, {
+    onDone: () => {
+      setIsGenerating(false);
+      setActiveJobId(null);
+      toast.success('Évaluation prête !', { id: pendingToastRef.current });
+      router.refresh();
+    },
+    onError: (err) => {
+      setIsGenerating(false);
+      setActiveJobId(null);
+      toast.error(`Échec de la génération : ${err}`, { id: pendingToastRef.current });
+    },
+  });
+
   // Cleanup on unmount to prevent memory leaks in Vercel
   useEffect(() => {
     return () => {
@@ -41,116 +59,35 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
       toast.error("Veuillez sélectionner un PDF avant de générer l'évaluation.");
       return;
     }
+    if (isGenerating || activeJobId) return; // anti double-clic / clic répété
     setIsGenerating(true);
-    let count = 10;
-    if (selectedType === 'qcm') count = 20; // max 20
-    else count = 15; // max 15 pour quiz, etc.
 
+    const count = selectedType === 'qcm' ? 20 : 15;
     const documentName = documentList.find(d => d.id === selectedDocumentId)?.nom || '';
+    const toastId = toast.loading("Mise en file de votre évaluation…");
+    pendingToastRef.current = toastId;
 
     try {
-      const toastId = toast.loading('Création de l\'évaluation en cours...');
-      // Memory leak prevention: cancel previous request if still running
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      // Appel sécurisé au backend (qui valide les limites, appelle l'IA et insère en base)
-      const response = await fetch('/api/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          documentName,
-          documentId: selectedDocumentId,
-          type: selectedType,
-          count
-        })
+      const { enqueueAiJob } = await import('@/app/actions/jobs');
+      const res = await enqueueAiJob('evaluation', {
+        documentId: selectedDocumentId,
+        type: selectedType,
+        count,
+        documentName,
       });
 
-      if (!response.body) throw new Error("Pas de flux de réponse");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let fullText = "";
-
-      // Lecture du stream
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          fullText += decoder.decode(value, { stream: true });
-        }
-      }
-      
-      // On s'assure d'avoir tout décodé
-      fullText += decoder.decode();
-
-      // Tentative de parsing
-      let questionsJson;
-      try {
-        let cleanedText = fullText.trim();
-        if (cleanedText.startsWith('```json')) cleanedText = cleanedText.slice(7);
-        else if (cleanedText.startsWith('```')) cleanedText = cleanedText.slice(3);
-        if (cleanedText.endsWith('```')) cleanedText = cleanedText.slice(0, -3);
-        
-        questionsJson = JSON.parse(cleanedText.trim());
-        
-        if (questionsJson.error) {
-          throw new Error(questionsJson.error);
-        }
-
-        // Si le JSON est un objet au lieu d'un tableau (ex: { questions: [...] })
-        if (questionsJson && typeof questionsJson === 'object' && !Array.isArray(questionsJson)) {
-          if (Array.isArray(questionsJson.questions)) {
-            questionsJson = questionsJson.questions;
-          } else if (Array.isArray(questionsJson.quiz)) {
-            questionsJson = questionsJson.quiz;
-          } else {
-            questionsJson = [questionsJson];
-          }
-        }
-      } catch (parseError: any) {
+      if ((res as any).error || !(res as any).jobId) {
         setIsGenerating(false);
-        if (parseError.name === 'AbortError') {
-           console.log("Génération annulée par l'utilisateur.");
-           toast.dismiss(toastId);
-           return;
-        }
-        toast.error(`Erreur de format renvoyé par l'IA.`, { id: toastId });
+        toast.error((res as any).error || "Impossible de lancer la génération.", { id: toastId });
         return;
       }
 
-      // Insertion en base via la nouvelle action rapide
-      const { saveEvaluationAction } = await import('@/app/actions/ai');
-      const saveRes = await saveEvaluationAction({
-        type: selectedType,
-        meta_type: selectedType,
-        titre: `Évaluation - ${documentName || 'Document'}`,
-        questions: questionsJson,
-        document_id: selectedDocumentId
-      });
-
-      setIsGenerating(false);
-
-      if (saveRes.error) {
-        console.error(`[EVAL ERROR] Erreur sauvegarde BDD :`, saveRes.error);
-        toast.error(`Erreur de sauvegarde: ${saveRes.error}`, { id: toastId });
-      } else {
-        toast.success(`Évaluation prête !`, { id: toastId });
-        router.refresh();
-      }
+      // Le backend exécute ; le frontend observe. On peut fermer/recharger sans rien perdre.
+      toast.loading("L'IA prépare votre évaluation… (vous pouvez fermer cette fenêtre)", { id: toastId });
+      setActiveJobId((res as any).jobId);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log("Génération annulée par l'utilisateur.");
-      } else {
-        toast.error("Erreur système ou délai dépassé.");
-      }
-    } finally {
       setIsGenerating(false);
-      abortControllerRef.current = null;
+      toast.error("Erreur système lors du lancement.", { id: toastId });
     }
   };
 

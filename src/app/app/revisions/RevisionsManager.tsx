@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
-import { updateFlashcardReview, generateFlashcardsAction } from '@/app/actions/ai';
+import { updateFlashcardReview } from '@/app/actions/ai';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { useJob } from '@/lib/hooks/useJob';
 
 export default function RevisionsManager({
   coursList,
@@ -24,6 +25,24 @@ export default function RevisionsManager({
   const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [flashcardCount, setFlashcardCount] = useState(10);
+
+  // Observation du job async (le frontend n'attend jamais Gemini).
+  const [flashcardsJobId, setFlashcardsJobId] = useState<string | null>(null);
+  const flashcardsToastRef = React.useRef<string | undefined>(undefined);
+  useJob(flashcardsJobId, {
+    onDone: () => {
+      setIsGenerating(false);
+      setFlashcardsJobId(null);
+      toast.success('Flashcards prêtes !', { id: flashcardsToastRef.current });
+      fetchFlashcards();
+      router.refresh();
+    },
+    onError: (err) => {
+      setIsGenerating(false);
+      setFlashcardsJobId(null);
+      toast.error(`Échec de la génération : ${err}`, { id: flashcardsToastRef.current });
+    },
+  });
 
   // Écoute temps réel
   useEffect(() => {
@@ -105,34 +124,30 @@ export default function RevisionsManager({
       if (c) docName = c.titre;
     }
 
+    const toastId = toast.loading('Mise en file de vos flashcards…');
+    flashcardsToastRef.current = toastId;
     try {
-      console.log(`[FLOW 2] Appel de la Server Action generateFlashcardsAction...`);
-      
-      const generationPromise = generateFlashcardsAction(docId, docName, cId, flashcardCount);
-      
-      toast.promise(generationPromise, {
-        loading: 'Analyse et génération des flashcards en cours...',
-        success: 'Flashcards générées avec succès !',
-        error: 'Erreur lors de la génération des flashcards.'
+      const { enqueueAiJob } = await import('@/app/actions/jobs');
+      const res: any = await enqueueAiJob('flashcards', {
+        documentId: docId,
+        coursId: cId,
+        documentName: docName,
+        count: flashcardCount,
       });
 
-      const res = await generationPromise;
-      setIsGenerating(false);
-      
-      if (res.error) {
-         console.error(`[FLOW END ERROR] Erreur retournée par le backend :`, res.error);
-         toast.error(`Erreur: ${res.error}`);
-      } else {
-        console.log(`[FLOW END SUCCESS] Succès retourné par le backend.`);
-        if (res.wasTruncated) {
-          toast.success(`Seules les 50 premières pages du PDF ont été analysées.`);
-        }
-        fetchFlashcards();
+      if (res.error || !res.jobId) {
+        setIsGenerating(false);
+        toast.error(res.error || "Impossible de lancer la génération.", { id: toastId });
+        return;
       }
+
+      // Le backend exécute ; on observe. Fermer/recharger ne perd rien.
+      toast.loading("L'IA prépare vos flashcards… (vous pouvez fermer cette fenêtre)", { id: toastId });
+      setFlashcardsJobId(res.jobId);
     } catch (err: any) {
-      console.error(`[FLOW FATAL ERROR] Erreur inattendue :`, err);
+      console.error(`[FLASHCARDS] Erreur lancement :`, err);
       setIsGenerating(false);
-      toast.error("Erreur système ou délai dépassé. Veuillez réessayer.");
+      toast.error("Erreur système lors du lancement.", { id: toastId });
     }
   };
 
