@@ -18,6 +18,31 @@ async function patchJob(id: string, patch: Record<string, any>) {
   await supabaseAdmin.from('ai_jobs').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// SINGLE-FLIGHT PAR CONTENU : le 1er job qui insère le hash devient "leader" (génère) ;
+// les autres sont "followers" (attendent le cache puis clonent). Anti thundering herd.
+async function acquireContentLock(hash: string): Promise<boolean> {
+  await supabaseAdmin.from('ai_content_locks').delete().eq('hash', hash).lt('expires_at', new Date().toISOString());
+  const { error } = await supabaseAdmin.from('ai_content_locks').insert({ hash, expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() });
+  if (!error) return true;                 // verrou acquis → leader
+  if (error.code === '23505') return false; // conflit de clé → un autre est leader → follower
+  return true; // autre erreur (ex: migration ai_content_locks absente) → dégradation : on agit en leader
+}
+async function releaseContentLock(hash: string) {
+  await supabaseAdmin.from('ai_content_locks').delete().eq('hash', hash).then(() => {}, () => {});
+}
+// Attend qu'une donnée apparaisse (remplie par le leader), jusqu'à maxMs. Renvoie la donnée ou null.
+async function waitForData<T>(check: () => Promise<T | null>, maxMs: number, stepMs = 2000): Promise<T | null> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    await sleep(stepMs);
+    const v = await check();
+    if (v) return v;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // EXTRACTION DE TEXTE (cache-first, jamais de re-téléchargement inutile)
 // ---------------------------------------------------------------------------
@@ -126,25 +151,36 @@ async function processEvaluation(job: any): Promise<any> {
   const sourceHash = sha256(text);
   let result = job.result || {};
 
-  // Phase A : obtenir les questions (result → cache DB → Gemini)
+  // Phase A : obtenir les questions (result → cache DB → single-flight → Gemini)
   let questions = result.questions;
   if (!questions) {
-    const { data: cached } = await supabaseAdmin
-      .from('evaluation_cache').select('questions').eq('source_hash', sourceHash).eq('type', type).eq('count', count).maybeSingle();
-    if (cached?.questions) {
-      questions = cached.questions;
-    } else {
-      const { schema, systemInstruction } = buildEvaluationSpec(type, count);
-      const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
-      const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
-      let gen: any = await generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId });
-      if (!Array.isArray(gen)) gen = gen?.questions || gen?.quiz || (gen ? [gen] : []);
-      if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de questions valides.");
-      questions = gen;
-      if (sourceHash) {
-        await supabaseAdmin.from('evaluation_cache').upsert(
-          { source_hash: sourceHash, type, count, questions }, { onConflict: 'source_hash,type,count', ignoreDuplicates: true }
-        );
+    const lookupCache = async () => {
+      const { data } = await supabaseAdmin.from('evaluation_cache')
+        .select('questions').eq('source_hash', sourceHash).eq('type', type).eq('count', count).maybeSingle();
+      return data?.questions || null;
+    };
+    questions = await lookupCache();
+    if (!questions) {
+      const lockKey = `eval:${sourceHash}:${type}:${count}`;
+      const isLeader = await acquireContentLock(lockKey);
+      try {
+        // Follower : attendre que le leader remplisse le cache (max 45s) → clone, 0 appel Gemini.
+        if (!isLeader) questions = await waitForData(lookupCache, 45000);
+        // Leader, OU follower dont l'attente a expiré (leader mort) → on génère.
+        if (!questions) {
+          const { schema, systemInstruction } = buildEvaluationSpec(type, count);
+          const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
+          const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
+          let gen: any = await generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId });
+          if (!Array.isArray(gen)) gen = gen?.questions || gen?.quiz || (gen ? [gen] : []);
+          if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de questions valides.");
+          questions = gen;
+          await supabaseAdmin.from('evaluation_cache').upsert(
+            { source_hash: sourceHash, type, count, questions }, { onConflict: 'source_hash,type,count', ignoreDuplicates: true }
+          );
+        }
+      } finally {
+        if (isLeader) await releaseContentLock(lockKey);
       }
     }
     result = { ...result, questions };
@@ -179,30 +215,14 @@ async function processFlashcards(job: any): Promise<any> {
   const { text, coursId } = await getSourceText(documentId, p.coursId);
   const sourceHash = sha256(text);
   let result = job.result || {};
+  if (result.inserted) return result; // idempotent : déjà fait
 
-  // Phase A : obtenir les cartes (result → clone DB cross-user → Gemini)
-  let cards = result.cards;
-  if (!cards) {
-    const { data: cached } = await supabaseAdmin
-      .from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
-    if (cached && cached.length > 0) {
-      cards = cached.map((c: any) => ({ question: c.question, reponse: c.reponse }));
-    } else {
-      const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
-      let gen: any = await generateStructuredJSON(
-        `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
-        `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
-        schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
-      );
-      if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
-      cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
-    }
-    result = { ...result, cards };
-    await patchJob(job.id, { result });
-  }
-
-  // Phase B : insérer les cartes de CET utilisateur (idempotent via result.inserted)
-  if (!result.inserted) {
+  // Clone cross-utilisateur : lit les cartes déjà générées pour ce contenu (n'importe quel user).
+  const lookupClone = async () => {
+    const { data } = await supabaseAdmin.from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
+    return (data && data.length > 0) ? data.map((c: any) => ({ question: c.question, reponse: c.reponse })) : null;
+  };
+  const insertForUser = async (cards: any[]) => {
     const rows = cards.map((c: any) => ({
       question: c.question, reponse: c.reponse,
       cours_id: p.coursId || coursId || null,
@@ -212,8 +232,38 @@ async function processFlashcards(job: any): Promise<any> {
     }));
     const { error } = await supabaseAdmin.from('flashcards').insert(rows);
     if (error) throw new Error(`Insertion flashcards: ${error.message}`);
-    result = { ...result, inserted: true, count: rows.length };
+  };
+
+  // 1. Clone déjà disponible → on insère juste pour cet utilisateur (0 appel Gemini).
+  let cards = result.cards || await lookupClone();
+  if (cards) {
+    await insertForUser(cards);
+    result = { ...result, cards, inserted: true, count: cards.length };
     await patchJob(job.id, { result });
+    return result;
+  }
+
+  // 2. Single-flight : le verrou couvre génération + insertion du leader (pour que les followers
+  //    puissent cloner ses cartes via source_hash). Anti thundering herd.
+  const lockKey = `fc:${sourceHash}`;
+  const isLeader = await acquireContentLock(lockKey);
+  try {
+    if (!isLeader) cards = await waitForData(lookupClone, 45000);
+    if (!cards) {
+      const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
+      let gen: any = await generateStructuredJSON(
+        `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
+        `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
+        schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
+      );
+      if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
+      cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
+    }
+    await insertForUser(cards);
+    result = { ...result, cards, inserted: true, count: cards.length };
+    await patchJob(job.id, { result });
+  } finally {
+    if (isLeader) await releaseContentLock(lockKey);
   }
   return result;
 }
