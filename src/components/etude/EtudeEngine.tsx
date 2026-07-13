@@ -19,8 +19,6 @@ export default function EtudeEngine({
   const [isQueued, setIsQueued] = useState(false);
   const [pollingCoursId, setPollingCoursId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0); // Nouveau state pour la barre de progression
-  const loadingRef = React.useRef(loading);
-  React.useEffect(() => { loadingRef.current = loading; }, [loading]);
   const detectedPretRef = React.useRef(false);
   
   // State Machine logic simplified for the MVP
@@ -82,20 +80,17 @@ export default function EtudeEngine({
     }
   }, [coursId, sections]);
 
-  // Détection de fin GARANTIE : refresh + filet de sécurité (reload dur si l'écran ne bascule pas en 4s).
+  // Détection de fin INCREVABLE : dès que le job est 'pret', on recharge la page.
+  // page.tsx re-tourne côté serveur et rend le cours (le propriétaire peut le lire).
+  // Aucune dépendance à la propagation des props React (source des blocages à 95%).
   const handlePret = React.useCallback(() => {
     if (detectedPretRef.current) return;
     detectedPretRef.current = true;
-    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'pret' détecté → router.refresh()`);
     setProgress(100);
-    router.refresh();
-    setTimeout(() => {
-      if (loadingRef.current) {
-        console.log(`[ETUDE ${new Date().toISOString()}] Écran non basculé après refresh → reload dur (filet de sécurité).`);
-        window.location.reload();
-      }
-    }, 4000);
-  }, [router]);
+    console.log(`[ETUDE ${new Date().toISOString()}] Statut 'pret' détecté → rechargement pour afficher le cours.`);
+    // Petit délai pour laisser la barre atteindre 100% visuellement, puis reload dur.
+    setTimeout(() => { window.location.reload(); }, 300);
+  }, []);
 
   const handleErreur = React.useCallback(() => {
     console.log(`[ETUDE ${new Date().toISOString()}] Statut 'erreur' détecté.`);
