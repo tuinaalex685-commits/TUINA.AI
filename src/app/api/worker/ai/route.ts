@@ -55,12 +55,21 @@ function makeCtx(jobId: string): JobCtx {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// HEARTBEAT DE LEASE : pendant une opération longue (appel Gemini pouvant enchaîner des retries 503
-// jusqu'à plusieurs minutes), on renouvelle lease_until toutes les 60s. Sans ça, une génération longue
-// dépasserait le bail → un 2e worker re-leaserait le MÊME job → double génération. Le heartbeat garantit
-// qu'un job vivant n'est jamais repris (et un worker MORT cesse de battre → repris en ≤ LEASE_MS).
-async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
-  const iv = setInterval(() => { patchJob(jobId, { lease_until: leaseIso() }).catch(() => {}); }, 60_000);
+// HEARTBEAT pendant une opération longue (appel Gemini pouvant enchaîner des retries 503 sur plusieurs
+// minutes). Renouvelle toutes les 60s : (1) le BAIL du job (sinon un 2e worker re-lease le même job →
+// double génération) ET (2) le VERROU DE CONTENU single-flight si fourni (sinon il expire à 5 min et un
+// follower devient 2e leader → double génération). Un leader VIVANT tient donc tout indéfiniment ;
+// un leader MORT cesse de battre → bail + verrou expirent → repris proprement.
+async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHash?: string): Promise<T> {
+  const beat = () => {
+    patchJob(jobId, { lease_until: leaseIso() }).catch(() => {});
+    if (lockHash) {
+      supabaseAdmin.from('ai_content_locks')
+        .update({ expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() })
+        .eq('hash', lockHash).then(() => {}, () => {});
+    }
+  };
+  const iv = setInterval(beat, 60_000);
   try { return await fn(); } finally { clearInterval(iv); }
 }
 
@@ -216,7 +225,7 @@ async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
           const { schema, systemInstruction } = buildEvaluationSpec(type, count);
           const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
           const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
-          let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId }));
+          let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId }), lockKey);
           if (!Array.isArray(gen)) gen = gen?.questions || gen?.quiz || (gen ? [gen] : []);
           if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de questions valides.");
           questions = gen;
@@ -302,7 +311,7 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
         `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
         `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
         schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
-      ));
+      ), lockKey);
       if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
       cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
     }
@@ -529,7 +538,7 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
         PEDAGOGICAL_MASTER_SCHEMA,
         undefined,
         { userId: job.user_id, feature: 'worker_master', documentId }
-      ));
+      ), lockKey);
       if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
