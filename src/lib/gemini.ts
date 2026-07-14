@@ -64,6 +64,12 @@ export const GEMINI_TIMEOUT_MS = 90_000;
 export function isRetryableError(error: any): boolean {
   const message = (error?.message || String(error) || '').toLowerCase();
   const status = error?.status || error?.httpStatusCode || 0;
+  // Erreur de FACTURATION / quota de compte épuisé (souvent renvoyée en 429) : PERMANENTE — retenter
+  // ne résout rien et ferait attendre l'utilisateur inutilement. Échec rapide avec message clair.
+  if (message.includes('credit') || message.includes('depleted') || message.includes('billing') ||
+      message.includes('prepayment') || message.includes('insufficient') || message.includes('exceeded your current quota')) {
+    return false;
+  }
   // 429 = Rate limit, 500 = Internal error, 503 = Overloaded
   if ([429, 500, 503].includes(status)) return true;
   if (message.includes('429') || message.includes('rate limit') || message.includes('quota')) return true;
