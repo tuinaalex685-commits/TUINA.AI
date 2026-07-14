@@ -219,6 +219,8 @@ async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
       try {
         // Follower : attendre que le leader remplisse le cache (max 45s) → clone, 0 appel Gemini.
         if (!isLeader) questions = await waitForData(lookupCache, 45000);
+        // Double-checked : entre le 1er lookup et l'acquisition du verrou, un leader a pu remplir le cache.
+        if (!questions) questions = await lookupCache();
         // Leader, OU follower dont l'attente a expiré (leader mort) → on génère.
         if (!questions) {
           await ctx.mark('generating', 40, 'Génération des questions…');
@@ -304,6 +306,8 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
   const isLeader = await acquireContentLock(lockKey);
   try {
     if (!isLeader) cards = await waitForData(lookupClone, 45000);
+    // Double-checked : un leader a pu insérer les cartes pendant qu'on acquérait le verrou.
+    if (!cards) cards = await lookupClone();
     if (!cards) {
       await ctx.mark('generating', 40, 'Génération des flashcards…');
       const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
@@ -523,6 +527,18 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
         return await finalize(false);
       }
       return { __requeueMs: 4000 };
+    }
+
+    // 5bis. DOUBLE-CHECKED LOCKING : entre le check dédup (étape 4) et l'acquisition du verrou, un autre
+    //       leader a pu terminer ET libérer le verrou (mesuré : 2e génération 27s après la 1re). Comme on
+    //       ne peut acquérir le verrou qu'APRÈS sa libération par le leader précédent (qui a alors déjà mis
+    //       son cours 'pret'), on RE-VÉRIFIE ici : si un cours identique est prêt, on clone au lieu de
+    //       régénérer. Élimine la double génération à l'échelle sans migration ni appel Gemini superflu.
+    const twinAfterLock = await findReadyEtudeByHash(textHash, coursId);
+    if (twinAfterLock) {
+      await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
+      await cloneEtudeContent(twinAfterLock, coursId);
+      return await finalize(false);
     }
 
     // 6. LEADER : génération Gemini du prompt maître — IDEMPOTENTE via job.result.generated.
