@@ -283,7 +283,7 @@ export default function EtudeEngine({
   if (loading) {
     return (
       <div className={styles.engineContainer}>
-        <EtudeLoadingScreen progress={progress} />
+        <EtudeLoadingScreen progress={progress} phase={job.phase} status={job.status} />
       </div>
     );
   }
