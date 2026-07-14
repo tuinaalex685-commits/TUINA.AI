@@ -521,6 +521,18 @@ async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string): 
   return srcSecs.length;
 }
 
+// CACHE DE GÉNÉRATION PAR CONTENU (clé = hash du texte). Garantit UN SEUL appel Gemini réussi par
+// contenu, MÊME si un leader échoue (503) et libère le verrou : le follower/retry qui devient générateur
+// lit le cache au lieu de relancer Gemini. Résilient : si la table n'existe pas encore, cache ignoré
+// (comportement actuel). Le résultat est écrit AVANT toute étape faillible (sauvegarde/finalize).
+async function getEtudeCache(cacheKey: string): Promise<any | null> {
+  const { data } = await supabaseAdmin.from('etude_generation_cache').select('data').eq('source_hash', cacheKey).maybeSingle();
+  return data?.data || null;
+}
+async function setEtudeCache(cacheKey: string, data: any): Promise<void> {
+  await supabaseAdmin.from('etude_generation_cache').upsert({ source_hash: cacheKey, data }, { onConflict: 'source_hash', ignoreDuplicates: true }).then(() => {}, () => {});
+}
+
 // Existe-t-il un cours DÉJÀ prêt (avec sections) pour ce hash de contenu, autre que le cours courant ?
 async function findReadyEtudeByHash(textHash: string, excludeCoursId: string): Promise<string | null> {
   const { data } = await supabaseAdmin
@@ -633,20 +645,28 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
     //    Le résultat est persisté AVANT toute étape faillible (sauvegarde/finalize) : un retry ne relance
     //    donc JAMAIS Gemini (fin des doubles générations sous retry). Un seul appel Gemini par contenu.
     const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt, PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
+    // Clé de cache de contenu (préfixe 'mock:' pour isoler totalement les données de test des vraies).
+    const cacheKey = isMockJob(job) ? `mock:${textHash}` : textHash;
     let leaderResult = job.result || {};
     if (!leaderResult.generated) {
-      await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
-      const gen: any = isMockJob(job)
-        ? await mockGenerate(job, 'worker_master', documentId, mockEtudeData)
-        : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
-          "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
-          getPedagogicalMasterPrompt(text.substring(0, 50000)),
-          PEDAGOGICAL_MASTER_SCHEMA,
-          undefined,
-          { userId: job.user_id, feature: 'worker_master', documentId }
-        ), lockKey);
-      if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
-        throw new Error("Impossible de générer un JSON valide pour le cours.");
+      // Cache PARTAGÉ entre jobs du même contenu : si un générateur précédent a déjà produit ce contenu
+      // (même après un échec post-génération), on le RÉUTILISE au lieu de rappeler Gemini → exactly-once.
+      let gen: any = await getEtudeCache(cacheKey);
+      if (!gen) {
+        await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
+        gen = isMockJob(job)
+          ? await mockGenerate(job, 'worker_master', documentId, mockEtudeData)
+          : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
+            "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
+            getPedagogicalMasterPrompt(text.substring(0, 50000)),
+            PEDAGOGICAL_MASTER_SCHEMA,
+            undefined,
+            { userId: job.user_id, feature: 'worker_master', documentId }
+          ), lockKey);
+        if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
+          throw new Error("Impossible de générer un JSON valide pour le cours.");
+        }
+        await setEtudeCache(cacheKey, gen); // écrit AVANT save/finalize → un follower/retry ne régénère jamais
       }
       leaderResult = { ...leaderResult, generated: gen };
       // Persistance FIABLE du résultat généré : un retry doit TOUJOURS retrouver 'generated' pour ne
@@ -704,46 +724,40 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
 export async function runAiWorker(workerUrl?: string): Promise<any> {
   const now = nowIso();
 
-  // 1. Candidat : job 'pending' prêt à tourner (next_attempt_at échu) OU job in-flight au bail expiré
-  //    (worker mort → reprise automatique). 'queued' toléré comme alias de 'pending' (transition).
-  // SCALABILITÉ : on récupère les 25 plus anciens candidats et on en pioche UN AU HASARD. Sinon, sous des
-  // centaines de workers concurrents, tous viseraient le même job le plus ancien → 1 gagne, N-1 repartent
-  // bredouilles → débit ~1 job/cycle. La pioche aléatoire répartit la contention (~25×) tout en restant
-  // quasi-FIFO → montée en charge fluide vers des milliers d'utilisateurs.
-  const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>
-    (rows && rows.length) ? rows[Math.floor(Math.random() * rows.length)] : null;
-  let candidate: { id: string } | null = null;
-  const canonicalFilter =
-    `and(status.in.(pending,queued),or(next_attempt_at.is.null,next_attempt_at.lte.${now})),` +
-    `and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`;
-  const sel = await supabaseAdmin
-    .from('ai_jobs').select('id').or(canonicalFilter)
-    .order('created_at', { ascending: true }).limit(25);
-  if (sel.error) {
-    // Migration pas encore appliquée (next_attempt_at absent) → requête legacy équivalente.
-    const legacy = await supabaseAdmin
-      .from('ai_jobs').select('id')
-      .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
-      .order('created_at', { ascending: true }).limit(25);
-    candidate = pickRandom(legacy.data);
+  // 1. RÉCLAMATION ATOMIQUE d'un job via la fonction Postgres claim_ai_job (FOR UPDATE SKIP LOCKED) :
+  //    2 workers ne réclament JAMAIS le même job → ZÉRO double-lease (donc zéro double appel Gemini).
+  //    Fallback (si la fonction n'est pas encore déployée) : ancien "candidat aléatoire + lease conditionnel".
+  let leased: any = null;
+  const claim = await supabaseAdmin.rpc('claim_ai_job', { now_ts: now, lease_ts: leaseIso() });
+  if (!claim.error) {
+    leased = Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null);
+    if (!leased) return { message: 'Aucun job en attente' };
   } else {
-    candidate = pickRandom(sel.data);
+    // Fallback : pioche aléatoire parmi les 25 plus anciens (répartit la contention) + lease conditionnel.
+    const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>
+      (rows && rows.length) ? rows[Math.floor(Math.random() * rows.length)] : null;
+    let candidate: { id: string } | null = null;
+    const canonicalFilter =
+      `and(status.in.(pending,queued),or(next_attempt_at.is.null,next_attempt_at.lte.${now})),` +
+      `and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`;
+    const sel = await supabaseAdmin.from('ai_jobs').select('id').or(canonicalFilter).order('created_at', { ascending: true }).limit(25);
+    if (sel.error) {
+      const legacy = await supabaseAdmin.from('ai_jobs').select('id')
+        .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
+        .order('created_at', { ascending: true }).limit(25);
+      candidate = pickRandom(legacy.data);
+    } else {
+      candidate = pickRandom(sel.data);
+    }
+    if (!candidate) return { message: 'Aucun job en attente' };
+    const upd = await supabaseAdmin.from('ai_jobs')
+      .update({ status: 'processing', lease_until: leaseIso(), updated_at: now })
+      .eq('id', candidate.id)
+      .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
+      .select('*').maybeSingle();
+    leased = upd.data;
+    if (!leased) return { message: 'Job déjà pris' };
   }
-
-  if (!candidate) return { message: 'Aucun job en attente' };
-
-  // 2. Lease ATOMIQUE : un seul worker flippe le candidat vers 'processing' (même seuil `now` que la
-  //    sélection → pas de zone morte où un candidat éligible échoue systématiquement le lease).
-  //    Update réduit aux colonnes cœur (toujours présentes) → indépendant de l'ordre du SQL.
-  const { data: leased } = await supabaseAdmin
-    .from('ai_jobs')
-    .update({ status: 'processing', lease_until: leaseIso(), updated_at: now })
-    .eq('id', candidate.id)
-    .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
-    .select('*')
-    .maybeSingle();
-
-  if (!leased) return { message: 'Job déjà pris' };
 
   // 3. Compteur de tentatives (borne les retries → jamais de boucle infinie) + marquage best-effort.
   const attempts = (leased.attempts || 0) + 1;
