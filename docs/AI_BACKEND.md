@@ -75,10 +75,16 @@ identiques, 2 différents) — jamais des centaines de générations de test.
 | 50 PDF différents | 50 completed, gen=50 (aucun double) | PASS ✅ |
 | Intégrité (sections) | chaque cours = 3 sections, aucun doublon | PASS ✅ (`[3]` partout) |
 
-Robustesse anti double-génération (3 mécanismes) : idempotence (`job.result.generated` persisté de façon
-fiable), heartbeat de bail + de verrou pendant la génération, double-checked locking + verrou single-flight.
-Écritures idempotentes (UPSERT par position + contraintes UNIQUE) → un double-traitement rare reste
-INOFFENSIF pour les données. Le coût réel est journalisé fidèlement dans `saas_metrics` (tarif 2.5 Flash).
+Robustesse **exactly-once** (5 mécanismes cumulés) : (1) `job.result.generated` persisté de façon fiable ;
+(2) heartbeat de bail + de verrou pendant la génération ; (3) double-checked locking + verrou single-flight ;
+(4) réclamation atomique `claim_ai_job` (`FOR UPDATE SKIP LOCKED`) → zéro double-lease + distribution de
+charge ; (5) **cache de génération par contenu** (`etude_generation_cache`) → même si un leader échoue
+(503) et libère le verrou, le follower/retry lit le cache au lieu de rappeler Gemini. Prouvé : gen=1 même
+en forçant l'échec du leader. Écritures idempotentes (UPSERT + UNIQUE) → un double-traitement reste
+INOFFENSIF. Coût réel journalisé fidèlement dans `saas_metrics` (tarif 2.5 Flash : 0,30 $/M in + 2,50 $/M out).
+
+Validation Gemini RÉELLE (1 unique + 2 identiques + 2 différents) : 5 cours prêts, dédup fonctionnelle,
+coût constaté ~0,03-0,05 $/génération. Les audits de charge (100/300/500) utilisent le Fake Provider (0 $).
 
 ## Migration requise
 
