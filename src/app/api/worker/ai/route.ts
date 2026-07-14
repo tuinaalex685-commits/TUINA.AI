@@ -477,32 +477,48 @@ async function processRedaction(job: any, ctx: JobCtx): Promise<any> {
 // Le job pilote la génération ; etude_cours reste la table de résultat lue par la page.
 // ---------------------------------------------------------------------------
 
-// Clone le contenu pédagogique d'un cours source vers un cours cible (idempotent : purge d'abord).
-// LÈVE une erreur en cas d'échec d'insertion → le job retentera au lieu de "compléter" un cours VIDE
-// (intégrité des données : on ne finalise jamais un cours sans son contenu). Renvoie le nb de sections.
-async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string): Promise<number> {
+// Écriture IDEMPOTENTE des sections : UPSERT par (cours_id, ordre) si la contrainte UNIQUE existe
+// (migration etude_integrity.sql) → un double-traitement concurrent n'écrit pas de doublon (3+3≠6).
+// Fallback delete+insert si la contrainte n'existe pas encore (résilient à l'ordre de déploiement).
+async function writeSectionsIdempotent(targetCoursId: string, rows: any[]): Promise<{ id: string; ordre: number }[]> {
+  const up = await supabaseAdmin.from('etude_sections').upsert(rows, { onConflict: 'cours_id,ordre' }).select('id, ordre');
+  if (!up.error && up.data) return up.data as any;
   await supabaseAdmin.from('etude_sections').delete().eq('cours_id', targetCoursId);
+  const ins = await supabaseAdmin.from('etude_sections').insert(rows).select('id, ordre');
+  if (ins.error || !ins.data) throw new Error(`Écriture sections: ${ins.error?.message || 'insert vide'}`);
+  return ins.data as any;
+}
+async function writeThemesIdempotent(rows: any[]): Promise<void> {
+  if (!rows.length) return;
+  const up = await supabaseAdmin.from('etude_themes').upsert(rows, { onConflict: 'section_id,ordre' });
+  if (!up.error) return;
+  const ins = await supabaseAdmin.from('etude_themes').insert(rows);
+  if (ins.error && ins.error.code !== '23505') throw new Error(`Écriture thèmes: ${ins.error.message}`);
+}
+
+// Clone le contenu pédagogique d'un cours source vers un cours cible, de façon IDEMPOTENTE (upsert par
+// position). Un clone concurrent du même contenu n'ajoute donc jamais de doublon. Renvoie le nb de sections.
+async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string): Promise<number> {
   const { data: srcSecs, error: selErr } = await supabaseAdmin.from('etude_sections').select('*').eq('cours_id', sourceCoursId).order('ordre', { ascending: true });
   if (selErr) throw new Error(`Clone (lecture sections source): ${selErr.message}`);
   if (!srcSecs || srcSecs.length === 0) throw new Error('Clone impossible : cours source sans section.');
-  let n = 0;
+  const secRows = srcSecs.map((s: any) => ({ cours_id: targetCoursId, titre: s.titre, synthese: s.synthese, ordre: s.ordre, questions_cloture: s.questions_cloture }));
+  const newSecs = await writeSectionsIdempotent(targetCoursId, secRows);
+  const ordreToId = new Map<number, string>();
+  for (const s of newSecs) ordreToId.set(s.ordre, s.id);
+  const themeRows: any[] = [];
   for (const sec of srcSecs) {
-    const { data: newSec, error: secErr } = await supabaseAdmin.from('etude_sections').insert({
-      cours_id: targetCoursId, titre: sec.titre, synthese: sec.synthese, ordre: sec.ordre, questions_cloture: sec.questions_cloture
-    }).select('id').single();
-    if (secErr || !newSec) throw new Error(`Clone (insertion section): ${secErr?.message || 'insert vide'}`);
-    n++;
+    const nid = ordreToId.get(sec.ordre);
+    if (!nid) continue;
     const { data: srcThemes } = await supabaseAdmin.from('etude_themes').select('*').eq('section_id', sec.id).order('ordre', { ascending: true });
-    if (srcThemes && srcThemes.length > 0) {
-      const { error: thErr } = await supabaseAdmin.from('etude_themes').insert(srcThemes.map((t: any) => ({
-        section_id: newSec.id, titre: t.titre, ordre: t.ordre,
-        explication: t.explication, question_forme: t.question_forme, cas_pratique_fond: t.cas_pratique_fond,
-        remediation_forme: t.remediation_forme, remediation_fond: t.remediation_fond
-      })));
-      if (thErr) throw new Error(`Clone (insertion thèmes): ${thErr.message}`);
-    }
+    for (const t of srcThemes || []) themeRows.push({
+      section_id: nid, titre: t.titre, ordre: t.ordre,
+      explication: t.explication, question_forme: t.question_forme, cas_pratique_fond: t.cas_pratique_fond,
+      remediation_forme: t.remediation_forme, remediation_fond: t.remediation_fond
+    });
   }
-  return n;
+  await writeThemesIdempotent(themeRows);
+  return srcSecs.length;
 }
 
 // Existe-t-il un cours DÉJÀ prêt (avec sections) pour ce hash de contenu, autre que le cours courant ?
@@ -637,7 +653,7 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
     }
     const generatedData: any = leaderResult.generated;
 
-    // 7. Sauvegarde (batch, idempotent : purge d'abord les sections de ce cours).
+    // 7. Sauvegarde IDEMPOTENTE (upsert par position → un double-traitement n'écrit pas de doublon).
     await ctx.mark('saving', 85, 'Enregistrement du cours…');
     try {
       const fullIntelligence = {
@@ -648,13 +664,10 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
       await supabaseAdmin.from('documents').update({ intelligence_pedagogique: fullIntelligence }).eq('id', documentId);
     } catch { /* colonne intelligence absente → non bloquant */ }
 
-    await supabaseAdmin.from('etude_sections').delete().eq('cours_id', coursId);
     const sectionsPayload = generatedData.sections.map((s: any) => ({
       cours_id: coursId, titre: s.titre, synthese: s.synthese || '', ordre: s.ordre, questions_cloture: s.questions_cloture_section || []
     }));
-    const { data: insertedSections, error: secError } = await supabaseAdmin
-      .from('etude_sections').insert(sectionsPayload).select('id, ordre');
-    if (secError || !insertedSections) throw new Error(`Insertion sections: ${secError?.message}`);
+    const insertedSections = await writeSectionsIdempotent(coursId, sectionsPayload);
 
     const ordreToId = new Map<number, string>();
     for (const s of insertedSections) ordreToId.set(s.ordre, s.id);
@@ -671,10 +684,7 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
         });
       }
     }
-    if (themesPayload.length > 0) {
-      const { error: themeError } = await supabaseAdmin.from('etude_themes').insert(themesPayload);
-      if (themeError) throw new Error(`Insertion thèmes: ${themeError.message}`);
-    }
+    await writeThemesIdempotent(themesPayload);
 
     return await finalize(true); // le générateur enregistre le hash canonique (source de dédup)
   } finally {
