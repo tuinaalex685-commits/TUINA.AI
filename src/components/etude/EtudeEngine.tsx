@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './EtudeEngine.module.css';
 import EtudeLoadingScreen from './EtudeLoadingScreen';
+import EtudeMarkdown from './EtudeMarkdown';
 import { useJob } from '@/lib/hooks/useJob';
 
 export default function EtudeEngine({ 
@@ -310,7 +311,7 @@ export default function EtudeEngine({
         <div className={styles.card}>
           <span className={`${styles.tag} ${styles.tagSynthese}`}>Introduction de Section</span>
           <h2 className={styles.title}>{currentSection.titre}</h2>
-          <p className={styles.content}>{currentSection.synthese}</p>
+          <EtudeMarkdown className={styles.content}>{currentSection.synthese}</EtudeMarkdown>
           <button className={styles.primaryBtn} onClick={handleNextStep}>Démarrer l&apos;étude</button>
         </div>
       )}
@@ -320,7 +321,7 @@ export default function EtudeEngine({
         <div className={styles.card}>
           <span className={`${styles.tag} ${styles.tagExplication}`}>Explication du concept</span>
           <h2 className={styles.title}>{currentTheme.titre}</h2>
-          <p className={styles.content}>{currentTheme.explication}</p>
+          <EtudeMarkdown className={styles.content}>{currentTheme.explication}</EtudeMarkdown>
           <button className={styles.primaryBtn} onClick={handleNextStep}>J&apos;ai compris, on teste !</button>
         </div>
       )}
