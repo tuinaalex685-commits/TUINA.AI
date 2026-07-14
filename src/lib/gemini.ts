@@ -63,7 +63,7 @@ function getAIClient() {
 
 // Timeout dur par tentative d'appel Gemini (ms). Au-delà, on abandonne CETTE tentative et on retente
 // (le retry a son propre timeout). Empêche un appel qui "pend" de bloquer le lease du worker 5 min.
-export const GEMINI_TIMEOUT_MS = 90_000;
+export const GEMINI_TIMEOUT_MS = 180_000;
 
 // Détecte si une erreur Gemini est transitoire et mérite un retry. Exporté = source de vérité unique
 // pour le worker (distinction transitoire/permanent) → cohérence garantie entre gemini.ts et le worker.
