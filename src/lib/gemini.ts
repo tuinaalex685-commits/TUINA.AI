@@ -19,6 +19,12 @@ export class AIError extends Error {
 }
 
 // Fonction de log d'usage asynchrone (non bloquante)
+// Tarifs RÉELS Gemini 2.5 Flash (par 1M de tokens). La sortie inclut les *thinking tokens* (facturés au
+// tarif de sortie) → l'ancien tarif codé en dur (0.075/0.30, prix de Gemini 1.5) SOUS-ESTIMAIT le coût
+// d'environ 8×. Ces constantes rendent le dashboard saas_metrics fidèle au coût réellement facturé.
+export const GEMINI_PRICE_INPUT_PER_M = 0.30;   // $ / 1M tokens en entrée
+export const GEMINI_PRICE_OUTPUT_PER_M = 2.50;  // $ / 1M tokens en sortie (thinking inclus)
+
 function trackSaaSUsage(
   context: GeminiTrackingContext | undefined,
   durationMs: number,
@@ -26,10 +32,10 @@ function trackSaaSUsage(
   completionTokens: number
 ) {
   if (!context) return;
-  
-  // Prix public Gemini 2.5 Flash: ~0.075$ / 1M prompt tokens et 0.30$ / 1M completion tokens
-  const costUsd = (promptTokens / 1_000_000) * 0.075 + (completionTokens / 1_000_000) * 0.30;
-  
+
+  const costUsd = (promptTokens / 1_000_000) * GEMINI_PRICE_INPUT_PER_M
+                + (completionTokens / 1_000_000) * GEMINI_PRICE_OUTPUT_PER_M;
+
   console.log(`[SaaS METRICS] ${context.feature} | Tokens: ${promptTokens}+${completionTokens} | Coût: $${costUsd.toFixed(6)} | Temps: ${durationMs}ms`);
   
   // Insertion DB asynchrone (fire and forget)

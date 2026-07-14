@@ -73,6 +73,72 @@ async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHa
   try { return await fn(); } finally { clearInterval(iv); }
 }
 
+// ===========================================================================
+// FAKE GEMINI PROVIDER (mode TEST) — activé UNIQUEMENT si job.payload.mock === true.
+// L'UI réelle ne met JAMAIS ce drapeau (les payloads sont construits côté serveur : {documentId}, etc.).
+// Objectif : auditer TOUTE la mécanique backend (jobs, locks, single-flight, idempotence, retries,
+// heartbeat, reprise, dédup, absence de double génération) à COÛT ZÉRO, sans aucun appel Gemini.
+// Seule la génération IA est simulée ; toute la logique de concurrence reste STRICTEMENT identique.
+// Contrôles via payload : mockDelayMs (temps de génération simulé), mockFailTimes + mockFailKind
+// ('transient'|'permanent') pour tester déterministiquement retries / erreur permanente.
+// ===========================================================================
+const isMockJob = (job: any) => job?.payload?.mock === true;
+
+// Journalise une "génération" simulée à coût 0 → les tests comptent les générations (dédup) sans dépenser.
+async function trackMockGeneration(feature: string, userId: string | undefined, documentId: string | undefined) {
+  await supabaseAdmin.from('saas_metrics').insert({
+    user_id: userId || null, feature, document_id: documentId || null,
+    prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, duration_ms: 0
+  }).then(() => {}, () => {});
+}
+
+// Génère un résultat simulé (délai + éventuels échecs déterministes, puis builder). Le délai est enveloppé
+// par le heartbeat comme un vrai appel long → exerce réellement lease + verrou.
+async function mockGenerate(job: any, feature: string, documentId: string | undefined, builder: () => any): Promise<any> {
+  const p = job.payload || {};
+  const delay = Math.max(0, Number(p.mockDelayMs ?? 800));
+  await withLeaseHeartbeat(job.id, async () => { if (delay) await sleep(delay); });
+  const failTimes = Number(p.mockFailTimes || 0);
+  if (failTimes > 0 && (job.attempts || 0) <= failTimes) {
+    if (p.mockFailKind === 'permanent') throw new Error('Mock: PDF illisible (échec permanent déterministe).');
+    throw new Error('Mock: 503 overloaded (échec transitoire déterministe).');
+  }
+  await trackMockGeneration(feature, job.user_id, documentId);
+  return builder();
+}
+
+function mockEtudeData() {
+  const theme = (n: number) => ({
+    titre: `Thème simulé ${n}`, ordre: n, explication: `Explication déterministe ${n}.`,
+    question_forme: { question: `Q forme ${n}`, options: ['A', 'B'], bonne_reponse: 0, remediation: 'r' },
+    cas_pratique_fond: { situation: `Cas ${n}`, question: `Q fond ${n}`, reponse_attendue_ou_choix: 'ok' },
+    branches_remediation_forme: [], branches_remediation_fond: []
+  });
+  return {
+    intelligence_pedagogique: { _mock: true, notions_cles: ['n1', 'n2'], pieges: ['p1'] },
+    strategie_pedagogique_sur_mesure: { approche: 'mock' },
+    sections: [1, 2, 3].map((i) => ({
+      titre: `Section simulée ${i}`, synthese: `Synthèse déterministe ${i}.`, ordre: i,
+      questions_cloture_section: [`Cloture ${i}`], themes: [theme(i * 2 - 1), theme(i * 2)]
+    }))
+  };
+}
+function mockEvalData(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i + 1, question: `Question simulée ${i + 1}`, options: ['A', 'B', 'C', 'D'],
+    correctAnswer: 0, expectedAnswer: 'réponse', explication: 'Explication déterministe.'
+  }));
+}
+function mockFlashcardsData(count: number) {
+  return Array.from({ length: count }, (_, i) => ({ question: `Carte ${i + 1}`, reponse: `Réponse ${i + 1}` }));
+}
+function mockRedactionData() {
+  return {
+    points_forts: ['pf'], points_faibles: ['pfa'], axes_amelioration: ['axe'],
+    note_globale: '12/20 (simulé)', proposition: { correction_globale: 'Correction déterministe.' }
+  };
+}
+
 // SINGLE-FLIGHT PAR CONTENU : le 1er job qui insère le hash devient "leader" (génère) ;
 // les autres sont "followers" (attendent le cache puis clonent). Anti thundering herd.
 async function acquireContentLock(hash: string): Promise<boolean> {
@@ -227,7 +293,9 @@ async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
           const { schema, systemInstruction } = buildEvaluationSpec(type, count);
           const intel = intelligence ? `\n\nIntelligence pédagogique (pièges, notions clés) à exploiter :\n${JSON.stringify(intelligence).slice(0, 12000)}` : '';
           const prompt = `Analyse le document comme un professeur préparant ses partiels, puis génère l'évaluation strictement basée dessus.${intel}\n\nUSER DOCUMENT :\n<DOCUMENT>\n${text.slice(0, 80000)}\n</DOCUMENT>`;
-          let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId }), lockKey);
+          let gen: any = isMockJob(job)
+            ? await mockGenerate(job, 'evaluate_qcm', documentId, () => mockEvalData(count))
+            : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: job.user_id, feature: 'evaluate_qcm', documentId }), lockKey);
           if (!Array.isArray(gen)) gen = gen?.questions || gen?.quiz || (gen ? [gen] : []);
           if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de questions valides.");
           questions = gen;
@@ -311,11 +379,13 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
     if (!cards) {
       await ctx.mark('generating', 40, 'Génération des flashcards…');
       const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, reponse: { type: Type.STRING } }, required: ['question', 'reponse'] } };
-      let gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
-        `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
-        `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
-        schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
-      ), lockKey);
+      let gen: any = isMockJob(job)
+        ? await mockGenerate(job, 'flashcards', documentId, () => mockFlashcardsData(count))
+        : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
+          `Tu es un professeur de droit. Extrais les concepts clés et génère exactement ${count} flashcards.`,
+          `Génère ${count} flashcards à partir de ce contenu :\n\n${text.slice(0, 80000)}`,
+          schema, undefined, { userId: job.user_id, feature: 'flashcards', documentId }
+        ), lockKey);
       if (!Array.isArray(gen) || gen.length === 0) throw new Error("L'IA n'a pas renvoyé de flashcards valides.");
       cards = gen.map((c: any) => ({ question: c.question, reponse: c.reponse }));
     }
@@ -383,7 +453,9 @@ async function processRedaction(job: any, ctx: JobCtx): Promise<any> {
     await ctx.mark('generating', 40, 'Analyse de la copie…');
     const { schema, systemInstruction } = buildRedactionSpec(red.type);
     const prompt = `TYPE DE DEVOIR : ${red.type}\n\nUSER DOCUMENT :\n<REDACTION_ETUDIANT>\n${red.contenu}\n</REDACTION_ETUDIANT>\n\nCorrige cette copie avec la plus grande sévérité, conformément à tes instructions système.`;
-    const rapport = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: red.user_id || job.user_id, feature: 'redaction' }));
+    const rapport = isMockJob(job)
+      ? await mockGenerate(job, 'redaction', undefined, mockRedactionData)
+      : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(systemInstruction, prompt, schema, undefined, { userId: red.user_id || job.user_id, feature: 'redaction' }));
     result = { ...result, rapport };
     await patchJob(job.id, { result });
   }
@@ -548,13 +620,15 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
     let leaderResult = job.result || {};
     if (!leaderResult.generated) {
       await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
-      const gen: any = await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
-        "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
-        getPedagogicalMasterPrompt(text.substring(0, 50000)),
-        PEDAGOGICAL_MASTER_SCHEMA,
-        undefined,
-        { userId: job.user_id, feature: 'worker_master', documentId }
-      ), lockKey);
+      const gen: any = isMockJob(job)
+        ? await mockGenerate(job, 'worker_master', documentId, mockEtudeData)
+        : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
+          "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
+          getPedagogicalMasterPrompt(text.substring(0, 50000)),
+          PEDAGOGICAL_MASTER_SCHEMA,
+          undefined,
+          { userId: job.user_id, feature: 'worker_master', documentId }
+        ), lockKey);
       if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
