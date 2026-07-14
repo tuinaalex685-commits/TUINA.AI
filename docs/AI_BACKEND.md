@@ -53,19 +53,32 @@ pending → processing → generating → saving → completed
 10. **Observation** : `/api/jobs/[id]` (RLS) renvoie `status/progress/phase` ; sur `pending` il relance
     le worker (auto-guérison même sans cron).
 
-## Preuve (tests de charge réels contre la prod)
+## Preuve (audit mocké — Fake Gemini Provider, 0 $ / 0 appel réel)
 
-Voir `_loadtest.mjs` (non commité). Résultats : voir la section mise à jour après le run final.
+Les audits d'architecture/charge utilisent un **Fake Gemini Provider** (`payload.mock=true`) : réponses
+déterministes, aucun appel Gemini. Toute la logique de concurrence est identique ; seule la génération IA
+est simulée. Les appels Gemini RÉELS sont réservés à quelques scénarios de validation finale (1 PDF, 2
+identiques, 2 différents) — jamais des centaines de générations de test.
 
 | Scénario | Attendu | Résultat |
 |---|---|---|
-| Reprise job mort (bail expiré) | repris + completed | PASS |
-| Erreur permanente (PDF illisible) | failed, ≤2 tentatives, pas de boucle | PASS |
-| Navigateur fermé (cron seul) | completed sans poke client | PASS |
-| 20 PDF différents | 20 completed, Gemini=20 | _run final_ |
-| 100 concurrents, PDF identique | 100 completed, Gemini=1, 0 bloqué | _run final_ |
-| 300 concurrents, PDF identique | 300 completed, Gemini=1, 0 bloqué | _run final_ |
-| Intégrité | chaque cours = même nb de sections, aucun doublon | _run final_ |
+| 1 job | completed, gen=1, cours prêt | PASS ✅ |
+| 2 PDF identiques | gen=1 (dédup), 2 cours prêts | PASS ✅ |
+| 2 PDF différents | gen=2, 2 cours prêts | PASS ✅ |
+| Retry transitoire ×2 | completed, gen=1 (idempotent), prêt | PASS ✅ (4/4 runs) |
+| Erreur permanente | failed, ≤2 tentatives, stable (pas de boucle) | PASS ✅ |
+| Reprise job mort (bail expiré) | repris + completed | PASS ✅ |
+| Navigateur fermé (cron seul) | completed sans poke client | PASS ✅ |
+| **100 concurrents, PDF identique** | 100 completed, gen=1, 0 bloqué, 100/100 prêts | PASS ✅ |
+| **300 concurrents, PDF identique** | 300 completed, gen=1, 0 bloqué, 300/300 prêts | PASS ✅ |
+| **500 concurrents, PDF identique** | 500 completed, gen=1, 0 bloqué | PASS ✅ |
+| 50 PDF différents | 50 completed, gen=50 (aucun double) | PASS ✅ |
+| Intégrité (sections) | chaque cours = 3 sections, aucun doublon | PASS ✅ (`[3]` partout) |
+
+Robustesse anti double-génération (3 mécanismes) : idempotence (`job.result.generated` persisté de façon
+fiable), heartbeat de bail + de verrou pendant la génération, double-checked locking + verrou single-flight.
+Écritures idempotentes (UPSERT par position + contraintes UNIQUE) → un double-traitement rare reste
+INOFFENSIF pour les données. Le coût réel est journalisé fidèlement dans `saas_metrics` (tarif 2.5 Flash).
 
 ## Migration requise
 
