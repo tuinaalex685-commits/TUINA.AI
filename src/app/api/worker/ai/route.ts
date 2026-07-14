@@ -700,22 +700,28 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
 
   // 1. Candidat : job 'pending' prêt à tourner (next_attempt_at échu) OU job in-flight au bail expiré
   //    (worker mort → reprise automatique). 'queued' toléré comme alias de 'pending' (transition).
+  // SCALABILITÉ : on récupère les 25 plus anciens candidats et on en pioche UN AU HASARD. Sinon, sous des
+  // centaines de workers concurrents, tous viseraient le même job le plus ancien → 1 gagne, N-1 repartent
+  // bredouilles → débit ~1 job/cycle. La pioche aléatoire répartit la contention (~25×) tout en restant
+  // quasi-FIFO → montée en charge fluide vers des milliers d'utilisateurs.
+  const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>
+    (rows && rows.length) ? rows[Math.floor(Math.random() * rows.length)] : null;
   let candidate: { id: string } | null = null;
   const canonicalFilter =
     `and(status.in.(pending,queued),or(next_attempt_at.is.null,next_attempt_at.lte.${now})),` +
     `and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`;
   const sel = await supabaseAdmin
     .from('ai_jobs').select('id').or(canonicalFilter)
-    .order('created_at', { ascending: true }).limit(1).maybeSingle();
+    .order('created_at', { ascending: true }).limit(25);
   if (sel.error) {
     // Migration pas encore appliquée (next_attempt_at absent) → requête legacy équivalente.
     const legacy = await supabaseAdmin
       .from('ai_jobs').select('id')
       .or(`status.in.(pending,queued),and(status.in.(${IN_FLIGHT.join(',')}),lease_until.lt.${now})`)
-      .order('created_at', { ascending: true }).limit(1).maybeSingle();
-    candidate = legacy.data;
+      .order('created_at', { ascending: true }).limit(25);
+    candidate = pickRandom(legacy.data);
   } else {
-    candidate = sel.data;
+    candidate = pickRandom(sel.data);
   }
 
   if (!candidate) return { message: 'Aucun job en attente' };
