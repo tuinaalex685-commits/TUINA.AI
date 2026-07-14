@@ -48,3 +48,8 @@ _diag_*.mjs
 _loadtest*.mjs
 _smoke*.mjs
 _smoke*.log
+_mock*.mjs
+_mock*.log
+_diag*.log
+_smoke*.log
+_loadtest*.log
