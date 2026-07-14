@@ -649,7 +649,13 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
         throw new Error("Impossible de générer un JSON valide pour le cours.");
       }
       leaderResult = { ...leaderResult, generated: gen };
-      await patchJob(job.id, { result: leaderResult }); // persistance immédiate → retry sans re-génération
+      // Persistance FIABLE du résultat généré : un retry doit TOUJOURS retrouver 'generated' pour ne
+      // JAMAIS relancer Gemini (anti double appel / double coût). On réessaie tant que l'écriture échoue.
+      for (let i = 0; i < 5; i++) {
+        const { error } = await supabaseAdmin.from('ai_jobs').update({ result: leaderResult, updated_at: nowIso() }).eq('id', job.id);
+        if (!error) break;
+        await sleep(300 * (i + 1));
+      }
     }
     const generatedData: any = leaderResult.generated;
 
