@@ -32,6 +32,8 @@ export default async function AdminDashboard() {
     .gte('created_at', start30.toISOString());
 
   let costToday = 0, costMonth = 0, countToday = 0, countMonth = 0;
+  // Rédaction = seul poste de coût VARIABLE (par copie, jamais mutualisé) → suivi dédié.
+  let redacCountToday = 0, redacCostToday = 0, redacCountMonth = 0, redacCostMonth = 0;
   const agg: Record<string, { cost: number; count: number }> = {};
   const dayMap: Record<string, number> = {};
   const docAgg: Record<string, { count: number; cost: number }> = {};
@@ -51,6 +53,10 @@ export default async function AdminDashboard() {
       agg[key].cost += cost; agg[key].count++;
     }
     if (t >= startOfDayTime) { costToday += cost; countToday++; }
+    if ((m.feature || '') === 'redaction') {
+      if (t >= startOfMonthTime) { redacCostMonth += cost; redacCountMonth++; }
+      if (t >= startOfDayTime) { redacCostToday += cost; redacCountToday++; }
+    }
     if (m.document_id) { (docAgg[m.document_id] ??= { count: 0, cost: 0 }); docAgg[m.document_id].count++; docAgg[m.document_id].cost += cost; }
     if (m.user_id) { (userAgg[m.user_id] ??= { count: 0, cost: 0 }); userAgg[m.user_id].count++; userAgg[m.user_id].cost += cost; activeSet.add(m.user_id); }
     const fk = m.feature || 'autre';
@@ -61,7 +67,10 @@ export default async function AdminDashboard() {
   const byFeature = Object.entries(agg).map(([key, v]) => ({
     key, label: FEATURES[key]?.label || key, color: FEATURES[key]?.color || '#64748b', cost: v.cost, count: v.count,
   })).sort((a, b) => b.cost - a.cost);
-  const costStats = { costToday, costMonth, countToday, countMonth, byFeature };
+  const costStats = {
+    costToday, costMonth, countToday, countMonth, byFeature,
+    redaction: { countToday: redacCountToday, costToday: redacCostToday, countMonth: redacCountMonth, costMonth: redacCostMonth },
+  };
 
   // Courbe des 30 derniers jours
   const daily: { label: string; cost: number }[] = [];

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { DollarSign, CalendarDays, Zap, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { DollarSign, CalendarDays, Zap, Wallet, AlertTriangle, CheckCircle2, PenLine } from 'lucide-react';
 
 export interface GeminiCostStats {
   costToday: number;
@@ -9,6 +9,7 @@ export interface GeminiCostStats {
   countToday: number;
   countMonth: number;
   byFeature: { key: string; label: string; color: string; cost: number; count: number }[];
+  redaction?: { countToday: number; costToday: number; countMonth: number; costMonth: number };
 }
 
 const fmt = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
@@ -60,6 +61,32 @@ export default function GeminiCostPanel({ stats }: { stats: GeminiCostStats }) {
         {statCard('Coût ce mois', fmt(stats.costMonth), `${stats.countMonth} génération${stats.countMonth > 1 ? 's' : ''}`, <CalendarDays size={20} />, '#5E35B1')}
         {statCard('Générations ce mois', String(stats.countMonth), 'Appels Gemini réussis', <Zap size={20} />, '#F57C00')}
       </div>
+
+      {/* Rédaction : SEUL poste de coût variable (par copie, jamais mutualisé) → suivi dédié */}
+      {stats.redaction && (
+        <div style={{ marginTop: 24, background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 55%)', border: '1px solid #ec489933', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px #ec48990d', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ background: '#ec489918', padding: 8, borderRadius: 12, color: '#ec4899' }}><PenLine size={20} /></div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-text-main)' }}>Rédactions — poste de coût variable</h3>
+          </div>
+          <p style={{ margin: '0 0 18px', color: 'var(--color-text-secondary)', fontSize: 13.5, lineHeight: 1.5 }}>
+            Chaque copie est unique : la Rédaction n'est <strong>jamais mutualisée</strong>. C'est le seul module dont le coût grimpe avec le nombre d'utilisateurs — à surveiller en priorité.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+            <div style={{ background: '#ffffff', border: '1px solid #ec489922', borderRadius: 12, padding: 18 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, color: '#ec4899', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Aujourd'hui</p>
+              <h4 style={{ margin: '0 0 2px', fontSize: 28, fontWeight: 800, color: 'var(--color-text-main)', letterSpacing: -0.8 }}>{stats.redaction.countToday}</h4>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500 }}>rédaction{stats.redaction.countToday > 1 ? 's' : ''} · {fmt(stats.redaction.costToday)}</p>
+            </div>
+            <div style={{ background: '#ffffff', border: '1px solid #ec489922', borderRadius: 12, padding: 18 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, color: '#ec4899', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Ce mois</p>
+              <h4 style={{ margin: '0 0 2px', fontSize: 28, fontWeight: 800, color: 'var(--color-text-main)', letterSpacing: -0.8 }}>{stats.redaction.countMonth}</h4>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500 }}>rédaction{stats.redaction.countMonth > 1 ? 's' : ''} · {fmt(stats.redaction.costMonth)}</p>
+            </div>
+          </div>
+          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: 'radial-gradient(circle, #ec48991a 0%, #ec489900 70%)', borderRadius: '50%' }} />
+        </div>
+      )}
 
       {/* Budget mensuel + alerte de seuil */}
       <div style={{ marginTop: 24, background: '#ffffff', border: '1px solid var(--color-border)', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
