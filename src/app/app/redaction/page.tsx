@@ -4,6 +4,7 @@ export const maxDuration = 300;
 
 
 import { createClient } from '@/lib/supabase/server';
+import { getCoursMasteryBreakdown } from '@/lib/etude/mastery';
 import RedactionManager from './RedactionManager';
 
 export default async function RedactionPage() {
@@ -12,15 +13,21 @@ export default async function RedactionPage() {
 
   if (!user) return null;
 
-  const { data: redactions } = await supabase
-    .from('redactions')
-    .select('*, redaction_versions(*)')
-    .eq('user_id', user.id)
-    .order('date_creation', { ascending: false });
+  const [{ data: redactions }, coursMastery] = await Promise.all([
+    supabase
+      .from('redactions')
+      .select('*, redaction_versions(*)')
+      .eq('user_id', user.id)
+      .order('date_creation', { ascending: false }),
+    // Soft-gate INC.3 : maîtrise par cours Étude déjà travaillé (lecture seule,
+    // vue theme_mastery). Sert le sélecteur facultatif + la bannière de reco.
+    // Dégrade en [] si la migration/les vues ne sont pas encore en prod.
+    getCoursMasteryBreakdown(supabase, user.id).catch(() => []),
+  ]);
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
-      <RedactionManager initialRedactions={redactions || []} />
+      <RedactionManager initialRedactions={redactions || []} coursMastery={coursMastery} />
     </div>
   );
 }

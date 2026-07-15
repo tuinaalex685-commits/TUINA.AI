@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache';
 // (actions/jobs.ts enqueueAiJob('redaction') → /api/worker/ai). Ce fichier ne conserve
 // que le CRUD des rédactions et le compteur de quota.
 
-export async function createRedaction(titre: string, type: string) {
+export async function createRedaction(titre: string, type: string, etudeCoursId?: string | null) {
   console.log(`[REDACTION] createRedaction appelée: titre="${titre}", type="${type}"`);
   try {
     const supabase = await createClient();
@@ -16,10 +16,30 @@ export async function createRedaction(titre: string, type: string) {
     if (authError) console.log(`[REDACTION ERROR] auth.getUser: ${authError.message}`);
     if (!user) return { error: "Non authentifié" };
 
+    // Soft-gate INC.3 : rattachement FACULTATIF à un cours Étude. On ne conserve
+    // l'id que s'il correspond à un cours réellement travaillé par l'utilisateur
+    // (défense : évite d'associer un cours arbitraire). Sinon → NULL.
+    let coursId: string | null = null;
+    if (etudeCoursId) {
+      const { data: prog } = await supabase
+        .from('etude_progression_cours')
+        .select('cours_id')
+        .eq('user_id', user.id)
+        .eq('cours_id', etudeCoursId)
+        .maybeSingle();
+      if (prog) coursId = etudeCoursId;
+    }
+
     console.log(`[REDACTION] Insertion dans la table redactions pour user ${user.id}...`);
+    // On n'ajoute etude_cours_id QUE si un cours est réellement associé : ainsi
+    // la création reste fonctionnelle même si la migration softgate n'est pas
+    // encore passée en prod (dégradation gracieuse — cf. redaction_softgate.sql).
+    const payload: Record<string, any> = { user_id: user.id, titre, type, sujet: titre };
+    if (coursId) payload.etude_cours_id = coursId;
+
     const { data, error } = await supabase
       .from('redactions')
-      .insert([{ user_id: user.id, titre, type, sujet: titre }])
+      .insert([payload])
       .select()
       .single();
 

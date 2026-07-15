@@ -1,23 +1,52 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { Modal } from '@/components/ui/Modal/Modal';
 import { createRedaction, updateRedactionContent, saveRedactionVersion, getDailyRedactionUsage } from '@/app/actions/redaction';
+import type { CoursMastery } from '@/lib/etude/mastery';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useJob } from '@/lib/hooks/useJob';
 import styles from './redaction.module.css';
 
-export default function RedactionManager({ initialRedactions }: { initialRedactions: any[] }) {
+export default function RedactionManager({ initialRedactions, coursMastery = [] }: { initialRedactions: any[]; coursMastery?: CoursMastery[] }) {
   const router = useRouter();
 
   const [redactionsList, setRedactionsList] = useState<any[]>(initialRedactions);
   const [activeRedaction, setActiveRedaction] = useState<any>(null);
   const [dailyUsage, setDailyUsage] = useState<number>(0);
+
+  // Soft-gate INC.3 : cours Étude sélectionnable (facultatif) à la création,
+  // et suivi des rédactions dont l'utilisateur a fermé la recommandation.
+  const [selectedCoursId, setSelectedCoursId] = useState<string>('');
+  const [dismissedGate, setDismissedGate] = useState<Set<string>>(new Set());
+  const coursById = useMemo(
+    () => new Map(coursMastery.map((c) => [c.coursId, c])),
+    [coursMastery]
+  );
+  // Cours étudiés ayant au moins un thème (candidats à l'association).
+  const coursOptions = useMemo(
+    () => coursMastery.filter((c) => c.totalThemes > 0),
+    [coursMastery]
+  );
+  // Recommandation active (soft-gate) : thèmes non maîtrisés du cours associé à
+  // la rédaction ouverte. null si pas de cours associé / cours pleinement
+  // maîtrisé / recommandation fermée par l'utilisateur.
+  const activeGate = useMemo(() => {
+    const coursId = activeRedaction?.etude_cours_id;
+    if (!coursId || dismissedGate.has(activeRedaction?.id)) return null;
+    const cours = coursById.get(coursId);
+    if (!cours) return null;
+    const weak = cours.sections
+      .flatMap((s) => s.themes)
+      .filter((t) => !t.maitrise)
+      .sort((a, b) => a.score - b.score);
+    return weak.length > 0 ? { cours, weak } : null;
+  }, [activeRedaction, coursById, dismissedGate]);
   
   useEffect(() => {
     getDailyRedactionUsage().then(setDailyUsage);
@@ -128,7 +157,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
     setLoading(true);
 
     try {
-      const res = await createRedaction(titre, type);
+      const res = await createRedaction(titre, type, selectedCoursId || null);
       setLoading(false);
 
       if (res.error) {
@@ -138,6 +167,7 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
       // Succès : fermer la modale, réinitialiser le formulaire
       setTitre('');
+      setSelectedCoursId('');
       setIsModalOpen(false);
 
       // Auto-ouvrir la rédaction nouvellement créée dans l'éditeur
@@ -307,6 +337,42 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
 
             {viewMode === 'edition' && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)' }}>
+                {activeGate && (
+                  <Card style={{ padding: 'var(--spacing-standard)', border: '1px solid var(--color-warning)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                      <div>
+                        <h4 style={{ margin: '0 0 6px 0', color: 'var(--color-warning)' }}>
+                          ⚠️ {activeGate.weak.length} thème{activeGate.weak.length > 1 ? 's' : ''} à renforcer dans « {activeGate.cours.nom} »
+                        </h4>
+                        <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                          Recommandation : revoir ces thèmes avant de rédiger. Vous pouvez continuer quand même.
+                        </p>
+                        <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px' }}>
+                          {activeGate.weak.slice(0, 5).map((t) => (
+                            <li key={t.id}>{t.titre} <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>({t.score}%)</span></li>
+                          ))}
+                          {activeGate.weak.length > 5 && (
+                            <li style={{ listStyle: 'none', color: 'var(--color-text-secondary)', fontSize: '13px' }}>… et {activeGate.weak.length - 5} autre{activeGate.weak.length - 5 > 1 ? 's' : ''}</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'var(--spacing-standard)' }}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => router.push(activeGate.cours.pdfId ? `/app/etude/${activeGate.cours.pdfId}` : '/app/etude')}
+                      >
+                        Réviser dans l&apos;Étude
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setDismissedGate((prev) => new Set(prev).add(activeRedaction.id))}
+                      >
+                        Continuer quand même ✕
+                      </Button>
+                    </div>
+                  </Card>
+                )}
                 <textarea
                   value={contenu}
                   onChange={(e) => setContenu(e.target.value)}
@@ -473,6 +539,24 @@ export default function RedactionManager({ initialRedactions }: { initialRedacti
               <option value="Commentaire d'arrêt">Commentaire d'arrêt</option>
             </select>
           </div>
+          {coursOptions.length > 0 && (
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                Cours associé <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(facultatif)</span>
+              </label>
+              <select value={selectedCoursId} onChange={(e) => setSelectedCoursId(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-main)', color: 'var(--color-text-main)' }}>
+                <option value="">— Aucun —</option>
+                {coursOptions.map((c) => (
+                  <option key={c.coursId} value={c.coursId}>
+                    {c.nom} — {c.pourcentage}% maîtrisé
+                  </option>
+                ))}
+              </select>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                Associez un cours pour recevoir une recommandation sur les thèmes à revoir avant de rédiger.
+              </p>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--spacing-standard)' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Création...' : 'Créer l\'espace de rédaction'}</Button>
           </div>
