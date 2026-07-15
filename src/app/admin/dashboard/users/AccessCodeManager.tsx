@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
-import { createAccessCode, updateAccessCodeStatus, deleteAccessCode } from '@/app/actions/admin';
+import { createAccessCode, updateAccessCodeStatus, deleteAccessCode, purgeUser } from '@/app/actions/admin';
 import { Badge } from '@/components/ui/Badge/Badge';
 import { useRouter } from 'next/navigation';
 
@@ -51,6 +51,19 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
       setActiveActionId(`${id}-delete`);
       startTransition(async () => {
         await deleteAccessCode(id, userEmail || '');
+        router.refresh();
+        setActiveActionId(null);
+      });
+    }
+  };
+
+  const handlePurge = (id: string, userEmail: string | null) => {
+    if (!userEmail) { alert("Ce code n'est lié à aucun compte : rien à purger."); return; }
+    if (confirm(`⚠️ PURGE DÉFINITIVE de ${userEmail} ?\n\nCela supprime le COMPTE et TOUTES ses données (documents, cours, flashcards, évaluations, rédactions, progression).\n\nCette action est IRRÉVERSIBLE.`)) {
+      setActiveActionId(`${id}-purge`);
+      startTransition(async () => {
+        const res = await purgeUser(userEmail);
+        if (res?.error) { alert(res.error); }
         router.refresh();
         setActiveActionId(null);
       });
@@ -114,14 +127,25 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                     >
                       {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : code.status === 'active' ? 'Désactiver' : 'Activer'}
                     </Button>
-                    <Button 
-                      variant="secondary" 
+                    <Button
+                      variant="secondary"
                       onClick={() => handleDelete(code.id, code.email)}
                       disabled={isPending && activeActionId === `${code.id}-delete`}
                       style={{ padding: '6px 12px', fontSize: '12px', color: '#e53e3e', borderColor: '#fc8181' }}
                     >
                       {isPending && activeActionId === `${code.id}-delete` ? 'Suppression...' : 'Supprimer'}
                     </Button>
+                    {code.email && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handlePurge(code.id, code.email)}
+                        disabled={isPending && activeActionId === `${code.id}-purge`}
+                        title="Supprime définitivement le compte et toutes ses données"
+                        style={{ padding: '6px 12px', fontSize: '12px', color: '#fff', background: '#c53030', borderColor: '#c53030' }}
+                      >
+                        {isPending && activeActionId === `${code.id}-purge` ? 'Purge...' : 'Purge déf.'}
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>

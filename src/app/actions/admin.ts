@@ -104,3 +104,47 @@ export async function deleteAccessCode(id: string, email: string) {
     return { error: err.message };
   }
 }
+
+// PURGE DÉFINITIVE d'un utilisateur : supprime le compte (auth) ET toutes ses données. IRRÉVERSIBLE.
+// Gardes : impossible de purger un compte 'admin' ni son propre compte.
+export async function purgeUser(email: string) {
+  try {
+    const adminUser = await requireAdmin();
+    if (!email) return { error: 'Email manquant : ce code n’est lié à aucun compte.' };
+
+    const { data: role } = await supabaseAdmin
+      .from('user_roles').select('user_id, role').eq('email', email).maybeSingle();
+    if (role?.role === 'admin') return { error: 'Impossible de purger un compte administrateur.' };
+    const uid = role?.user_id as string | undefined;
+    if (uid && uid === adminUser.id) return { error: 'Vous ne pouvez pas purger votre propre compte.' };
+
+    if (uid) {
+      const { data: docs } = await supabaseAdmin.from('documents').select('id').eq('user_id', uid);
+      const docIds = (docs || []).map((d: any) => d.id);
+      if (docIds.length) {
+        const { data: cours } = await supabaseAdmin.from('etude_cours').select('id').in('pdf_id', docIds);
+        const cids = (cours || []).map((c: any) => c.id);
+        if (cids.length) {
+          await supabaseAdmin.from('etude_sections').delete().in('cours_id', cids);
+          await supabaseAdmin.from('etude_cours').delete().in('id', cids);
+        }
+        await supabaseAdmin.from('flashcards').delete().in('document_id', docIds);
+        await supabaseAdmin.from('evaluations').delete().in('document_id', docIds);
+      }
+      // Données liées à l'utilisateur (best-effort : on tolère les tables absentes).
+      for (const tbl of ['flashcards', 'evaluations', 'redactions', 'ai_jobs', 'historique_revisions',
+        'etude_progression_sections', 'etude_progression_themes', 'etude_progression_cours', 'documents']) {
+        await supabaseAdmin.from(tbl).delete().eq('user_id', uid).then(() => {}, () => {});
+      }
+      await supabaseAdmin.from('user_roles').delete().eq('user_id', uid);
+    }
+    await supabaseAdmin.from('access_codes').delete().eq('email', email);
+    if (uid) { try { await supabaseAdmin.auth.admin.deleteUser(uid); } catch { /* déjà supprimé */ } }
+
+    revalidatePath('/admin/dashboard/users');
+    revalidatePath('/admin/dashboard');
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
