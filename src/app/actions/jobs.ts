@@ -33,7 +33,7 @@ export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>
     const proto = h.get('x-forwarded-proto') || 'https';
     const host = h.get('host');
     if (host) {
-      fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST' }).catch(() => {});
+      fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
     }
   } catch { /* non bloquant */ }
 

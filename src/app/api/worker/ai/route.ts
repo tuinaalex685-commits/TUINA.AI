@@ -779,7 +779,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
         status: 'pending', lease_until: null,
         next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
       });
-      if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
+      if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
       return { requeued: leased.id, type: leased.type };
     }
 
@@ -787,7 +787,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       status: 'completed', progress: 100, phase: 'Terminé',
       result, error: null, last_error: null, lease_until: null, next_attempt_at: null
     });
-    if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
+    if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
@@ -809,7 +809,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       await patchJob(leased.id, { status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null });
     }
     console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
-    if (workerUrl) fetch(workerUrl, { method: 'POST' }).catch(() => {});
+    if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
     return { error: message, jobId: leased.id, retryable: willRetry };
   }
 }
@@ -820,14 +820,28 @@ function workerUrlFrom(req: NextRequest) {
   return `${protocol}://${host}/api/worker/ai`;
 }
 
-// Déclenchement immédiat (best-effort, appelé par le frontend après enqueue).
+// SÉCURITÉ : le worker ne doit pas être déclenchable par n'importe qui (anti abus/DoS). On exige le secret
+// CRON_SECRET (envoyé par Vercel Cron via Authorization, et par nos déclencheurs internes via x-worker-secret).
+// Tant que CRON_SECRET n'est PAS configuré → permissif (aucune rupture avant que tu poses le secret).
+function workerAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  const auth = req.headers.get('authorization') || '';
+  const custom = req.headers.get('x-worker-secret') || '';
+  return auth === `Bearer ${secret}` || custom === secret;
+}
+const UNAUTHORIZED = NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+// Déclenchement immédiat (best-effort, appelé côté serveur après enqueue avec le secret).
 export async function POST(req: NextRequest) {
+  if (!workerAuthorized(req)) return UNAUTHORIZED;
   const result = await runAiWorker(workerUrlFrom(req));
   return NextResponse.json(result ?? { message: 'ok' });
 }
 
 // Déclenché par Vercel Cron (toutes les minutes) : traitement serveur GARANTI, jamais lié à un client.
 export async function GET(req: NextRequest) {
+  if (!workerAuthorized(req)) return UNAUTHORIZED;
   const result = await runAiWorker(workerUrlFrom(req));
   return NextResponse.json(result ?? { message: 'ok' });
 }

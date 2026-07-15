@@ -130,9 +130,9 @@ export default function EtudeEngine({
         }
       } else {
         // Observation du job (source de vérité backend). useJob → onDone/onError.
+        // Le worker est déjà déclenché côté serveur par /api/etude/generate (avec le secret) + le cron,
+        // et /api/jobs/[id] le relance sur 'pending' → pas de poke client (endpoint worker protégé).
         setJobId(data.jobId);
-        // Réveil immédiat du worker unifié (best-effort). Le cron garantit le traitement sinon.
-        fetch('/api/worker/ai', { method: 'POST' }).catch(() => {});
       }
     } catch (err: any) {
       setError(err.message);

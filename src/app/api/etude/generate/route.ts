@@ -81,6 +81,6 @@ function triggerWorker(req: NextRequest) {
   try {
     const proto = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host');
-    if (host) fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST' }).catch(() => {});
+    if (host) fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
   } catch { /* non bloquant */ }
 }

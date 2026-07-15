@@ -383,7 +383,7 @@ export async function runWorker(workerUrlStr?: string) {
 
       // Relancer un appel HTTP pour le job suivant (évite le timeout récursif de Vercel)
       if (workerUrlStr) {
-        fetch(workerUrlStr, { method: 'POST' }).catch(() => {});
+        fetch(workerUrlStr, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
       }
 
       return { success: true, processedJob: job.id, duration };
@@ -431,7 +431,7 @@ export async function runWorker(workerUrlStr?: string) {
       }
 
       if (workerUrlStr) {
-        fetch(workerUrlStr, { method: 'POST' }).catch(() => {});
+        fetch(workerUrlStr, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
       }
       return { error: processError.message };
     }
@@ -442,14 +442,21 @@ export async function runWorker(workerUrlStr?: string) {
   }
 }
 
+// SÉCURITÉ : n'autoriser que Vercel Cron (Authorization) ou nos appels internes (x-worker-secret).
+// Permissif tant que CRON_SECRET n'est pas configuré (aucune rupture avant que le secret soit posé).
+function workerAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  const auth = req.headers.get('authorization') || '';
+  const custom = req.headers.get('x-worker-secret') || '';
+  return auth === `Bearer ${secret}` || custom === secret;
+}
+
 export async function POST(req: NextRequest) {
+  if (!workerAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const protocol = req.headers.get('x-forwarded-proto') || 'http';
   const host = req.headers.get('host') || 'localhost:3000';
   const workerUrl = `${protocol}://${host}/api/worker/process`;
-
-  // Exécution INLINE (awaitée) : le handler dispose de maxDuration (300s) de CPU réel.
-  // after() n'obtenait qu'un budget minime après la réponse (mort avant l'appel Gemini).
-  // Le frontend appelle ce endpoint en fire-and-forget → bloquer ici ne gèle jamais l'UI.
   const result = await runWorker(workerUrl);
   return NextResponse.json(result ?? { message: "Worker terminé" });
 }
@@ -457,6 +464,7 @@ export async function POST(req: NextRequest) {
 // Déclenché par Vercel Cron (toutes les minutes) : traitement serveur GARANTI, jamais lié à un
 // client (donc jamais tué par un rechargement de page). C'est le filet de sécurité qui vide la file.
 export async function GET(req: NextRequest) {
+  if (!workerAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const protocol = req.headers.get('x-forwarded-proto') || 'https';
   const host = req.headers.get('host') || 'localhost:3000';
   const workerUrl = `${protocol}://${host}/api/worker/process`;
