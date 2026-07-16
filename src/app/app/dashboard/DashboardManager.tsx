@@ -51,7 +51,7 @@ export default function DashboardManager({
     };
   }, [router]);
 
-  const totalActivities = (stats.matieresCount || 0) + (stats.evaluationsCount || 0) + flashcardsCount + (stats.redactionsCount || 0);
+  const totalActivities = (stats.matieresCount || 0) + (stats.examensCount || 0) + flashcardsCount + (stats.redactionsCount || 0);
   const progression = totalActivities > 0 ? Math.min(100, Math.round(totalActivities * 2)) : 0;
 
   return (
@@ -202,8 +202,8 @@ export default function DashboardManager({
                 <CheckSquare size={24} />
               </div>
               <div>
-                <p className={styles.statWidgetValue}>{stats.evaluationsCount || 0}</p>
-                <p className={styles.statWidgetLabel}>Évaluations</p>
+                <p className={styles.statWidgetValue}>{stats.examensCount || 0}</p>
+                <p className={styles.statWidgetLabel}>Examens</p>
               </div>
             </div>
 

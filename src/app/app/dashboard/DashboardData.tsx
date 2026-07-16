@@ -12,7 +12,7 @@ export default async function DashboardData({ user }: { user: any }) {
     { count: coursCount },
     { count: documentsCount },
     { count: flashcardsCount },
-    { count: evaluationsCount },
+    { count: examensCount },
     { count: redactionsCount },
     { data: objectifs }
   ] = await Promise.all([
@@ -20,7 +20,7 @@ export default async function DashboardData({ user }: { user: any }) {
     supabase.from('cours').select('*', { count: 'exact', head: true }),
     supabase.from('documents').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('evaluations').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('examen_sessions').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'submitted'),
     supabase.from('redactions').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('objectifs').select('*').eq('user_id', user.id).limit(3)
   ]);
@@ -29,7 +29,7 @@ export default async function DashboardData({ user }: { user: any }) {
     matieresCount: matieresCount || 0,
     coursCount: coursCount || 0,
     documentsCount: documentsCount || 0,
-    evaluationsCount: evaluationsCount || 0,
+    examensCount: examensCount || 0,
     redactionsCount: redactionsCount || 0,
   };
 

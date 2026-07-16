@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { label: 'Étude Guidée', path: '/app/etude', icon: '📖' },
   { label: 'Bibliothèque', path: '/app/bibliotheque', icon: '📁' },
   { label: 'Révisions', path: '/app/revisions', icon: '🧠' },
-  { label: 'Évaluations', path: '/app/evaluations', icon: '📝' },
   { label: 'Examen', path: '/app/examen', icon: '🎓' },
   { label: 'Rédaction', path: '/app/redaction', icon: '✍️' },
   { label: 'Progression', path: '/app/progression', icon: '📈' },

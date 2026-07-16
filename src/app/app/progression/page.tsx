@@ -12,13 +12,13 @@ export default async function ProgressionPage() {
 
   // Récupération depuis les VRAIES tables existantes
   const [
-    { count: evalCount },
+    { count: examCount },
     { count: flashCount },
     { count: redactionCount },
     { data: objectifs },
     coursMastery
   ] = await Promise.all([
-    supabase.from('evaluations').select('*', { count: 'exact', head: true }).eq('user_id', user.id).not('score', 'is', null),
+    supabase.from('examen_sessions').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'submitted'),
     supabase.from('flashcards').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('redactions').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('objectifs').select('*').eq('user_id', user.id),
@@ -59,9 +59,9 @@ export default async function ProgressionPage() {
         </Card>
 
         <Card style={{ textAlign: 'center', padding: 'var(--spacing-large)' }}>
-          <h3 style={{ margin: '0 0 var(--spacing-standard)', color: 'var(--color-text-secondary)' }}>Évaluations Réalisées</h3>
-          <div style={{ fontSize: '48px', fontWeight: 'bold', color: 'var(--color-success)' }}>{evalCount || 0}</div>
-          <p style={{ margin: 'var(--spacing-small) 0 0', color: 'var(--color-text-secondary)' }}>Évaluations complétées avec note</p>
+          <h3 style={{ margin: '0 0 var(--spacing-standard)', color: 'var(--color-text-secondary)' }}>Examens Passés</h3>
+          <div style={{ fontSize: '48px', fontWeight: 'bold', color: 'var(--color-success)' }}>{examCount || 0}</div>
+          <p style={{ margin: 'var(--spacing-small) 0 0', color: 'var(--color-text-secondary)' }}>Examens complétés et notés</p>
         </Card>
 
         <Card style={{ textAlign: 'center', padding: 'var(--spacing-large)' }}>

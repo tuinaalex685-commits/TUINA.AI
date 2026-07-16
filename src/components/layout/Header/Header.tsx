@@ -11,6 +11,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/app/matieres': 'Mes Matières',
   '/app/bibliotheque': 'Bibliothèque Documentaire',
   '/app/revisions': 'Centre de Révision',
+  '/app/examen': 'Examen',
   '/app/evaluations': 'Évaluations & Quiz',
   '/app/redaction': 'Rédaction Juridique',
   '/app/objectifs': 'Mes Objectifs',
