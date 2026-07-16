@@ -90,3 +90,30 @@ export function dureeExamenSecondes(countsParType: Partial<Record<ExamenQuestion
   for (const t of EXAMEN_TYPES) s += (countsParType[t] || 0) * TEMPS_PAR_TYPE_S[t];
   return Math.ceil(s / 60) * 60;
 }
+
+// ============================================================================
+// EX.3 : MAÎTRISE EXAMEN (par thème) + composition ADAPTATIVE
+// ============================================================================
+
+/**
+ * Lissage exponentiel (EMA) de la maîtrise examen d'un thème : les passages
+ * récents pèsent davantage sans effacer l'historique. α ∈ ]0,1] configurable.
+ *   maîtrise = α·score_récent + (1-α)·maîtrise_précédente  (1er passage = score)
+ * α=0.5 → le dernier passage compte pour moitié, l'avant-dernier pour un quart…
+ * Une réussite chanceuse isolée ne suffit pas à franchir le seuil ; une
+ * régression fait redescendre progressivement. Jamais stockée : recalculée
+ * depuis l'historique des sessions (aucune dérive possible).
+ */
+export const MAITRISE_EXAMEN_ALPHA = 0.5;
+
+/** Composition d'un examen ADAPTATIF (total = 10) : plus court, ciblé sur les faiblesses. */
+export const COMPOSITION_ADAPTATIF: Record<ExamenQuestionType, number> = {
+  qcm: 4,
+  vrai_faux: 2,
+  trous: 2,
+  association: 1,
+  classement: 1,
+};
+
+/** Part des questions d'un examen adaptatif tirées des thèmes SOUS le seuil (le reste = consolidation). */
+export const ADAPTATIF_PART_FAIBLES = 0.7;

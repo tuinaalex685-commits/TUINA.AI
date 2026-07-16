@@ -12,8 +12,10 @@
  */
 import {
   ExamenQuestionType, EXAMEN_TYPES, POINTS_PAR_TYPE, COMPOSITION_STANDARD,
+  COMPOSITION_ADAPTATIF, ADAPTATIF_PART_FAIBLES, MAITRISE_EXAMEN_ALPHA,
   dureeExamenSecondes,
 } from '@/lib/config/examen';
+import { estMaitrise } from '@/lib/config/mastery';
 
 /** Une question telle que stockée dans examen_question_pools (contient le corrigé). */
 export interface PoolQuestion {
@@ -83,6 +85,22 @@ export function composerStandard(pool: PoolQuestion[], seed: number): Compositio
   return composer(pool, seed, COMPOSITION_STANDARD);
 }
 
+/** Clé positionnelle d'un thème (identique dans tous les clones d'un contenu). */
+export const keyOf = (sectionOrdre: number, themeOrdre: number) => `${sectionOrdre}:${themeOrdre}`;
+
+// Construit un item de composition depuis une question du pool (+ mélanges d'affichage seedés).
+function buildItem(pool: PoolQuestion[], i: number, rng: () => number): CompositionItem {
+  const q = pool[i];
+  const item: CompositionItem = {
+    poolIndex: i, type: q.type, section_ordre: q.section_ordre, theme_ordre: q.theme_ordre,
+    points: POINTS_PAR_TYPE[q.type],
+  };
+  if (q.type === 'qcm' && q.options) item.optionsAffichees = shuffled(q.options, rng);
+  if (q.type === 'association' && q.paires) item.droitesAffichees = shuffled(q.paires.map((p) => p.droite), rng);
+  if (q.type === 'classement' && q.elements_ordonnes) item.elementsAffiches = shuffled(q.elements_ordonnes, rng);
+  return item;
+}
+
 export function composer(
   pool: PoolQuestion[], seed: number, counts: Partial<Record<ExamenQuestionType, number>>
 ): CompositionItem[] {
@@ -91,22 +109,82 @@ export function composer(
   for (const type of EXAMEN_TYPES) {
     const want = counts[type] || 0;
     if (want <= 0) continue;
-    const candidates = pool
-      .map((q, i) => ({ q, i }))
-      .filter((x) => x.q.type === type);
-    const picked = shuffled(candidates, rng).slice(0, want);
-    for (const { q, i } of picked) {
-      const item: CompositionItem = {
-        poolIndex: i, type, section_ordre: q.section_ordre, theme_ordre: q.theme_ordre,
-        points: POINTS_PAR_TYPE[type],
-      };
-      if (type === 'qcm' && q.options) item.optionsAffichees = shuffled(q.options, rng);
-      if (type === 'association' && q.paires) item.droitesAffichees = shuffled(q.paires.map((p) => p.droite), rng);
-      if (type === 'classement' && q.elements_ordonnes) item.elementsAffiches = shuffled(q.elements_ordonnes, rng);
-      items.push(item);
-    }
+    const candidates = pool.map((q, i) => ({ q, i })).filter((x) => x.q.type === type);
+    for (const { i } of shuffled(candidates, rng).slice(0, want)) items.push(buildItem(pool, i, rng));
   }
   // Ordre de présentation global mélangé (mais points_max inchangé).
+  return shuffled(items, rng);
+}
+
+// --- EX.3 : maîtrise examen (EMA) --------------------------------------------
+export interface SessionThemeResults {
+  submitted_at: string;
+  theme_results: { section_ordre: number; theme_ordre: number; ratio: number }[];
+}
+export interface ThemeExamMastery {
+  section_ordre: number;
+  theme_ordre: number;
+  score: number;   // 0..100 (EMA des ratios de réussite), null-équivalent si tested=0
+  tested: number;  // nombre de passages ayant couvert ce thème
+}
+
+/**
+ * Maîtrise examen par thème = EMA des scores de réussite, calculée depuis TOUT
+ * l'historique des sessions soumises (jamais stockée). Un thème jamais testé
+ * n'apparaît pas (→ à considérer comme prioritaire par l'appelant).
+ */
+export function computeExamMastery(
+  sessions: SessionThemeResults[], alpha = MAITRISE_EXAMEN_ALPHA
+): Record<string, ThemeExamMastery> {
+  const ordered = sessions.slice().sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at));
+  const acc: Record<string, ThemeExamMastery> = {};
+  for (const s of ordered) {
+    for (const tr of s.theme_results || []) {
+      const key = keyOf(tr.section_ordre, tr.theme_ordre);
+      const score = Math.max(0, Math.min(100, (Number(tr.ratio) || 0) * 100));
+      const prev = acc[key];
+      acc[key] = {
+        section_ordre: tr.section_ordre, theme_ordre: tr.theme_ordre,
+        score: prev ? alpha * score + (1 - alpha) * prev.score : score,
+        tested: (prev?.tested || 0) + 1,
+      };
+    }
+  }
+  for (const k of Object.keys(acc)) acc[k].score = Math.round(acc[k].score * 10) / 10;
+  return acc;
+}
+
+/** Un thème est FAIBLE pour l'adaptatif s'il est jamais testé OU sous le seuil de maîtrise. */
+export function estThemeFaible(examMastery: Record<string, ThemeExamMastery>, key: string): boolean {
+  const m = examMastery[key];
+  return !m || m.tested === 0 || !estMaitrise(m.score);
+}
+
+/**
+ * Composition ADAPTATIVE : ~ADAPTATIF_PART_FAIBLES des questions tirées des
+ * thèmes faibles (jamais testés ou sous le seuil), le reste en consolidation.
+ * Déterministe (seed). Best-effort si la banque manque de questions d'un profil.
+ */
+export function composerAdaptatif(
+  pool: PoolQuestion[], seed: number, examMastery: Record<string, ThemeExamMastery>,
+  counts: Partial<Record<ExamenQuestionType, number>> = COMPOSITION_ADAPTATIF,
+  partFaibles = ADAPTATIF_PART_FAIBLES
+): CompositionItem[] {
+  const rng = mulberry32(seed);
+  const items: CompositionItem[] = [];
+  for (const type of EXAMEN_TYPES) {
+    const want = counts[type] || 0;
+    if (want <= 0) continue;
+    const candidates = pool.map((q, i) => ({ q, i })).filter((x) => x.q.type === type);
+    const faibles = shuffled(candidates.filter((x) => estThemeFaible(examMastery, keyOf(x.q.section_ordre, x.q.theme_ordre))), rng);
+    const forts = shuffled(candidates.filter((x) => !estThemeFaible(examMastery, keyOf(x.q.section_ordre, x.q.theme_ordre))), rng);
+    const nFaible = Math.min(faibles.length, Math.round(want * partFaibles));
+    const picked = faibles.slice(0, nFaible);
+    // Complète avec les forts puis, si besoin, le reste des faibles (best-effort, jamais de doublon).
+    const reste = [...forts, ...faibles.slice(nFaible)];
+    picked.push(...reste.slice(0, Math.max(0, want - picked.length)));
+    for (const { i } of picked) items.push(buildItem(pool, i, rng));
+  }
   return shuffled(items, rng);
 }
 
