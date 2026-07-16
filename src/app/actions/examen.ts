@@ -27,11 +27,11 @@ async function deps() {
   };
 }
 
-export async function startExam(documentId: string) {
+export async function startExam(documentId: string, mode?: 'standard' | 'adaptatif') {
   const d = await deps();
   if (!d) return { error: 'Non authentifié' };
   try {
-    const res = await session.startExam(d, { documentId });
+    const res = await session.startExam(d, { documentId, mode });
     revalidatePath('/app/examen');
     return { success: true, ...res };
   } catch (e: any) {
@@ -113,19 +113,25 @@ export async function getExamDashboard() {
     arr.push(h); byDoc.set(h.documentId || '', arr);
   }
 
-  const items = docList
-    .filter((d: any) => pretPdf.has(d.id))
-    .map((d: any) => {
-      const h = byDoc.get(d.id) || [];
-      const notes = h.map((x) => x.note).filter((n) => n !== null);
-      return {
-        documentId: d.id, nom: d.nom,
-        bankReady: !!d.text_hash && bankSet.has(d.text_hash),
-        nbExamens: h.length,
-        derniereNote: h.length ? h[h.length - 1].note : null,
-        meilleureNote: notes.length ? Math.max(...notes) : null,
-      };
-    });
+  const docsPret = docList.filter((d: any) => pretPdf.has(d.id));
+  const items = await Promise.all(docsPret.map(async (d: any) => {
+    const h = byDoc.get(d.id) || [];
+    const notes = h.map((x) => x.note).filter((n) => n !== null);
+    // Adaptatif dispo après un 1er examen (diagnostic) tant que le cours n'est pas entièrement maîtrisé.
+    let canAdaptive = false;
+    if (h.length > 0) {
+      const a = await getExamAnalyse(supabaseAdmin, userId, d.id);
+      canAdaptive = !a.resume.coursMaitrise;
+    }
+    return {
+      documentId: d.id, nom: d.nom,
+      bankReady: !!d.text_hash && bankSet.has(d.text_hash),
+      nbExamens: h.length,
+      derniereNote: h.length ? h[h.length - 1].note : null,
+      meilleureNote: notes.length ? Math.max(...notes) : null,
+      canAdaptive,
+    };
+  }));
   return { success: true as const, items };
 }
 

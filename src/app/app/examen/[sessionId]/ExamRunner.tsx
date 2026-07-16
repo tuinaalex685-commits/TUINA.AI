@@ -21,6 +21,7 @@ interface VueQuestion {
 interface View {
   sessionId: string;
   status: string;
+  mode?: string;
   remainingSeconds: number;
   questions: VueQuestion[];
   answers: Record<string, any>;
@@ -88,7 +89,10 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
         padding: '14px 20px', marginBottom: 'var(--spacing-standard)', borderRadius: '12px',
         background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
       }}>
-        <div style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
+        <div style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {initialView.mode === 'adaptatif' && (
+            <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(99,102,241,0.12)', color: 'var(--color-primary)', fontWeight: 600 }}>🎯 Adaptatif</span>
+          )}
           Répondu : <strong style={{ color: 'var(--color-text-main)' }}>{answered}/{total}</strong>
         </div>
         <div style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: remaining <= 60 ? 'var(--color-error)' : 'var(--color-text-main)' }}>

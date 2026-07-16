@@ -14,9 +14,10 @@
  */
 import crypto from 'crypto';
 import {
-  composerStandard, corriger, vueEpuree, dureeSecondes, pointsMax,
+  composerStandard, composerAdaptatif, corriger, vueEpuree, dureeSecondes, pointsMax,
   seedFrom, CompositionItem, PoolQuestion,
 } from '@/lib/examen/engine';
+import { getExamMasteryMap } from '@/lib/examen/analytics';
 
 export interface SessionDeps {
   poolDb: any;    // service-role : lit examen_question_pools + documents (corrigés jamais exposés)
@@ -42,10 +43,16 @@ async function readSession(deps: SessionDeps, sessionId: string): Promise<any> {
   return data;
 }
 
-/** Démarre un examen : compose depuis la banque, fixe la deadline serveur, persiste. */
+/**
+ * Démarre un examen : compose depuis la banque (déjà en cache), fixe la deadline
+ * serveur, persiste. Mode 'adaptatif' = MÊME moteur, composition pondérée vers les
+ * thèmes faibles (maîtrise examen déjà calculée, aucun appel Gemini). L'adaptatif
+ * exige un diagnostic préalable (≥ 1 examen soumis).
+ */
 export async function startExam(
-  deps: SessionDeps, args: { documentId: string; mode?: 'standard' }
+  deps: SessionDeps, args: { documentId: string; mode?: 'standard' | 'adaptatif' }
 ): Promise<{ sessionId: string; deadline: string; dureeSecondes: number }> {
+  const mode = args.mode === 'adaptatif' ? 'adaptatif' : 'standard';
   const { data: doc } = await deps.poolDb.from('documents')
     .select('extracted_text').eq('id', args.documentId).maybeSingle();
   const text = doc?.extracted_text || '';
@@ -55,7 +62,18 @@ export async function startExam(
   const pool = await loadPool(deps, sourceHash);
   const seedStr = `${deps.userId}:${args.documentId}:${deps.now().getTime()}:${Math.random()}`;
   const seed = seedFrom(seedStr);
-  const composition = composerStandard(pool, seed);
+
+  let composition: CompositionItem[];
+  if (mode === 'adaptatif') {
+    const mastery = await getExamMasteryMap(deps.poolDb, deps.userId, args.documentId);
+    // Garde : l'adaptatif se fonde sur la maîtrise mesurée → il faut au moins un examen passé.
+    if (!Object.values(mastery).some((m: any) => m.tested > 0)) {
+      throw new Error("Passez d'abord un examen standard (diagnostic) avant l'examen adaptatif.");
+    }
+    composition = composerAdaptatif(pool, seed, mastery);
+  } else {
+    composition = composerStandard(pool, seed);
+  }
   if (composition.length === 0) throw new Error('Composition vide : banque insuffisante.');
 
   const startedAt = deps.now();
@@ -64,7 +82,7 @@ export async function startExam(
 
   const { data: row, error } = await deps.sessionDb.from('examen_sessions').insert({
     user_id: deps.userId, document_id: args.documentId, source_hash: sourceHash,
-    mode: args.mode || 'standard', composition, seed, answers: {},
+    mode, composition, seed, answers: {},
     started_at: startedAt.toISOString(), deadline: deadline.toISOString(),
     points_max: pointsMax(composition), status: 'in_progress',
   }).select('id').single();

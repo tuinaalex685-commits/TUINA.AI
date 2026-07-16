@@ -16,6 +16,7 @@ interface ExamItem {
   nbExamens: number;
   derniereNote: number | null;
   meilleureNote: number | null;
+  canAdaptive: boolean;
 }
 
 export default function ExamenManager({ initialItems }: { initialItems: ExamItem[] }) {
@@ -60,12 +61,12 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
     }
   };
 
-  const demarrer = async (documentId: string) => {
+  const demarrer = async (documentId: string, mode?: 'standard' | 'adaptatif') => {
     if (busyDoc) return;
     setBusyDoc(documentId);
-    const id = toast.loading('Démarrage de l’examen…');
+    const id = toast.loading(mode === 'adaptatif' ? 'Démarrage de l’examen adaptatif…' : 'Démarrage de l’examen…');
     try {
-      const res = await startExam(documentId);
+      const res = await startExam(documentId, mode);
       if ((res as any).error || !(res as any).sessionId) {
         setBusyDoc(null);
         toast.error((res as any).error || 'Impossible de démarrer.', { id });
@@ -124,11 +125,16 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {it.bankReady ? (
                     <Button onClick={() => demarrer(it.documentId)} disabled={busy} style={{ width: '100%', padding: '10px' }}>
-                      {busy ? 'Démarrage…' : 'Démarrer l’examen'}
+                      {busy ? 'Démarrage…' : it.nbExamens > 0 ? 'Repasser l’examen' : 'Démarrer l’examen'}
                     </Button>
                   ) : (
                     <Button onClick={() => genererBanque(it.documentId)} disabled={busy} style={{ width: '100%', padding: '10px' }}>
                       {busy ? 'Préparation…' : 'Préparer la banque d’examen'}
+                    </Button>
+                  )}
+                  {it.bankReady && it.canAdaptive && (
+                    <Button onClick={() => demarrer(it.documentId, 'adaptatif')} disabled={busy} style={{ width: '100%', padding: '10px' }}>
+                      🎯 Examen adaptatif (thèmes faibles)
                     </Button>
                   )}
                   {it.nbExamens > 0 && (
