@@ -74,6 +74,27 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
     if (initialView.status === 'submitted') router.replace('/app/examen');
   }, [initialView.status, router]);
 
+  // MODE VERROUILLÉ : tant que l'examen est en cours, on empêche de quitter.
+  //  - bouton Retour neutralisé (on ré-empile l'état) ;
+  //  - fermeture/rechargement → avertissement natif du navigateur ;
+  //  - le plein écran recouvre le menu (aucun lien de sortie cliquable).
+  // Rappel : même en fermant, l'examen se remet automatiquement à l'échéance côté serveur.
+  useEffect(() => {
+    if (initialView.status !== 'in_progress') return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    const onPop = () => {
+      history.pushState(null, '', window.location.href);
+      toast('Terminez l’examen ou attendez la fin du temps pour quitter.', { icon: '🔒', id: 'exam-lock' });
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    history.pushState(null, '', window.location.href); // sentinelle : le 1er "Retour" reste sur la page
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('popstate', onPop);
+    };
+  }, [initialView.status]);
+
   const save = useCallback((position: number, answer: any) => {
     setAnswers((prev) => ({ ...prev, [String(position)]: answer }));
     // Auto-save serveur (idempotent, fire-and-forget ; rejeté proprement après la deadline).
@@ -83,8 +104,12 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
   const answered = initialView.questions.filter((q) => answers[String(q.position)] !== undefined).length;
   const total = initialView.questions.length;
 
+  const locked = initialView.status === 'in_progress';
   return (
-    <div style={{ padding: 'var(--spacing-large) 0', width: '100%', maxWidth: 800, margin: '0 auto' }}>
+    <div style={locked
+      ? { position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--color-bg-main)', overflowY: 'auto', padding: 'var(--spacing-large)' }
+      : { padding: 'var(--spacing-large) 0' }}>
+      <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
       {submitting && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,11,24,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
@@ -107,7 +132,8 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
         padding: '14px 20px', marginBottom: 'var(--spacing-standard)', borderRadius: '12px',
         background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
       }}>
-        <div style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(239,68,68,0.10)', color: 'var(--color-error)', fontWeight: 700 }}>🔒 Verrouillé</span>
           {initialView.mode === 'adaptatif' && (
             <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(99,102,241,0.12)', color: 'var(--color-primary)', fontWeight: 600 }}>🎯 Adaptatif</span>
           )}
@@ -132,10 +158,12 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
         ))}
       </div>
 
-      <div style={{ marginTop: 'var(--spacing-large)', display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginTop: 'var(--spacing-large)', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
         <Button onClick={finish} disabled={submitting} style={{ padding: '12px 28px' }}>
           {submitting ? 'Correction…' : 'Terminer et remettre'}
         </Button>
+        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>🔒 Seule la remise ou la fin du temps permet de quitter l’examen.</span>
+      </div>
       </div>
     </div>
   );
