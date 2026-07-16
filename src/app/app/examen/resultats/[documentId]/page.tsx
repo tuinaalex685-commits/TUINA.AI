@@ -36,6 +36,13 @@ export default async function ResultatsPage({ params }: { params: Promise<{ docu
       <header style={{ marginBottom: 'var(--spacing-large)' }}>
         <Link href="/app/examen" style={{ color: 'var(--color-text-secondary)', fontSize: '14px', textDecoration: 'none' }}>← Retour aux examens</Link>
         <h1 style={{ margin: '8px 0 0', color: 'var(--color-text-main)', fontSize: '28px' }}>Analyse par thème</h1>
+        {r.derniereSessionId && (
+          <div style={{ marginTop: 12 }}>
+            <Link href={`/app/examen/correction/${r.derniereSessionId}`}>
+              <Button style={{ padding: '9px 16px' }}>📝 Voir la correction détaillée (dernier examen)</Button>
+            </Link>
+          </div>
+        )}
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--spacing-standard)', marginBottom: 'var(--spacing-large)' }}>

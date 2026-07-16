@@ -50,8 +50,8 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
       return;
     }
     toast.success(`Examen terminé — note : ${(res as any).note}/20`, { id });
-    const docId = (res as any).documentId;
-    router.push(docId ? `/app/examen/resultats/${docId}` : '/app/examen');
+    // On montre d'abord la correction question par question (ta réponse vs la bonne réponse).
+    router.push(`/app/examen/correction/${sessionId}`);
     router.refresh();
   }, [sessionId, router]);
 

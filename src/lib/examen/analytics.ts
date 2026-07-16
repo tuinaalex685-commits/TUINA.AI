@@ -15,7 +15,10 @@
  * reste la seule source de la maîtrise Étude, cf theme_mastery / INC.1).
  */
 import { estMaitrise } from '@/lib/config/mastery';
-import { computeExamMastery, keyOf, ThemeExamMastery } from '@/lib/examen/engine';
+import {
+  computeExamMastery, corriger, formatReponse, keyOf,
+  CompositionItem, PoolQuestion, ThemeExamMastery,
+} from '@/lib/examen/engine';
 
 type Db = any; // client authed (RLS) en prod / service-role en test
 
@@ -49,6 +52,8 @@ export interface ExamAnalyse {
     moyenneNotes: number | null;
     /** Vrai si TOUS les thèmes sont maîtrisés → sortie de boucle possible (recommandation Rédaction, EX.4). */
     coursMaitrise: boolean;
+    /** Id de la session la plus récente (pour lier vers sa correction détaillée). */
+    derniereSessionId: string | null;
   };
 }
 
@@ -127,8 +132,58 @@ export async function getExamAnalyse(db: Db, userId: string, documentId: string)
       moyenneNotes: notes.length ? Math.round((notes.reduce((a: number, b: number) => a + b, 0) / notes.length) * 10) / 10 : null,
       // Sortie de boucle : cours entièrement maîtrisé UNIQUEMENT si chaque thème est testé ET au seuil.
       coursMaitrise: themes.length > 0 && nbMaitrises === themes.length,
+      derniereSessionId: sorted.length ? sorted[sorted.length - 1].id : null,
     },
   };
+}
+
+export interface CorrectionQuestion {
+  position: number;
+  type: string;
+  difficulte: string;
+  question: string;
+  votre: string;
+  bonne: string;
+  explication: string;
+  correcte: boolean;
+  ratio: number;
+  points: number;
+  pointsMax: number;
+}
+
+/**
+ * Correction DÉTAILLÉE d'une session (question par question : votre réponse vs
+ * la bonne réponse + explication). Le corrigé n'est révélé que si la session est
+ * SOUMISE (jamais pendant l'examen). Lu via service role (la banque des corrigés
+ * n'est pas exposée au client).
+ */
+export async function getExamCorrection(
+  db: Db, userId: string, sessionId: string
+): Promise<{ note: number | null; documentId: string | null; submittedAt: string | null; questions: CorrectionQuestion[] }> {
+  const { data: s } = await db.from('examen_sessions')
+    .select('id, user_id, status, source_hash, composition, answers, score, document_id, submitted_at')
+    .eq('id', sessionId).eq('user_id', userId).maybeSingle();
+  if (!s) throw new Error('Session introuvable.');
+  if (s.status !== 'submitted') throw new Error('La correction est disponible après la remise de l’examen.');
+
+  const { data: pool } = await db.from('examen_question_pools').select('questions').eq('source_hash', s.source_hash).maybeSingle();
+  const questions = (pool?.questions || []) as PoolQuestion[];
+  const composition = (s.composition || []) as CompositionItem[];
+  const answers = s.answers || {};
+  const c = corriger(composition, questions, answers);
+
+  const items: CorrectionQuestion[] = composition.map((it, pos) => {
+    const q = questions[it.poolIndex];
+    const res = c.parQuestion[pos];
+    const fmt = q ? formatReponse(it, q, answers[String(pos)]) : { votre: '', bonne: '' };
+    return {
+      position: pos, type: it.type, difficulte: q?.difficulte || '', question: q?.question || '',
+      votre: fmt.votre, bonne: fmt.bonne, explication: q?.explication || '',
+      correcte: res?.correcte || false, ratio: res?.ratio || 0,
+      points: res?.points ?? 0, pointsMax: res?.pointsMax ?? it.points,
+    };
+  });
+  return { note: s.score === null || s.score === undefined ? null : Number(s.score), documentId: s.document_id, submittedAt: s.submitted_at, questions: items };
 }
 
 /** Historique des notes (tous documents) pour les vues de progression. */

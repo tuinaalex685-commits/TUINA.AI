@@ -288,6 +288,48 @@ function corrigerQuestion(it: CompositionItem, q: PoolQuestion, rep: any): numbe
   }
 }
 
+/** Met en forme, pour l'affichage de la correction, la réponse de l'étudiant ET la bonne réponse. */
+export function formatReponse(it: CompositionItem, q: PoolQuestion, rep: any): { votre: string; bonne: string } {
+  const manque = '— (non répondu)';
+  switch (it.type) {
+    case 'qcm': {
+      const bonne = typeof q.correct === 'number' && q.options ? q.options[q.correct] : '';
+      const votre = (typeof rep === 'string' && rep) ? rep : manque;
+      return { votre, bonne: bonne || '' };
+    }
+    case 'vrai_faux': {
+      const lbl = (v: any) => (v === 0 ? 'Vrai' : v === 1 ? 'Faux' : manque);
+      return { votre: lbl(Number(rep)), bonne: lbl(q.correct) };
+    }
+    case 'trous': {
+      const attendu = q.reponses_trous || [];
+      const arr = Array.isArray(rep) ? rep : [];
+      return {
+        votre: attendu.length && arr.some((x: any) => x) ? attendu.map((_, i) => arr[i] || '—').join(' · ') : manque,
+        bonne: attendu.join(' · '),
+      };
+    }
+    case 'association': {
+      const paires = q.paires || [];
+      const arr = Array.isArray(rep) ? rep : [];
+      return {
+        votre: paires.length && arr.some((x: any) => x) ? paires.map((p, i) => `${p.gauche} → ${arr[i] || '—'}`).join('  ·  ') : manque,
+        bonne: paires.map((p) => `${p.gauche} → ${p.droite}`).join('  ·  '),
+      };
+    }
+    case 'classement': {
+      const attendu = q.elements_ordonnes || [];
+      const arr = Array.isArray(rep) ? rep : [];
+      return {
+        votre: arr.length ? arr.join('  →  ') : manque,
+        bonne: attendu.join('  →  '),
+      };
+    }
+    default:
+      return { votre: manque, bonne: '' };
+  }
+}
+
 export interface Correction {
   points: number;
   pointsMax: number;

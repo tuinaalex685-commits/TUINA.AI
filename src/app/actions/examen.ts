@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import * as session from '@/lib/examen/session';
-import { getExamAnalyse, getExamHistory } from '@/lib/examen/analytics';
+import { getExamAnalyse, getExamHistory, getExamCorrection } from '@/lib/examen/analytics';
 
 /**
  * Server actions de la section EXAMEN (EX.2). Elles ne font que :
@@ -148,5 +148,18 @@ export async function getExamResults(documentId: string) {
     return { success: true as const, analyse };
   } catch (e: any) {
     return { error: e?.message || 'Analyse indisponible.' };
+  }
+}
+
+/** Correction détaillée d'une session (question par question). Corrigé révélé seulement après remise. */
+export async function getExamCorrectionAction(sessionId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Non authentifié' as const };
+  try {
+    const correction = await getExamCorrection(supabaseAdmin, user.id, sessionId);
+    return { success: true as const, correction };
+  } catch (e: any) {
+    return { error: e?.message || 'Correction indisponible.' };
   }
 }
