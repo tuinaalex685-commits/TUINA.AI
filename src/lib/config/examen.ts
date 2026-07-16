@@ -46,3 +46,47 @@ export const BANQUE_REPARTITION_DIFFICULTE: Record<ExamenDifficulte, number> = {
  * est refusée (erreur permanente du job → jamais d'examen bancal en cache).
  */
 export const BANQUE_MIN_QUESTIONS_VALIDES = 18;
+
+// ============================================================================
+// EX.2 : DÉROULÉ D'UN EXAMEN (composition, barème, durée)
+// Tout est en config TS → ajustable sans migration. La composition FIXE par type
+// garantit un points_max IDENTIQUE entre toutes les variantes → notes comparables
+// entre étudiants et entre passages (décision figée, barème pondéré simple).
+// ============================================================================
+
+/** Barème PONDÉRÉ par type (défaut figé). Un vrai/faux ne vaut pas un classement. */
+export const POINTS_PAR_TYPE: Record<ExamenQuestionType, number> = {
+  qcm: 1,
+  vrai_faux: 0.5,
+  trous: 1,
+  association: 1.5,
+  classement: 1.5,
+};
+
+/** Budget temps indicatif par question (secondes) → durée d'examen AUTO-CALCULÉE. */
+export const TEMPS_PAR_TYPE_S: Record<ExamenQuestionType, number> = {
+  qcm: 75,
+  vrai_faux: 45,
+  trous: 60,
+  association: 90,
+  classement: 90,
+};
+
+/** Composition d'un examen STANDARD : nombre de questions par type (total = 15). */
+export const COMPOSITION_STANDARD: Record<ExamenQuestionType, number> = {
+  qcm: 5,
+  vrai_faux: 4,
+  trous: 3,
+  association: 2,
+  classement: 1,
+};
+
+/** Note maximale d'un examen. */
+export const NOTE_MAX = 20;
+
+/** Durée (secondes) calculée depuis une composition (compte par type). Arrondie à la minute sup. */
+export function dureeExamenSecondes(countsParType: Partial<Record<ExamenQuestionType, number>>): number {
+  let s = 0;
+  for (const t of EXAMEN_TYPES) s += (countsParType[t] || 0) * TEMPS_PAR_TYPE_S[t];
+  return Math.ceil(s / 60) * 60;
+}
