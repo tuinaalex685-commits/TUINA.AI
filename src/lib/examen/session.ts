@@ -144,12 +144,15 @@ async function finalize(deps: SessionDeps, session: any, _force: boolean): Promi
     const fresh = await readSession(deps, session.id);
     return finalResult(fresh);
   }
-  return { note: c.note, points: c.points, pointsMax: c.pointsMax, parQuestion: c.parQuestion, parTheme: c.parTheme, status: 'submitted' };
+  return {
+    documentId: session.document_id, note: c.note, points: c.points, pointsMax: c.pointsMax,
+    parQuestion: c.parQuestion, parTheme: c.parTheme, status: 'submitted',
+  };
 }
 
 function finalResult(session: any) {
   return {
-    note: Number(session.score), points: Number(session.points_obtenus),
+    documentId: session.document_id, note: Number(session.score), points: Number(session.points_obtenus),
     pointsMax: Number(session.points_max), parTheme: session.theme_results || [],
     status: 'submitted', alreadySubmitted: true,
   };
