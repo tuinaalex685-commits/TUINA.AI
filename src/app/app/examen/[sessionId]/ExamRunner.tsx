@@ -53,17 +53,19 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
     router.refresh();
   }, [sessionId, router]);
 
-  // Chrono client (cosmétique) : la deadline fait autorité côté serveur. À 0 → soumission auto.
+  // Chrono client (cosmétique) : la deadline fait autorité côté serveur. Décompte pur.
   useEffect(() => {
     if (initialView.status !== 'in_progress') return;
-    const t = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) { clearInterval(t); void finish(); return 0; }
-        return r - 1;
-      });
-    }, 1000);
+    const t = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
     return () => clearInterval(t);
-  }, [initialView.status, finish]);
+  }, [initialView.status]);
+
+  // À 0 → soumission auto (déférée hors du rendu et de l'updater : jamais de setState pendant le rendu).
+  useEffect(() => {
+    if (initialView.status !== 'in_progress' || remaining > 0) return;
+    const id = setTimeout(() => { void finish(); }, 0);
+    return () => clearTimeout(id);
+  }, [remaining, initialView.status, finish]);
 
   // Déjà soumis (reload d'une session terminée) → on redirige vers les résultats.
   useEffect(() => {
