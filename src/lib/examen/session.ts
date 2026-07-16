@@ -93,7 +93,11 @@ export async function getExamView(deps: SessionDeps, sessionId: string): Promise
   };
 }
 
-/** Enregistre une réponse (idempotent par position). REJETTE après la deadline (chrono serveur). */
+/**
+ * Enregistre une réponse. REJETTE après la deadline (chrono serveur). La fusion
+ * dans `answers` est ATOMIQUE (RPC examen_save_answer) → deux sauvegardes
+ * concurrentes ne s'écrasent jamais (anti lost-update). Idempotent par position.
+ */
 export async function saveAnswer(
   deps: SessionDeps, sessionId: string, position: number, answer: any
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
@@ -103,11 +107,23 @@ export async function saveAnswer(
     await finalize(deps, session, true); // le temps est écoulé → on clôt, la réponse est rejetée
     return { ok: false, reason: 'Temps écoulé.' };
   }
-  const answers = { ...(session.answers || {}), [String(position)]: answer };
-  const { error } = await deps.sessionDb.from('examen_sessions')
-    .update({ answers, updated_at: deps.now().toISOString() })
-    .eq('id', sessionId).eq('user_id', deps.userId).eq('status', 'in_progress');
-  if (error) throw new Error(`Sauvegarde réponse: ${error.message}`);
+
+  const { data, error } = await deps.sessionDb.rpc('examen_save_answer', {
+    p_session_id: sessionId, p_user_id: deps.userId, p_position: String(position), p_answer: answer ?? null,
+  });
+  if (error) {
+    // Dégradation gracieuse si la RPC n'est pas encore déployée (fonction absente) : ancien merge.
+    const missing = error.code === '42883' || error.code === 'PGRST202' || /examen_save_answer|function.*not|schema cache/i.test(error.message || '');
+    if (!missing) throw new Error(`Sauvegarde réponse: ${error.message}`);
+    const answers = { ...(session.answers || {}), [String(position)]: answer };
+    const { error: upErr } = await deps.sessionDb.from('examen_sessions')
+      .update({ answers, updated_at: deps.now().toISOString() })
+      .eq('id', sessionId).eq('user_id', deps.userId).eq('status', 'in_progress');
+    if (upErr) throw new Error(`Sauvegarde réponse: ${upErr.message}`);
+    return { ok: true };
+  }
+  // RETURNING vide → NULL : la session n'était plus 'in_progress' (course avec une soumission).
+  if (data !== true) return { ok: false, reason: 'Enregistrement refusé (session close).' };
   return { ok: true };
 }
 
