@@ -118,10 +118,13 @@ export async function getExamDashboard() {
     const h = byDoc.get(d.id) || [];
     const notes = h.map((x) => x.note).filter((n) => n !== null);
     // Adaptatif dispo après un 1er examen (diagnostic) tant que le cours n'est pas entièrement maîtrisé.
+    // Isolé : l'analyse d'un document ne doit JAMAIS faire échouer tout le tableau de bord.
     let canAdaptive = false;
     if (h.length > 0) {
-      const a = await getExamAnalyse(supabaseAdmin, userId, d.id);
-      canAdaptive = !a.resume.coursMaitrise;
+      try {
+        const a = await getExamAnalyse(supabaseAdmin, userId, d.id);
+        canAdaptive = !a.resume.coursMaitrise;
+      } catch { canAdaptive = false; }
     }
     return {
       documentId: d.id, nom: d.nom,

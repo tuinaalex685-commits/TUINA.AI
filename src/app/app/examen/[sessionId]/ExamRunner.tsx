@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { saveExamAnswer, submitExam } from '@/app/actions/examen';
@@ -84,6 +85,23 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%', maxWidth: 800, margin: '0 auto' }}>
+      {submitting && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,11,24,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+          <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.5, 0.3] }} transition={{ duration: 6, repeat: Infinity }}
+            style={{ position: 'absolute', width: '55vw', height: '55vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(70px)', pointerEvents: 'none' }} />
+          <motion.div initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            style={{ position: 'relative', textAlign: 'center', padding: '32px 40px', borderRadius: 24, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
+            <div style={{ position: 'relative', width: 72, height: 72, margin: '0 auto 18px' }}>
+              <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.08)', borderTopColor: '#a855f7', display: 'block' }} />
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📝</span>
+            </div>
+            <h3 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#f8fafc' }}>Correction de votre copie…</h3>
+            <p style={{ margin: '6px 0 0', fontSize: 13.5, color: '#94a3b8' }}>Votre note et l’analyse par thème arrivent.</p>
+          </motion.div>
+        </motion.div>
+      )}
       <div style={{
         position: 'sticky', top: 0, zIndex: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '14px 20px', marginBottom: 'var(--spacing-standard)', borderRadius: '12px',
