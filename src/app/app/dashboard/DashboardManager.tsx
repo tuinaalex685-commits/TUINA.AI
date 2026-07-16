@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge/Badge';
 import styles from './dashboard.module.css';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import OnboardingGuide from '@/components/onboarding/OnboardingGuide';
+import { markOnboardingSeen } from '@/app/actions/onboarding';
 import { 
   BookOpen, 
   Library, 
@@ -22,14 +24,19 @@ export default function DashboardManager({
   user,
   stats,
   objectifs,
-  flashcardsCount
+  flashcardsCount,
+  onboardingSeen = true,
 }: {
   user: any;
   stats: any;
   objectifs: any[];
   flashcardsCount: number;
+  onboardingSeen?: boolean;
 }) {
   const router = useRouter();
+  // Guide d'accueil : ouvert d'office à la 1re connexion (onboarding non vu) ; rejouable via le bouton.
+  const [guideOpen, setGuideOpen] = useState(!onboardingSeen);
+  const closeGuide = () => { setGuideOpen(false); markOnboardingSeen().catch(() => {}); };
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -56,9 +63,16 @@ export default function DashboardManager({
 
   return (
     <div className={styles.dashboard}>
-      <header className={styles.header}>
-        <h1 className={styles.welcome}>Bonjour, {user.email?.split('@')[0]} 👋</h1>
-        <p className={styles.subtitle}>Prêt à exceller ? Voici votre espace de pilotage.</p>
+      <OnboardingGuide open={guideOpen} onClose={closeGuide} />
+      <header className={styles.header} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 className={styles.welcome}>Bonjour, {user.email?.split('@')[0]} 👋</h1>
+          <p className={styles.subtitle}>Prêt à exceller ? Voici votre espace de pilotage.</p>
+        </div>
+        <button onClick={() => setGuideOpen(true)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 10, border: '1px solid var(--color-border)', background: 'var(--color-bg-main)', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          🧭 Revoir le guide
+        </button>
       </header>
 
       <div className={styles.grid}>

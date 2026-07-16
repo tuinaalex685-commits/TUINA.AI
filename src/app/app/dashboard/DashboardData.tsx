@@ -33,12 +33,19 @@ export default async function DashboardData({ user }: { user: any }) {
     redactionsCount: redactionsCount || 0,
   };
 
+  // Onboarding : on n'affiche le guide QUE si on lit explicitement onboarding_vu = false.
+  // (colonne absente / erreur / pas de ligne → on considère "déjà vu" pour ne rien casser).
+  const { data: roleRow, error: roleErr } = await supabase
+    .from('user_roles').select('onboarding_vu').eq('user_id', user.id).maybeSingle();
+  const onboardingSeen = roleErr ? true : (roleRow?.onboarding_vu ?? true);
+
   return (
-    <DashboardManager 
-      user={user} 
-      stats={stats} 
-      objectifs={objectifs || []} 
-      flashcardsCount={flashcardsCount || 0} 
+    <DashboardManager
+      user={user}
+      stats={stats}
+      objectifs={objectifs || []}
+      flashcardsCount={flashcardsCount || 0}
+      onboardingSeen={onboardingSeen}
     />
   );
 }
