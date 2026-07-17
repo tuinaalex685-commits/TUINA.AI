@@ -6,6 +6,7 @@ import styles from './EtudeEngine.module.css';
 import EtudeLoadingScreen from './EtudeLoadingScreen';
 import EtudeMarkdown from './EtudeMarkdown';
 import { useJob } from '@/lib/hooks/useJob';
+import { getAmorce, buildCloze, clozeOk, matchRemediation } from '@/lib/etude/pedagogy';
 
 export default function EtudeEngine({ 
   pdfId, 
@@ -55,11 +56,19 @@ export default function EtudeEngine({
   const [pratiqueFeedback, setPratiqueFeedback] = useState<{correct: boolean, explication: string} | null>(null);
   const [dynamicCas, setDynamicCas] = useState<any>(null); // Pour stocker un nouveau cas généré par l'IA
 
+  // États des paliers d'apprentissage (EG.2a) — participation active, jamais notée.
+  const [amorceRevealed, setAmorceRevealed] = useState(false); // P0 : dévoiler l'explication après anticipation
+  const [clozeInput, setClozeInput] = useState('');            // P1 : saisie du terme-clé
+  const [clozeRevealed, setClozeRevealed] = useState(false);   // P1 : révélation du terme
+
   // Mettre à jour l'étape ou le thème réinitialise les états dynamiques
   useEffect(() => {
     setDynamicCas(null);
     setUserPratiqueAnswer("");
     setPratiqueFeedback(null);
+    setAmorceRevealed(false);
+    setClozeInput('');
+    setClozeRevealed(false);
   }, [currentThemeIdx, step]);
 
   // Helper to get current objects
@@ -69,6 +78,10 @@ export default function EtudeEngine({
 
   // Helper pour obtenir le cas actif (celui de base, ou celui généré par l'IA)
   const activeCas = dynamicCas || (currentTheme?.cas_pratique_fond);
+
+  // Paliers dérivés du contenu déjà généré (déterministe, 0 appel IA).
+  const amorce = currentTheme ? getAmorce(currentTheme.explication) : null; // P0
+  const cloze = currentTheme ? buildCloze(currentTheme.explication) : null; // P1
 
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
@@ -249,8 +262,10 @@ export default function EtudeEngine({
 
     if (step === 'question_forme') {
       isCorrect = normalize(answer) === normalize(currentTheme.question_forme.reponse_correcte);
-      if (!isCorrect && currentTheme.remediation_forme?.length > 0) {
-        remediationText = currentTheme.remediation_forme[0].reexplication;
+      if (!isCorrect) {
+        // Remédiation CIBLÉE sur l'option choisie (déjà générée), avec repli bienveillant.
+        remediationText = matchRemediation(currentTheme.remediation_forme, answer)
+          || "Regarde à nouveau : la bonne réponse découle du concept que tu viens de lire.";
       }
     } else if (step === 'cas_pratique') {
       isCorrect = normalize(answer) === normalize(currentTheme.cas_pratique_fond.reponse_attendue_ou_choix);
@@ -316,20 +331,66 @@ export default function EtudeEngine({
         </div>
       )}
 
-      {/* EXPLICATION DU THEME */}
+      {/* COMPRENDRE (P0 Amorcer + P1 Récupérer) */}
       {step === 'explication' && currentTheme && (
         <div className={styles.card}>
-          <span className={`${styles.tag} ${styles.tagExplication}`}>Explication du concept</span>
+          <span className={`${styles.tag} ${styles.tagExplication}`}>Comprendre</span>
           <h2 className={styles.title}>{currentTheme.titre}</h2>
-          <EtudeMarkdown className={styles.content}>{currentTheme.explication}</EtudeMarkdown>
-          <button className={styles.primaryBtn} onClick={handleNextStep}>J&apos;ai compris, on teste !</button>
+
+          {/* P0 — Amorcer : anticiper AVANT de dévoiler la règle (participation active) */}
+          {!amorceRevealed ? (
+            <>
+              {amorce && (
+                <p className={styles.content} style={{ fontStyle: 'italic', background: 'var(--color-bg-secondary)', padding: 16, borderRadius: 8 }}>
+                  {amorce}
+                </p>
+              )}
+              <p className={styles.content} style={{ marginTop: 12 }}>Avant de lire : à ton avis, que dit le droit ici ?</p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                <button className={styles.primaryBtn} onClick={() => setAmorceRevealed(true)}>J&apos;ai une idée 💭</button>
+                <button className={styles.primaryBtn} style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => setAmorceRevealed(true)}>Découvrons ensemble 👀</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <EtudeMarkdown className={styles.content}>{currentTheme.explication}</EtudeMarkdown>
+
+              {/* P1 — Comprendre en récupérant : rappel actif du terme-clé (cloze) */}
+              {cloze && !clozeRevealed ? (
+                <div className={styles.feedbackBox} style={{ marginTop: 8 }}>
+                  <p className={styles.feedbackTitle}>Le mot juste, tu l&apos;as ?</p>
+                  <p className={styles.content} style={{ marginBottom: 12 }}>{cloze.contexte}</p>
+                  <input
+                    value={clozeInput}
+                    onChange={(e) => setClozeInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setClozeRevealed(true); }}
+                    placeholder="Le terme manquant…"
+                    style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', fontSize: 16 }}
+                  />
+                  <button className={styles.primaryBtn} style={{ marginTop: 12 }} onClick={() => setClozeRevealed(true)}>Voir le mot</button>
+                </div>
+              ) : (
+                <>
+                  {cloze && clozeRevealed && (
+                    <div className={styles.feedbackBox} style={{ marginTop: 8 }}>
+                      <p className={styles.content}>
+                        {clozeOk(clozeInput, cloze.reponse) ? '✅ Exactement — ' : 'Le mot juste : '}
+                        <strong>{cloze.reponse}</strong>
+                      </p>
+                    </div>
+                  )}
+                  <button className={styles.primaryBtn} style={{ marginTop: 16 }} onClick={handleNextStep}>Continuer</button>
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
 
-      {/* QUESTION DE FORME (Definition) */}
+      {/* RECONNAÎTRE LE PIÈGE (P2) */}
       {step === 'question_forme' && currentTheme && (
         <div className={styles.card}>
-          <span className={`${styles.tag} ${styles.tagQuestion}`}>Vérification (Concept)</span>
+          <span className={`${styles.tag} ${styles.tagQuestion}`}>Repérons le piège ensemble</span>
           <h2 className={styles.title}>{currentTheme.question_forme.question}</h2>
           
           <div className={styles.optionsGrid}>
@@ -362,14 +423,17 @@ export default function EtudeEngine({
             <div className={styles.feedbackBox}>
               {(selectedAnswer && normalize(selectedAnswer) === normalize(currentTheme.question_forme.reponse_correcte)) ? (
                 <>
-                  <p className={styles.feedbackTitle} style={{color: '#00C864'}}>Excellent !</p>
+                  <p className={styles.feedbackTitle} style={{color: '#00C864'}}>Bien vu ! 🎯</p>
                   <button className={styles.primaryBtn} onClick={handleNextStep}>Passer à la pratique</button>
                 </>
               ) : (
                 <>
-                  <p className={styles.feedbackTitle} style={{color: '#FF3232'}}>Aïe, pas tout à fait.</p>
+                  <p className={styles.feedbackTitle} style={{color: 'var(--color-primary)'}}>Bonne piste — voici la subtilité :</p>
                   <p className={styles.content} style={{marginBottom: 16}}>{remediation}</p>
-                  <button className={styles.primaryBtn} onClick={() => {setShowFeedback(false); setSelectedAnswer(null);}}>Réessayer la question</button>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button className={styles.primaryBtn} onClick={handleNextStep}>J&apos;ai compris, on continue</button>
+                    <button className={styles.primaryBtn} style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => {setShowFeedback(false); setSelectedAnswer(null);}}>Réessayer</button>
+                  </div>
                 </>
               )}
             </div>
