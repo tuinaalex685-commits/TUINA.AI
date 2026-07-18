@@ -60,6 +60,10 @@ export default function EtudeEngine({
   const [amorceRevealed, setAmorceRevealed] = useState(false); // P0 : dévoiler l'explication après anticipation
   const [clozeInput, setClozeInput] = useState('');            // P1 : saisie du terme-clé
   const [clozeRevealed, setClozeRevealed] = useState(false);   // P1 : révélation du terme
+  const [casEtape, setCasEtape] = useState(0);                 // P3 : 0 qualifier, 1 règle, 2 répondre
+  const [qualifierVu, setQualifierVu] = useState(false);       // P3 : notion en jeu révélée
+  const [revoirExplication, setRevoirExplication] = useState(false); // P3 : re-voir l'explication
+  const [indiceVu, setIndiceVu] = useState(false);             // P3 : indice (remediation_fond) révélé
 
   // Mettre à jour l'étape ou le thème réinitialise les états dynamiques
   useEffect(() => {
@@ -69,6 +73,10 @@ export default function EtudeEngine({
     setAmorceRevealed(false);
     setClozeInput('');
     setClozeRevealed(false);
+    setCasEtape(0);
+    setQualifierVu(false);
+    setRevoirExplication(false);
+    setIndiceVu(false);
   }, [currentThemeIdx, step]);
 
   // Helper to get current objects
@@ -444,34 +452,84 @@ export default function EtudeEngine({
       {/* CAS PRATIQUE (Fond) */}
       {step === 'cas_pratique' && currentTheme && activeCas && (
         <div className={styles.card}>
-          <span className={`${styles.tag} ${styles.tagCasPratique}`}>Mise en Situation (Pratique)</span>
+          <span className={`${styles.tag} ${styles.tagCasPratique}`}>Mets-le en pratique</span>
           <p className={styles.content} style={{ fontStyle: 'italic', background: 'var(--color-bg-secondary)', padding: 16, borderRadius: 8 }}>
             {activeCas.situation}
           </p>
-          <h2 className={styles.title} style={{ fontSize: 22 }}>{activeCas.question}</h2>
-          
-          {!pratiqueFeedback && (
+
+          {/* P3 — Appliquer par étapes : on gravit le cas (qualifier → règle → conclure) */}
+          {!pratiqueFeedback && casEtape < 2 && (
+            <div className={styles.feedbackBox} style={{ marginTop: 8 }}>
+              {casEtape === 0 ? (
+                <>
+                  <p className={styles.feedbackTitle}>Étape 1 · Qualifier</p>
+                  <p className={styles.content} style={{ marginBottom: 12 }}>De quoi parle cette situation ? Quelle notion de ce thème est en jeu ?</p>
+                  {!qualifierVu ? (
+                    <button className={styles.primaryBtn} onClick={() => setQualifierVu(true)}>Voir la notion en jeu</button>
+                  ) : (
+                    <>
+                      <p className={styles.content} style={{ marginBottom: 12 }}>👉 Ici, il s&apos;agit de : <strong>{currentTheme.titre}</strong>.</p>
+                      <button className={styles.primaryBtn} onClick={() => setCasEtape(1)}>Étape suivante</button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className={styles.feedbackTitle}>Étape 2 · La règle</p>
+                  <p className={styles.content} style={{ marginBottom: 12 }}>Quelle règle as-tu retenue pour trancher ce genre de situation ?</p>
+                  <button
+                    className={styles.primaryBtn}
+                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', marginBottom: 12 }}
+                    onClick={() => setRevoirExplication((v) => !v)}
+                  >
+                    {revoirExplication ? "Masquer l'explication" : "Revoir l'explication"}
+                  </button>
+                  {revoirExplication && (
+                    <div style={{ marginBottom: 12 }}><EtudeMarkdown className={styles.content}>{currentTheme.explication}</EtudeMarkdown></div>
+                  )}
+                  <div><button className={styles.primaryBtn} onClick={() => setCasEtape(2)}>J&apos;ai la règle, je réponds</button></div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Étape 3 — Conclure : la réponse complète (évaluation IA existante, inchangée) */}
+          {!pratiqueFeedback && casEtape === 2 && (
             <div style={{ marginTop: 20 }}>
-              <textarea 
+              <h2 className={styles.title} style={{ fontSize: 22 }}>{activeCas.question}</h2>
+              <textarea
                 value={userPratiqueAnswer}
                 onChange={(e) => setUserPratiqueAnswer(e.target.value)}
-                placeholder="Rédigez votre réponse ici (l'IA évaluera votre compréhension)..."
+                placeholder="Rédige ta réponse ici — pense à qualifier, citer la règle, puis conclure…"
                 disabled={isEvaluating}
-                style={{ 
-                  width: '100%', minHeight: 120, padding: 16, 
-                  borderRadius: 8, border: '1px solid var(--color-border)', 
+                style={{
+                  width: '100%', minHeight: 120, padding: 16,
+                  borderRadius: 8, border: '1px solid var(--color-border)',
                   background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)',
                   fontSize: 16, fontFamily: 'inherit', resize: 'vertical'
                 }}
               />
-              <button 
-                className={styles.primaryBtn} 
-                style={{ marginTop: 16, opacity: (!userPratiqueAnswer.trim() || isEvaluating) ? 0.5 : 1 }}
-                disabled={!userPratiqueAnswer.trim() || isEvaluating}
-                onClick={submitPratiqueEvaluation}
-              >
-                {isEvaluating ? "L'IA analyse votre réponse..." : "Soumettre à l'IA"}
-              </button>
+              {currentTheme.remediation_fond?.length > 0 && (
+                indiceVu ? (
+                  <p className={styles.content} style={{ marginTop: 12, background: 'var(--color-bg-secondary)', padding: 12, borderRadius: 8 }}>
+                    💡 {currentTheme.remediation_fond[0].reexplication}
+                  </p>
+                ) : (
+                  <button className={styles.primaryBtn} style={{ marginTop: 12, background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => setIndiceVu(true)}>
+                    Besoin d&apos;un indice ?
+                  </button>
+                )
+              )}
+              <div>
+                <button
+                  className={styles.primaryBtn}
+                  style={{ marginTop: 16, opacity: (!userPratiqueAnswer.trim() || isEvaluating) ? 0.5 : 1 }}
+                  disabled={!userPratiqueAnswer.trim() || isEvaluating}
+                  onClick={submitPratiqueEvaluation}
+                >
+                  {isEvaluating ? "L'IA analyse ta réponse…" : "Soumettre ma réponse"}
+                </button>
+              </div>
             </div>
           )}
 
