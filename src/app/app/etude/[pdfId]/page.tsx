@@ -25,7 +25,7 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
   // laissait la page bloquée sur l'écran de génération à 95%.
   const { data: ownedDoc } = await supabaseAdmin
     .from('documents')
-    .select('id')
+    .select('id, intelligence_pedagogique')
     .eq('id', pdfId)
     .eq('user_id', user.id)
     .maybeSingle();
@@ -126,11 +126,12 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
   }
 
   return (
-    <EtudeEngine 
-      pdfId={pdfId} 
-      coursId={cours.id} 
-      sections={sections} 
+    <EtudeEngine
+      pdfId={pdfId}
+      coursId={cours.id}
+      sections={sections}
       themes={themes}
+      intelligence={(ownedDoc as any)?.intelligence_pedagogique || null}
       initialState={{
         sectionIdx: startSectionIdx,
         themeIdx: startThemeIdx,

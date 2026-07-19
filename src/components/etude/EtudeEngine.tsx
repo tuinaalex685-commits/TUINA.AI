@@ -6,14 +6,15 @@ import styles from './EtudeEngine.module.css';
 import EtudeLoadingScreen from './EtudeLoadingScreen';
 import EtudeMarkdown from './EtudeMarkdown';
 import { useJob } from '@/lib/hooks/useJob';
-import { getAmorce, buildCloze, clozeOk, matchRemediation } from '@/lib/etude/pedagogy';
+import { getAmorce, buildCloze, clozeOk, matchRemediation, buildExpliqueAutrement } from '@/lib/etude/pedagogy';
 
-export default function EtudeEngine({ 
-  pdfId, 
-  coursId, 
-  initialState, 
-  sections, 
-  themes 
+export default function EtudeEngine({
+  pdfId,
+  coursId,
+  initialState,
+  sections,
+  themes,
+  intelligence
 }: any) {
   const router = useRouter();
   const [loading, setLoading] = useState(!coursId);
@@ -64,6 +65,9 @@ export default function EtudeEngine({
   const [qualifierVu, setQualifierVu] = useState(false);       // P3 : notion en jeu révélée
   const [revoirExplication, setRevoirExplication] = useState(false); // P3 : re-voir l'explication
   const [indiceVu, setIndiceVu] = useState(false);             // P3 : indice (remediation_fond) révélé
+  const [aideOuverte, setAideOuverte] = useState(false);       // EG.2b : panneau « Explore autrement »
+  const [reexIndex, setReexIndex] = useState(0);               // EG.2b : angle de ré-explication courant
+  const [aideContenu, setAideContenu] = useState<{ titre: string; texte: string } | null>(null);
 
   // Mettre à jour l'étape ou le thème réinitialise les états dynamiques
   useEffect(() => {
@@ -77,6 +81,9 @@ export default function EtudeEngine({
     setQualifierVu(false);
     setRevoirExplication(false);
     setIndiceVu(false);
+    setAideOuverte(false);
+    setReexIndex(0);
+    setAideContenu(null);
   }, [currentThemeIdx, step]);
 
   // Helper to get current objects
@@ -90,6 +97,18 @@ export default function EtudeEngine({
   // Paliers dérivés du contenu déjà généré (déterministe, 0 appel IA).
   const amorce = currentTheme ? getAmorce(currentTheme.explication) : null; // P0
   const cloze = currentTheme ? buildCloze(currentTheme.explication) : null; // P1
+  // EG.2b — angles « Explique autrement » (remédiations + intelligence du cours, déjà générés).
+  const angles = currentTheme ? buildExpliqueAutrement(currentTheme, intelligence) : { reexplications: [], confusions: [], exceptions: [], examen: [] };
+  const aTotalAngles = angles.reexplications.length + angles.confusions.length + angles.exceptions.length + angles.examen.length;
+  const montrerAutreAngle = () => {
+    if (reexIndex < angles.reexplications.length) {
+      setAideContenu({ titre: 'Vu autrement', texte: angles.reexplications[reexIndex] });
+      setReexIndex(reexIndex + 1);
+    } else {
+      setAideContenu({ titre: 'Tu l’as vu sous tous ses angles 🎯', texte: 'Le mieux maintenant, c’est d’avancer et de t’entraîner — l’Examen te dira où tu brilles déjà.' });
+    }
+  };
+  const chipStyle: React.CSSProperties = { padding: '8px 12px', borderRadius: 20, border: '1px solid var(--color-border)', background: 'var(--color-bg-main)', color: 'var(--color-text-main)', cursor: 'pointer', fontSize: 13, fontWeight: 600 };
 
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
@@ -362,6 +381,41 @@ export default function EtudeEngine({
           ) : (
             <>
               <EtudeMarkdown className={styles.content}>{currentTheme.explication}</EtudeMarkdown>
+
+              {/* EG.2b — « Explique autrement » : angles déjà générés, à la demande (0 appel IA) */}
+              {aTotalAngles > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  {!aideOuverte ? (
+                    <button className={styles.primaryBtn} style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => setAideOuverte(true)}>
+                      🤔 Pas clair ? Explore autrement
+                    </button>
+                  ) : (
+                    <div className={styles.feedbackBox}>
+                      <p className={styles.feedbackTitle}>Explore autrement</p>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: aideContenu ? 12 : 0 }}>
+                        {angles.reexplications.length > 0 && (
+                          <button style={chipStyle} onClick={montrerAutreAngle}>✨ Explique-moi autrement</button>
+                        )}
+                        {angles.confusions.length > 0 && (
+                          <button style={chipStyle} onClick={() => setAideContenu({ titre: '🔀 À ne pas confondre', texte: angles.confusions.join('  ·  ') })}>À ne pas confondre</button>
+                        )}
+                        {angles.exceptions.length > 0 && (
+                          <button style={chipStyle} onClick={() => setAideContenu({ titre: '🚫 Les exceptions', texte: angles.exceptions.join('  ·  ') })}>Les exceptions</button>
+                        )}
+                        {angles.examen.length > 0 && (
+                          <button style={chipStyle} onClick={() => setAideContenu({ titre: '🎯 Ça tombe à l’examen', texte: angles.examen.join('  ·  ') })}>À l’examen</button>
+                        )}
+                      </div>
+                      {aideContenu && (
+                        <div style={{ padding: 12, borderRadius: 8, background: 'var(--color-bg-main)', border: '1px solid var(--color-border)' }}>
+                          <p style={{ fontWeight: 700, margin: '0 0 6px', color: 'var(--color-text-main)' }}>{aideContenu.titre}</p>
+                          <p className={styles.content} style={{ margin: 0 }}>{aideContenu.texte}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* P1 — Comprendre en récupérant : rappel actif du terme-clé (cloze) */}
               {cloze && !clozeRevealed ? (

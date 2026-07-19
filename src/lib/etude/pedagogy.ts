@@ -82,6 +82,30 @@ export function clozeOk(saisie: string, reponse: string): boolean {
 export interface RemediationBranche { blocage?: string; reexplication?: string }
 
 /**
+ * EG.2b — « Explique autrement » : rassemble les ANGLES déjà générés qu'on peut
+ * révéler à la demande (0 appel IA). Sources : les ré-explications des remédiations
+ * (thème) + l'intelligence pédagogique du cours (notions confondues, exceptions,
+ * ce qui est évalué à l'examen). Chaque catégorie est bornée et dédupliquée ;
+ * une catégorie vide n'affiche simplement pas de bouton (dégradation gracieuse).
+ */
+export function buildExpliqueAutrement(theme: any, intelligence: any): {
+  reexplications: string[]; confusions: string[]; exceptions: string[]; examen: string[];
+} {
+  const arr = (a: any): string[] => (Array.isArray(a) ? a.map((s) => String(s ?? '').trim()).filter(Boolean) : []);
+  const uniq = (a: string[]) => [...new Set(a)];
+  const reex = [...(theme?.remediation_forme || []), ...(theme?.remediation_fond || [])]
+    .map((b: RemediationBranche) => (b && b.reexplication ? String(b.reexplication).trim() : ''))
+    .filter(Boolean);
+  const intel = intelligence || {};
+  return {
+    reexplications: uniq(reex),
+    confusions: uniq([...arr(intel.notions_souvent_confondues), ...arr(intel.distinctions_doctrinales)]).slice(0, 4),
+    exceptions: uniq(arr(intel.exceptions)).slice(0, 4),
+    examen: uniq([...arr(intel.elements_evalues_examen), ...arr(intel.questions_qui_tombent_souvent)]).slice(0, 4),
+  };
+}
+
+/**
  * P2 — Remédiation ciblée : choisit la ré-explication déjà générée la plus proche
  * de l'option choisie par l'étudiant (matching flou sur `blocage`). À défaut, la
  * première branche. `null` si aucune remédiation → le lecteur affiche un repli
