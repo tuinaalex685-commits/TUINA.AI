@@ -109,6 +109,11 @@ export default function EtudeEngine({
     }
   };
   const chipStyle: React.CSSProperties = { padding: '8px 12px', borderRadius: 20, border: '1px solid var(--color-border)', background: 'var(--color-bg-main)', color: 'var(--color-text-main)', cursor: 'pointer', fontSize: 13, fontWeight: 600 };
+  // EG.2c — liens inter-thèmes : fil sémantique déjà généré (niveau cours) + fil structurel (position).
+  const liensCours: string[] = Array.isArray(intelligence?.liens_inter_chapitres)
+    ? intelligence.liens_inter_chapitres.map((x: any) => String(x ?? '').trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const isFirstTheme = currentSectionIdx === 0 && currentThemeIdx === 0;
 
   // Helper pour normaliser les chaines (gérer la ponctuation IA)
   const normalize = (s?: string) => s?.trim().toLowerCase().replace(/[.,!?;:]/g, "") || "";
@@ -354,6 +359,15 @@ export default function EtudeEngine({
           <span className={`${styles.tag} ${styles.tagSynthese}`}>Introduction de Section</span>
           <h2 className={styles.title}>{currentSection.titre}</h2>
           <EtudeMarkdown className={styles.content}>{currentSection.synthese}</EtudeMarkdown>
+          {/* EG.2c — le fil du cours (liens déjà générés au niveau du cours) */}
+          {liensCours.length > 0 && (
+            <div className={styles.feedbackBox} style={{ marginTop: 12 }}>
+              <p className={styles.feedbackTitle}>🔗 Le fil du cours</p>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--color-text-secondary)' }}>
+                {liensCours.map((l, i) => <li key={i} style={{ marginBottom: 4 }}>{l}</li>)}
+              </ul>
+            </div>
+          )}
           <button className={styles.primaryBtn} onClick={handleNextStep}>Démarrer l&apos;étude</button>
         </div>
       )}
@@ -362,6 +376,10 @@ export default function EtudeEngine({
       {step === 'explication' && currentTheme && (
         <div className={styles.card}>
           <span className={`${styles.tag} ${styles.tagExplication}`}>Comprendre</span>
+          {/* EG.2c — fil structurel : ce thème prolonge le précédent */}
+          {!isFirstTheme && (
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>🔗 Dans la continuité de ce que tu viens de voir.</p>
+          )}
           <h2 className={styles.title}>{currentTheme.titre}</h2>
 
           {/* P0 — Amorcer : anticiper AVANT de dévoiler la règle (participation active) */}
@@ -574,23 +592,32 @@ export default function EtudeEngine({
                   </button>
                 )
               )}
-              <div>
+              {/* EG.2d — la mise en situation est un ENTRAÎNEMENT (l'Examen mesure) : on peut passer */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
                 <button
                   className={styles.primaryBtn}
-                  style={{ marginTop: 16, opacity: (!userPratiqueAnswer.trim() || isEvaluating) ? 0.5 : 1 }}
+                  style={{ opacity: (!userPratiqueAnswer.trim() || isEvaluating) ? 0.5 : 1 }}
                   disabled={!userPratiqueAnswer.trim() || isEvaluating}
                   onClick={submitPratiqueEvaluation}
                 >
                   {isEvaluating ? "L'IA analyse ta réponse…" : "Soumettre ma réponse"}
                 </button>
+                {!isEvaluating && (
+                  <button className={styles.primaryBtn} style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={handleNextStep}>
+                    Passer pour l&apos;instant
+                  </button>
+                )}
               </div>
+              <p style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', marginTop: 10 }}>
+                C&apos;est un entraînement, sans note — ton vrai test, ce sera l&apos;Examen.
+              </p>
             </div>
           )}
 
           {pratiqueFeedback && (
             <div className={styles.feedbackBox} style={{ marginTop: 24 }}>
-              <p className={styles.feedbackTitle} style={{ color: pratiqueFeedback.correct ? '#00C864' : '#FF3232' }}>
-                {pratiqueFeedback.correct ? "Excellent ! L'IA valide." : "Pas tout à fait correct..."}
+              <p className={styles.feedbackTitle} style={{ color: pratiqueFeedback.correct ? '#00C864' : 'var(--color-primary)' }}>
+                {pratiqueFeedback.correct ? "Bien joué ! 🎯" : "Presque — affinons ensemble :"}
               </p>
               <p className={styles.content}>{pratiqueFeedback.explication}</p>
               
@@ -599,15 +626,17 @@ export default function EtudeEngine({
                   Continuer
                 </button>
               ) : (
-                <button className={styles.primaryBtn} style={{ marginTop: 16, background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => {
-                  setUserPratiqueAnswer("");
-                  setPratiqueFeedback(null);
-                  // Si l'IA a généré un nouveau cas, il est déjà dans dynamicCas (grâce à useEffect ou au setState dans submitPratiqueEvaluation)
-                }}>
-                  {dynamicCas && dynamicCas.situation !== currentTheme.cas_pratique_fond.situation 
-                    ? "Réessayer avec un nouveau cas" 
-                    : "Réessayer cette question"}
-                </button>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
+                  <button className={styles.primaryBtn} onClick={handleNextStep}>Continuer</button>
+                  <button className={styles.primaryBtn} style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)' }} onClick={() => {
+                    setUserPratiqueAnswer("");
+                    setPratiqueFeedback(null);
+                  }}>
+                    {dynamicCas && dynamicCas.situation !== currentTheme.cas_pratique_fond.situation
+                      ? "Réessayer avec un nouveau cas"
+                      : "Réessayer"}
+                  </button>
+                </div>
               )}
             </div>
           )}
