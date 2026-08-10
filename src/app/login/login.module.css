@@ -91,22 +91,82 @@
   font-size: 15px;
 }
 
+.trustRow {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8FC29E;
+}
+
 .form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
-/* Force text colors in inputs to be visible if the global input has dark text */
+/* Les composants Input/Button partagés (Input.module.css, Button.module.css) portent les tokens
+   du thème clair de l'app — sur cet écran sombre glassmorphism, on les réhabille pour qu'ils aient
+   l'air dessinés pour cet écran plutôt que posés dessus. !important : on cible les balises/éléments
+   globaux (pas les classes hashées des modules), donc pas d'autre moyen fiable de gagner la cascade. */
 .form :global(label) {
-  color: #e5e7eb !important;
+  color: #cbd5e1 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.form :global(input) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  font-size: 15.5px !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease !important;
+}
+
+.form :global(input::placeholder) {
+  color: rgba(226, 232, 240, 0.35) !important;
+}
+
+.form :global(input:focus) {
+  border-color: #7C5CFF !important;
+  box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  outline: none !important;
 }
 
 .actions {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-small);
-  margin-top: 12px;
+  margin-top: 4px;
+}
+
+.actions :global(button) {
+  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%) !important;
+  border: none !important;
+  padding: 15px !important;
+  border-radius: 12px !important;
+  font-size: 15.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.35) !important;
+  transition: transform 200ms ease, box-shadow 200ms ease !important;
+}
+
+.actions :global(button:hover:not(:disabled)) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 12px 32px rgba(124, 92, 255, 0.45) !important;
+}
+
+.actions :global(button:disabled) {
+  opacity: 0.5 !important;
 }
 
 .message {

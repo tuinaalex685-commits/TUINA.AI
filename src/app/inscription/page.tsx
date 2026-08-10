@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import styles from '../login/login.module.css';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { signUpFree } from '@/app/actions/auth';
 import { motion } from 'framer-motion';
 
 export default function InscriptionPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,9 +28,15 @@ export default function InscriptionPage() {
     if (result.error) {
       setMessage(result.error);
       setLoading(false);
-    } else {
+    } else if (result.needsConfirmation) {
+      // Confirmation email requise (Option A) : le compte existe mais n'a pas encore de session.
       setDone(true);
       setLoading(false);
+    } else {
+      // Confirmation désactivée côté Supabase (Option B) : signUp() a déjà ouvert une session,
+      // les cookies sont posés — direction directe vers l'app, pas de "vérifie ta boîte mail" trompeur.
+      router.push('/app/dashboard');
+      router.refresh();
     }
   };
 
@@ -49,6 +57,10 @@ export default function InscriptionPage() {
           <div className={styles.header}>
             <h1 className={styles.logo}>Tuina.ai</h1>
             <p className={styles.subtitle}>Découvre SJP gratuitement</p>
+            <div className={styles.trustRow}>
+              <span>✓ Sans carte bancaire</span>
+              <span>✓ Accès immédiat</span>
+            </div>
           </div>
 
           {done ? (
