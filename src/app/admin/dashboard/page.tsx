@@ -4,7 +4,7 @@ import SaasMetricsDashboard from '@/components/admin/SaasMetricsDashboard';
 import GeminiCostPanel from '@/components/admin/GeminiCostPanel';
 import AdminInsights from '@/components/admin/AdminInsights';
 import Link from 'next/link';
-import { KeyRound, ChevronRight } from 'lucide-react';
+import { KeyRound, ChevronRight, Library } from 'lucide-react';
 import styles from './page.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -137,6 +137,25 @@ export default async function AdminDashboard() {
               </div>
               <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
                 Générez des codes pour vos ventes WhatsApp, et activez ou désactivez l'accès des étudiants à la plateforme en un clic.
+              </p>
+              <div className={styles.adminCardArrow}>
+                <ChevronRight size={20} />
+              </div>
+            </div>
+          </Link>
+
+          <Link href="/admin/dashboard/catalogue" className={styles.adminCard}>
+            <div className={styles.adminCardInner}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                <div style={{ background: 'rgba(27, 58, 107, 0.1)', color: 'var(--color-primary)', padding: '12px', borderRadius: '12px' }}>
+                  <Library size={24} />
+                </div>
+                <h3 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '18px', fontWeight: 600 }}>
+                  Catalogue public
+                </h3>
+              </div>
+              <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+                Publiez des cours déjà générés pour que les étudiants les découvrent sans les importer eux-mêmes.
               </p>
               <div className={styles.adminCardArrow}>
                 <ChevronRight size={20} />

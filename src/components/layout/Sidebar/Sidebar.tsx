@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/app/dashboard', icon: '📊' },
+  { label: 'Catalogue', path: '/app/catalogue', icon: '🏛️' },
   { label: 'Objectifs', path: '/app/objectifs', icon: '🎯' },
   { label: 'Matières', path: '/app/matieres', icon: '📚' },
   { label: 'Étude Guidée', path: '/app/etude', icon: '📖' },
