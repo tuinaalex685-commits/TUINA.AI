@@ -443,10 +443,11 @@ export async function runWorker(workerUrlStr?: string) {
 }
 
 // SÉCURITÉ : n'autoriser que Vercel Cron (Authorization) ou nos appels internes (x-worker-secret).
-// Permissif tant que CRON_SECRET n'est pas configuré (aucune rupture avant que le secret soit posé).
+// FAIL CLOSED : si CRON_SECRET n'est pas configuré dans l'environnement, la route refuse TOUT appel —
+// jamais de repli permissif (CRON_SECRET est posé en production ; en local, l'ajouter à .env.local).
 function workerAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
+  if (!secret) return false;
   const auth = req.headers.get('authorization') || '';
   const custom = req.headers.get('x-worker-secret') || '';
   return auth === `Bearer ${secret}` || custom === secret;

@@ -52,6 +52,42 @@ function trackSaaSUsage(
   });
 }
 
+// Coupe-circuit budgétaire global (tous utilisateurs confondus). Calculé en temps réel sur saas_metrics
+// (déjà alimentée par trackSaaSUsage) — aucune nouvelle table nécessaire. Valeurs par défaut prudentes,
+// surchargeables via l'environnement sans redéploiement de code.
+export const GEMINI_DAILY_BUDGET_USD = Number(process.env.GEMINI_DAILY_BUDGET_USD || '5');
+export const GEMINI_MONTHLY_BUDGET_USD = Number(process.env.GEMINI_MONTHLY_BUDGET_USD || '50');
+
+async function checkGeminiBudget(): Promise<void> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const [dayRes, monthRes] = await Promise.all([
+    supabaseAdmin.from('saas_metrics').select('cost_usd').gte('created_at', startOfDay),
+    supabaseAdmin.from('saas_metrics').select('cost_usd').gte('created_at', startOfMonth),
+  ]);
+
+  // Si la lecture échoue (table absente, réseau...), on n'aveugle jamais le système : on laisse passer
+  // plutôt que de bloquer toute la plateforme sur une erreur d'observabilité.
+  if (dayRes.error || monthRes.error) {
+    console.error('[GEMINI_BUDGET] Impossible de vérifier le budget, appel autorisé par défaut:', dayRes.error?.message || monthRes.error?.message);
+    return;
+  }
+
+  const daySpend = (dayRes.data || []).reduce((sum, r: any) => sum + (Number(r.cost_usd) || 0), 0);
+  const monthSpend = (monthRes.data || []).reduce((sum, r: any) => sum + (Number(r.cost_usd) || 0), 0);
+
+  if (daySpend >= GEMINI_DAILY_BUDGET_USD) {
+    console.error(`[GEMINI_BUDGET] Budget JOURNALIER dépassé : $${daySpend.toFixed(4)} / $${GEMINI_DAILY_BUDGET_USD}`);
+    throw new AIError(`Budget Gemini journalier atteint ($${GEMINI_DAILY_BUDGET_USD}). Génération suspendue jusqu'à demain.`, 'BUDGET_EXCEEDED');
+  }
+  if (monthSpend >= GEMINI_MONTHLY_BUDGET_USD) {
+    console.error(`[GEMINI_BUDGET] Budget MENSUEL dépassé : $${monthSpend.toFixed(4)} / $${GEMINI_MONTHLY_BUDGET_USD}`);
+    throw new AIError(`Budget Gemini mensuel atteint ($${GEMINI_MONTHLY_BUDGET_USD}). Génération suspendue jusqu'au mois prochain.`, 'BUDGET_EXCEEDED');
+  }
+}
+
 // Fonction utilitaire pour instancier le SDK
 function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -152,8 +188,9 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
 
   try {
+    await checkGeminiBudget();
     const ai = getAIClient();
-    
+
     // Construction des contenus
     const contents: any[] = [];
     if (pdfBase64) {
@@ -232,8 +269,9 @@ export async function streamStructuredJSON(systemInstruction: string, prompt: st
   console.log(`\n[IA_START] Action: streamStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
 
+  await checkGeminiBudget();
   const ai = getAIClient();
-  
+
   const contents: any[] = [];
   if (pdfBase64) {
     contents.push({

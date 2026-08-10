@@ -1045,10 +1045,11 @@ function workerUrlFrom(req: NextRequest) {
 
 // SÉCURITÉ : le worker ne doit pas être déclenchable par n'importe qui (anti abus/DoS). On exige le secret
 // CRON_SECRET (envoyé par Vercel Cron via Authorization, et par nos déclencheurs internes via x-worker-secret).
-// Tant que CRON_SECRET n'est PAS configuré → permissif (aucune rupture avant que tu poses le secret).
+// FAIL CLOSED : si CRON_SECRET n'est pas configuré dans l'environnement, la route refuse TOUT appel —
+// jamais de repli permissif (CRON_SECRET est posé en production ; en local, l'ajouter à .env.local).
 function workerAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
+  if (!secret) return false;
   const auth = req.headers.get('authorization') || '';
   const custom = req.headers.get('x-worker-secret') || '';
   return auth === `Bearer ${secret}` || custom === secret;
