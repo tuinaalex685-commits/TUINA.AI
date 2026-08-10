@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isPremium } from '@/lib/plan';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
@@ -15,6 +16,12 @@ export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' };
+
+  // Rédaction = fonctionnalité Premium (verrou total, cf. Phase 2). Vérifié ici, côté serveur —
+  // jamais seulement via un verrou frontend.
+  if (type === 'redaction' && !(await isPremium(supabase, user.email))) {
+    return { error: "La Rédaction est réservée aux membres Premium." };
+  }
 
   // Quota Rédaction (3 corrections IA / jour) : jusqu'ici vérifié UNIQUEMENT côté client
   // (RedactionManager.tsx) — contournable en appelant cette action directement. Revérifié ici,

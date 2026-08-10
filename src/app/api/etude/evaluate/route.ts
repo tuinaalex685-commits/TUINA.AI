@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isPremium } from '@/lib/plan';
 import { Type, Schema } from '@google/genai';
 import { generateStructuredJSON } from '@/lib/gemini';
 
@@ -39,6 +41,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
+    // FREE : 10 corrections de cas pratique gratuites à vie, puis Premium illimité. Coût réel
+    // observé ~0,001 $/correction (saas_metrics) — la limite protège du volume/abus, pas du coût
+    // unitaire, donc généreuse plutôt qu'un chiffre calé sur un coût qui n'est plus le bon.
+    const premium = await isPremium(supabase, user.email);
+    let freeCasCount = 0;
+    if (!premium) {
+      const { data: role } = await supabaseAdmin
+        .from('user_roles').select('free_cas_pratique_count').eq('user_id', user.id).maybeSingle();
+      freeCasCount = role?.free_cas_pratique_count || 0;
+      if (freeCasCount >= 10) {
+        return NextResponse.json({ error: "Vous avez utilisé vos 10 corrections de cas pratique gratuites. Passez Premium pour continuer sans limite." }, { status: 403 });
+      }
+    }
+
     const prompt = `Tu es un Maître de Conférences en Droit exigeant, mais ton but est l'apprentissage adaptatif de l'étudiant.
 Concept enseigné : "${themeTitre}"
 Explication du concept : "${themeExplication}"
@@ -71,6 +87,10 @@ Ta tâche : ÉVALUATION ADAPTATIVE ET PROGRESSIVE
       { userId: user.id, feature: 'etude_evaluate' },
       0.3
     );
+
+    if (!premium) {
+      await supabaseAdmin.from('user_roles').update({ free_cas_pratique_count: freeCasCount + 1 }).eq('user_id', user.id);
+    }
 
     return NextResponse.json(generatedData);
 

@@ -23,27 +23,29 @@ export async function loginWithAccessCode(email: string, secret: string) {
 
       const userRole = roleData?.role || 'student';
 
-      // VERIFICATION STRICTE DU CODE D'ACCES POUR LES ETUDIANTS
+      // VERIFICATION DU CODE D'ACCES POUR LES ETUDIANTS — UNIQUEMENT SI CE MOT DE PASSE EST
+      // UN CODE. Un étudiant Free (inscription libre, Phase 2) se connecte avec un vrai mot de
+      // passe personnel qui ne correspond à aucun access_codes.code : c'est un état valide
+      // depuis Phase 2, pas une erreur — le statut Free/Premium réel est recalculé à chaque
+      // requête par le middleware via l'EMAIL, jamais via ce mot de passe.
       if (userRole !== 'admin') {
         const { data: accessCode } = await supabaseAdmin
           .from('access_codes')
           .select('*')
           .eq('code', secret)
-          .single();
+          .maybeSingle();
 
-        if (!accessCode) {
-           return { error: "Accès refusé. Ce code d'accès n'existe plus ou a été supprimé." };
-        }
-        if (accessCode.status === 'inactive') {
-          return { error: "Ce code d'accès a été désactivé par l'administrateur." };
-        }
-        if (accessCode.status === 'blocked') {
-          return { error: "Votre accès à la plateforme a été bloqué." };
-        }
-        
-        // S'assurer que l'email correspond au code (en ignorant la casse)
-        if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
-          return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
+        if (accessCode) {
+          if (accessCode.status === 'inactive') {
+            return { error: "Ce code d'accès a été désactivé par l'administrateur." };
+          }
+          if (accessCode.status === 'blocked') {
+            return { error: "Votre accès à la plateforme a été bloqué." };
+          }
+          // S'assurer que l'email correspond au code (en ignorant la casse)
+          if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
+            return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
+          }
         }
       }
 
@@ -212,6 +214,34 @@ export async function loginWithAccessCode(email: string, secret: string) {
 
   } catch (err: any) {
     console.error("Auth server error:", err);
+    return { error: "Une erreur inattendue s'est produite." };
+  }
+}
+
+// Inscription Free (Phase 2) — le SEUL chemin de création de compte qui passe par le flux
+// PUBLIC signUp() de Supabase (mot de passe réel, confirmation email réelle). Différent de
+// loginWithAccessCode ci-dessus, qui crée un compte via l'API admin (email pré-confirmé,
+// réservé au parcours "code d'accès reçu après paiement"). Aucun access_codes créé ici :
+// l'utilisateur reste Free tant qu'aucun code actif ne lui est assigné par un admin.
+export async function signUpFree(email: string, password: string) {
+  try {
+    if (!email || !password) return { error: "Email et mot de passe requis." };
+    if (password.length < 8) return { error: "Le mot de passe doit contenir au moins 8 caractères." };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) {
+      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
+        return { error: "Un compte existe déjà avec cet email. Connectez-vous plutôt." };
+      }
+      return { error: error.message };
+    }
+    if (!data.user) return { error: "Impossible de créer le compte." };
+
+    return { success: true, needsConfirmation: !data.session };
+  } catch (err: any) {
+    console.error("Auth signUpFree error:", err);
     return { error: "Une erreur inattendue s'est produite." };
   }
 }

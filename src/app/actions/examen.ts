@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isPremium } from '@/lib/plan';
 import { revalidatePath } from 'next/cache';
 import * as session from '@/lib/examen/session';
 import { getExamAnalyse, getExamHistory, getExamCorrection } from '@/lib/examen/analytics';
@@ -23,6 +24,8 @@ async function deps() {
     poolDb: supabaseAdmin,
     sessionDb: supabaseAdmin,
     userId: user.id,
+    userEmail: user.email as string | null,
+    supabase,
     now: () => new Date(),
   };
 }
@@ -30,6 +33,13 @@ async function deps() {
 export async function startExam(documentId: string, mode?: 'standard' | 'adaptatif') {
   const d = await deps();
   if (!d) return { error: 'Non authentifié' };
+
+  // Examen adaptatif = Premium (coût technique nul — le passage/la correction sont déterministes
+  // dans les deux modes — mais forte valeur perçue de personnalisation : verrou produit).
+  if (mode === 'adaptatif' && !(await isPremium(d.supabase, d.userEmail))) {
+    return { error: "L'examen adaptatif est réservé aux membres Premium." };
+  }
+
   try {
     const res = await session.startExam(d, { documentId, mode });
     revalidatePath('/app/examen');

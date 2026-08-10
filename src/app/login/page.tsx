@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import styles from './login.module.css';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { loginWithAccessCode } from '@/app/actions/auth';
 import { motion } from 'framer-motion';
 
@@ -81,6 +82,10 @@ export default function LoginPage() {
                 {loading ? 'Vérification...' : 'Se connecter'}
               </Button>
             </div>
+
+            <p style={{ textAlign: 'center', fontSize: '13px', color: '#9ca3af', marginTop: '8px' }}>
+              Pas encore de compte ? <Link href="/inscription" style={{ color: '#a5b4fc' }}>Essayer gratuitement</Link>
+            </p>
           </form>
         </Card>
       </motion.div>

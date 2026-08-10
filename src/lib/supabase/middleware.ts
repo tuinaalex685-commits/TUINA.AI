@@ -53,22 +53,11 @@ export async function updateSession(request: NextRequest) {
       
     const isAdmin = roleData?.role === 'admin';
 
-    // 2. Si NON admin, on VÉRIFIE STRICTEMENT le code d'accès à CHAQUE REQUÊTE
-    if (!isAdmin) {
-      const { data: accessCodes } = await supabase
-        .from('access_codes')
-        .select('status')
-        .ilike('email', user.email || '')
-
-      const hasActiveCode = accessCodes && accessCodes.some(code => code.status === 'active');
-
-      // Si aucun code actif trouvé -> EJECTION DIRECTE
-      if (!hasActiveCode) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/app/logout'
-        return NextResponse.redirect(url)
-      }
-    }
+    // 2. PHASE 2 (Free/Premium) : un non-admin sans code actif n'est plus éjecté — c'est un
+    // état valide (Free). Avant, ce bloc vérifiait le code à chaque requête et déconnectait de
+    // force sinon (redirect '/app/logout'). Le Premium/Free réel est maintenant recalculé au
+    // cas par cas par chaque fonctionnalité qui en a besoin (src/lib/plan.ts, isPremium()),
+    // pas ici. Ce fichier ne fait plus que router : authentifié ou non, admin ou non.
 
     // 3. Protection stricte des routes Administrateur
     if (request.nextUrl.pathname.startsWith('/admin')) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { isPremium } from '@/lib/plan';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -60,12 +61,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, status: existing.status, jobId: existing.id, coursId: cours?.id ?? null });
     }
 
-    // 5. Enqueue d'un nouveau job.
+    // 5. FREE : 1 import personnel gratuit à vie. On n'atteint ce point que pour un document
+    // qui n'a JAMAIS eu de cours généré (cours introuvable à l'étape 2) — un "force" sur un cours
+    // déjà existant (V1→V2) ne consomme pas une seconde fois l'allocation.
+    const isNewDocument = !cours;
+    let premium: boolean | null = null;
+    if (isNewDocument) {
+      premium = await isPremium(supabase, user.email);
+      if (!premium) {
+        const { data: role } = await supabaseAdmin
+          .from('user_roles').select('free_import_used').eq('user_id', user.id).maybeSingle();
+        if (role?.free_import_used) {
+          return NextResponse.json({ error: "Vous avez déjà utilisé votre import personnel gratuit. Passez Premium pour importer d'autres cours." }, { status: 403 });
+        }
+      }
+    }
+
+    // 6. Enqueue d'un nouveau job.
     const { data: job, error } = await supabaseAdmin
       .from('ai_jobs')
       .insert({ user_id: user.id, type: 'etude', status: 'pending', payload: { documentId } })
       .select('id').single();
     if (error || !job) return NextResponse.json({ error: error?.message || "Création du job impossible" }, { status: 500 });
+
+    if (isNewDocument && premium === false) {
+      await supabaseAdmin.from('user_roles').update({ free_import_used: true }).eq('user_id', user.id);
+    }
 
     triggerWorker(req);
     return NextResponse.json({ success: true, status: 'pending', jobId: job.id, coursId: cours?.id ?? null });
