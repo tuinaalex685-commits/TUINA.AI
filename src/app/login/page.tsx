@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { loginWithAccessCode } from '@/app/actions/auth';
 import { motion } from 'framer-motion';
+import { GraduationCap } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -43,6 +44,7 @@ export default function LoginPage() {
       <div className={styles.background}>
         <div className={`${styles.glow} ${styles.glow1}`} />
         <div className={`${styles.glow} ${styles.glow2}`} />
+        <GraduationCap className={styles.hatIcon} strokeWidth={0.8} />
       </div>
 
       <motion.div 
