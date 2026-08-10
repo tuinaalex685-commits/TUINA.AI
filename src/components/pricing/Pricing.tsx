@@ -2,8 +2,9 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import styles from "./Pricing.module.css";
-import { Crown, Check } from "lucide-react";
+import { Crown, Check, Sparkles } from "lucide-react";
 
 export default function Pricing() {
   const whatsappNumber = "22657138126";
@@ -21,18 +22,61 @@ export default function Pricing() {
         >
           Investissez dans votre réussite.
         </motion.h2>
-        <motion.p 
+        <motion.p
           className={styles.subtitle}
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
         >
-          Pour le prix d'un café par semaine, offrez-vous l'avantage déloyal qui fera la différence sur vos relevés de notes.
+          Commence gratuitement avec des cours déjà prêts. Passe Premium quand tu es prêt pour l'avantage déloyal qui fera la différence sur tes relevés de notes.
         </motion.p>
 
         <div className={styles.pricingCards}>
-          <motion.div 
+          <motion.div
+            className={`${styles.card} ${styles.cardFree}`}
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1, type: "spring", stiffness: 50 }}
+          >
+            <div className={styles.headerIconFree}>
+              <Sparkles size={32} />
+            </div>
+
+            <h3 className={styles.planName}>Découverte</h3>
+            <div className={styles.price}>
+              0 <span className={styles.currency}>FCFA</span> <span className={styles.duration}>à vie</span>
+            </div>
+            <p className={styles.description}>
+              Teste SJP pour de vrai, sur des cours déjà analysés — sans carte, sans engagement.
+            </p>
+
+            <ul className={styles.featuresList}>
+              <li className={styles.featureItem}>
+                <Check className={styles.checkIcon} size={24} />
+                Catalogue de cours déjà prêts (Étude Guidée, Révisions, Évaluations)
+              </li>
+              <li className={styles.featureItem}>
+                <Check className={styles.checkIcon} size={24} />
+                Examen standard illimité
+              </li>
+              <li className={styles.featureItem}>
+                <Check className={styles.checkIcon} size={24} />
+                1 de tes propres cours importé gratuitement
+              </li>
+              <li className={styles.featureItem}>
+                <Check className={styles.checkIcon} size={24} />
+                10 corrections de cas pratique par l'IA offertes
+              </li>
+            </ul>
+
+            <Link href="/inscription" className={styles.ctaBtnFree}>
+              Créer mon compte gratuit
+            </Link>
+          </motion.div>
+
+          <motion.div
             className={styles.card}
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
