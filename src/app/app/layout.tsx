@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header/Header';
 import styles from './layout.module.css';
 import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
+import AdHighImpactSlot from '@/components/ads/AdHighImpactSlot';
 
 export default async function AppLayout({
   children,
@@ -38,6 +39,10 @@ export default async function AppLayout({
         <main className={styles.mainContent}>
           {children}
         </main>
+        {/* Format haute visibilité, comptes Free uniquement. Monté une seule fois
+            pour toute la session de navigation ; il s'efface de lui-même sur les
+            pages d'examen, d'étude et de rédaction en cours. */}
+        <AdHighImpactSlot />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { isPremium } from '@/lib/plan';
 import EtudeList from './EtudeList';
 
 export const metadata = {
@@ -13,6 +14,14 @@ export default async function EtudeListPage() {
 
   if (!user) {
     redirect('/login');
+  }
+
+  // Pour un compte Free, le Catalogue EST l'Étude Guidée : mêmes fonctionnalités
+  // pédagogiques, appliquées aux cours que SJP publie au lieu des siens. On redirige
+  // plutôt que d'afficher un verrou — sinon l'étudiant croirait qu'il lui manque une
+  // fonctionnalité qu'il possède déjà, sous un autre nom.
+  if (!(await isPremium(supabase, user.email))) {
+    redirect('/app/catalogue');
   }
 
   // 1. Récupérer tous les documents de l'étudiant

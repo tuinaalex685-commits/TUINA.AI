@@ -67,3 +67,18 @@ export function getAdUnit(placement: AdPlacement): AdUnitConfig | null {
 export function isAdsConfigured(placement: AdPlacement): boolean {
   return getAdUnit(placement) !== null;
 }
+
+/**
+ * Format haute visibilité (Social Bar ou Interstitiel Adsterra).
+ *
+ * Ces formats ne sont PAS de simples bannières : la régie fournit une unique URL de
+ * script qui gère elle-même son affichage. Ils se créent comme une ad unit distincte
+ * dans le panneau Adsterra — le Banner 300x250 ne peut pas devenir plein écran.
+ *
+ * Tant que cette URL n'est pas renseignée, aucun script n'est chargé et l'expérience
+ * reste exactement celle d'aujourd'hui.
+ */
+export function getHighImpactScript(): string | null {
+  if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
+  return env('NEXT_PUBLIC_ADSTERRA_HIGH_IMPACT_URL') || null;
+}

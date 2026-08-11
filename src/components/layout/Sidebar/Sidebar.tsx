@@ -7,22 +7,28 @@ import styles from './Sidebar.module.css';
 import { supabase } from '@/lib/supabase/client';
 
 /**
- * `premiumOnly` n'interdit rien : il pose un cadenas visuel pour que l'étudiant Free
- * sache d'avance ce qui est réservé au Premium, au lieu de le découvrir en cliquant.
- * Le vrai verrou est côté serveur, sur chaque page et chaque action concernée.
+ * Trois comportements distincts, et il ne faut pas les confondre :
+ *
+ *   freeOnly     — retiré du menu en Premium (le Catalogue est une vitrine de
+ *                  découverte : un Premium travaille sur SES propres cours).
+ *   hiddenForFree— retiré du menu en Free, sans cadenas. Réservé à l'Étude Guidée :
+ *                  le Catalogue EST l'étude guidée du plan gratuit, afficher les
+ *                  deux ferait croire à deux fonctionnalités concurrentes.
+ *   premiumOnly  — visible en Free avec un cadenas. L'étudiant doit savoir que la
+ *                  fonctionnalité existe : c'est ce qui donne envie de s'abonner.
+ *
+ * Aucun de ces drapeaux ne protège quoi que ce soit : le vrai verrou est sur chaque
+ * page et chaque action, côté serveur.
  */
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/app/dashboard', icon: '📊' },
-  // Le Catalogue est la vitrine de découverte du plan gratuit. Un membre Premium
-  // travaille sur SES propres cours : lui laisser cette entrée reviendrait à lui
-  // proposer en permanence le contenu de démonstration qu'il a justement dépassé.
   { label: 'Catalogue', path: '/app/catalogue', icon: '🏛️', freeOnly: true },
-  { label: 'Objectifs', path: '/app/objectifs', icon: '🎯' },
-  { label: 'Matières', path: '/app/matieres', icon: '📚' },
-  { label: 'Étude Guidée', path: '/app/etude', icon: '📖' },
-  { label: 'Bibliothèque', path: '/app/bibliotheque', icon: '📁' },
+  { label: 'Étude Guidée', path: '/app/etude', icon: '📖', hiddenForFree: true },
   { label: 'Révisions', path: '/app/revisions', icon: '🧠' },
   { label: 'Examen', path: '/app/examen', icon: '🎓' },
+  { label: 'Objectifs', path: '/app/objectifs', icon: '🎯', premiumOnly: true },
+  { label: 'Matières', path: '/app/matieres', icon: '📚', premiumOnly: true },
+  { label: 'Bibliothèque', path: '/app/bibliotheque', icon: '📁', premiumOnly: true },
   { label: 'Rédaction', path: '/app/redaction', icon: '✍️', premiumOnly: true },
   { label: 'Progression', path: '/app/progression', icon: '📈' },
 ];
@@ -60,7 +66,9 @@ export function Sidebar({ className, isAdmin, premium }: { className?: string, i
         </div>
         
         <nav className={styles.nav}>
-          {NAV_ITEMS.filter((item) => !(item.freeOnly && premium)).map((item) => {
+          {NAV_ITEMS
+            .filter((item) => !(item.freeOnly && premium) && !(item.hiddenForFree && !premium))
+            .map((item) => {
             const isActive = pathname?.startsWith(item.path);
             const locked = !!item.premiumOnly && !premium;
             return (
