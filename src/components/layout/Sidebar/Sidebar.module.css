@@ -117,3 +117,63 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* --- Plan de l'utilisateur (Free / Premium) ------------------------------- */
+
+.navItem.locked .label {
+  opacity: 0.62;
+}
+
+.lockIcon {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.planBox {
+  margin-top: auto;
+  padding: var(--spacing-standard);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.planBadge {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.planPremium {
+  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.planCta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+}
+
+.planPrice {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
