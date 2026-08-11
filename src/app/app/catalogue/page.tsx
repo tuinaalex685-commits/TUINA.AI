@@ -2,6 +2,7 @@ import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import CatalogueList from './CatalogueList';
+import AdSlot from '@/components/ads/AdSlot';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,9 +39,13 @@ export default async function CataloguePage() {
   (progressions || []).forEach((p: any) => { progressByCours[p.cours_id] = p.statut; });
 
   return (
-    <CatalogueList
-      entries={entries || []}
-      progressByCours={progressByCours}
-    />
+    <>
+      <CatalogueList
+        entries={entries || []}
+        progressByCours={progressByCours}
+      />
+      {/* Sous la liste des cours : l'étudiant a vu toute l'offre pédagogique avant la publicité. */}
+      <AdSlot placement="catalogue" />
+    </>
   );
 }

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient } from '@/lib/supabase/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isPremium } from '@/lib/plan';
+import { consumeQuota, refundQuota } from '@/lib/quota';
 import { Type, Schema } from '@google/genai';
 import { generateStructuredJSON } from '@/lib/gemini';
 
@@ -41,18 +40,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    // FREE : 10 corrections de cas pratique gratuites à vie, puis Premium illimité. Coût réel
-    // observé ~0,001 $/correction (saas_metrics) — la limite protège du volume/abus, pas du coût
-    // unitaire, donc généreuse plutôt qu'un chiffre calé sur un coût qui n'est plus le bon.
-    const premium = await isPremium(supabase, user.email);
-    let freeCasCount = 0;
-    if (!premium) {
-      const { data: role } = await supabaseAdmin
-        .from('user_roles').select('free_cas_pratique_count').eq('user_id', user.id).maybeSingle();
-      freeCasCount = role?.free_cas_pratique_count || 0;
-      if (freeCasCount >= 10) {
-        return NextResponse.json({ error: "Vous avez utilisé vos 10 corrections de cas pratique gratuites. Passez Premium pour continuer sans limite." }, { status: 403 });
-      }
+    // SEUL poste au coût marginal réel du plan Free : la correction porte sur la réponse
+    // PERSONNELLE de l'étudiant, elle n'est donc ni mutualisable ni cachable — un appel
+    // Gemini à chaque fois. La lecture du cours reste illimitée ; seule la correction compte.
+    //
+    // Le crédit est pris AVANT l'appel : vérifier puis consommer après laisserait deux
+    // requêtes simultanées passer toutes les deux. Il est rendu si Gemini échoue.
+    const quota = await consumeQuota(supabase, user.id, user.email, 'cas_pratique');
+    if (!quota.allowed) {
+      return NextResponse.json({
+        error: quota.error, quotaReached: true, used: quota.used, quota: quota.quota,
+      }, { status: 403 });
     }
 
     const prompt = `Tu es un Maître de Conférences en Droit exigeant, mais ton but est l'apprentissage adaptatif de l'étudiant.
@@ -79,17 +77,20 @@ Ta tâche : ÉVALUATION ADAPTATIVE ET PROGRESSIVE
 
     // Passe par le helper mutualisé : retry + backoff sur 429/500/503, parsing JSON robuste,
     // et tracking SaaS. Température 0.3 préservée pour une correction déterministe.
-    const generatedData = await generateStructuredJSON(
-      "Tu es un Maître de Conférences en Droit exigeant. Tu corriges de façon adaptative la réponse d'un étudiant à un cas pratique.",
-      prompt,
-      RESPONSE_SCHEMA,
-      undefined,
-      { userId: user.id, feature: 'etude_evaluate' },
-      0.3
-    );
-
-    if (!premium) {
-      await supabaseAdmin.from('user_roles').update({ free_cas_pratique_count: freeCasCount + 1 }).eq('user_id', user.id);
+    let generatedData;
+    try {
+      generatedData = await generateStructuredJSON(
+        "Tu es un Maître de Conférences en Droit exigeant. Tu corriges de façon adaptative la réponse d'un étudiant à un cas pratique.",
+        prompt,
+        RESPONSE_SCHEMA,
+        undefined,
+        { userId: user.id, feature: 'etude_evaluate' },
+        0.3
+      );
+    } catch (aiError) {
+      // Panne Gemini : l'étudiant ne doit pas perdre un crédit pour notre incident.
+      if (!quota.unlimited) await refundQuota(user.id, 'cas_pratique');
+      throw aiError;
     }
 
     return NextResponse.json(generatedData);

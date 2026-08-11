@@ -40,7 +40,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Rate limiting : max 5 générations Étude par heure par utilisateur (via ai_jobs).
+    // 3. IMPORT PERSONNEL = PREMIUM STRICT.
+    // Avant : 1 import gratuit à vie (free_import_used). Le plan Free repose désormais
+    // entièrement sur le catalogue public — "je découvre SJP avec les cours proposés" —
+    // et travailler sur SES PROPRES documents devient la valeur distinctive du Premium.
+    // Placé après l'étape 2 volontairement : un Free qui possède déjà un cours généré
+    // sous l'ancienne règle continue de l'ouvrir normalement (l'étape 2 retourne avant
+    // d'arriver ici), on ne lui retire rien de ce qu'il a déjà.
+    if (!(await isPremium(supabase, user.email))) {
+      return NextResponse.json({
+        error: "L'import de tes propres cours est réservé aux membres Premium. Découvre SJP dès maintenant avec les cours du catalogue.",
+        premiumRequired: true,
+      }, { status: 403 });
+    }
+
+    // 4. Rate limiting : max 5 générations Étude par heure par utilisateur (via ai_jobs).
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count: recent } = await supabaseAdmin
       .from('ai_jobs').select('id', { count: 'exact', head: true })
@@ -49,7 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Limite atteinte : 5 études par heure maximum. Réessayez plus tard." }, { status: 429 });
     }
 
-    // 4. Idempotence : un job Étude déjà actif pour CE document → on le réutilise (pas de doublon).
+    // 5. Idempotence : un job Étude déjà actif pour CE document → on le réutilise (pas de doublon).
     const { data: existing } = await supabaseAdmin
       .from('ai_jobs').select('id, status')
       .eq('user_id', user.id).eq('type', 'etude')
@@ -61,32 +75,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, status: existing.status, jobId: existing.id, coursId: cours?.id ?? null });
     }
 
-    // 5. FREE : 1 import personnel gratuit à vie. On n'atteint ce point que pour un document
-    // qui n'a JAMAIS eu de cours généré (cours introuvable à l'étape 2) — un "force" sur un cours
-    // déjà existant (V1→V2) ne consomme pas une seconde fois l'allocation.
-    const isNewDocument = !cours;
-    let premium: boolean | null = null;
-    if (isNewDocument) {
-      premium = await isPremium(supabase, user.email);
-      if (!premium) {
-        const { data: role } = await supabaseAdmin
-          .from('user_roles').select('free_import_used').eq('user_id', user.id).maybeSingle();
-        if (role?.free_import_used) {
-          return NextResponse.json({ error: "Vous avez déjà utilisé votre import personnel gratuit. Passez Premium pour importer d'autres cours." }, { status: 403 });
-        }
-      }
-    }
-
     // 6. Enqueue d'un nouveau job.
     const { data: job, error } = await supabaseAdmin
       .from('ai_jobs')
       .insert({ user_id: user.id, type: 'etude', status: 'pending', payload: { documentId } })
       .select('id').single();
     if (error || !job) return NextResponse.json({ error: error?.message || "Création du job impossible" }, { status: 500 });
-
-    if (isNewDocument && premium === false) {
-      await supabaseAdmin.from('user_roles').update({ free_import_used: true }).eq('user_id', user.id);
-    }
 
     triggerWorker(req);
     return NextResponse.json({ success: true, status: 'pending', jobId: job.id, coursId: cours?.id ?? null });

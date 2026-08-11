@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
+import { resolveDocumentAccess } from '@/lib/access';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
@@ -50,9 +51,21 @@ export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>
   const coursId = typeof payload.coursId === 'string' ? payload.coursId : null;
 
   if (docId && docId !== 'dummy') {
-    const { data: doc } = await supabaseAdmin
-      .from('documents').select('id').eq('id', docId).eq('user_id', user.id).maybeSingle();
-    if (!doc) return { error: "Document introuvable ou accès refusé." };
+    const access = await resolveDocumentAccess(supabaseAdmin, user.id, docId);
+
+    // Un cours publié au catalogue est ouvert UNIQUEMENT aux deux types de contenu
+    // mutualisés par source_hash : flashcards et banque d'examen. Pour ces deux-là, le
+    // deuxième utilisateur et les suivants clonent le contenu déjà généré — coût Gemini
+    // nul. C'est ce qui rend les Révisions et les Examens possibles pour un compte Free
+    // qui ne possède aucun document.
+    //
+    // Les autres types restent réservés au propriétaire : 'etude' régénérerait le cours
+    // d'autrui, 'evaluation' et 'redaction' produisent du contenu personnel non
+    // mutualisable — les ouvrir au catalogue transformerait chaque cours publié en
+    // robinet à appels Gemini.
+    const catalogAllowed = type === 'flashcards' || type === 'examen_pool';
+    const ok = access === 'owner' || (access === 'catalog' && catalogAllowed);
+    if (!ok) return { error: "Document introuvable ou accès refusé." };
   } else if (coursId) {
     const { data: cours } = await supabaseAdmin
       .from('cours').select('matiere_id').eq('id', coursId).maybeSingle();

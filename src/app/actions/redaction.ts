@@ -2,6 +2,7 @@
 
 
 import { createClient } from '@/lib/supabase/server';
+import { isPremium } from '@/lib/plan';
 import { revalidatePath } from 'next/cache';
 
 // L'analyse IA des rédactions est désormais gérée par le système de jobs unifié
@@ -15,6 +16,15 @@ export async function createRedaction(titre: string, type: string, etudeCoursId?
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) console.log(`[REDACTION ERROR] auth.getUser: ${authError.message}`);
     if (!user) return { error: "Non authentifié" };
+
+    // La Rédaction est entièrement Premium. Le verrou était jusqu'ici posé uniquement
+    // sur la correction IA (enqueueAiJob) : un Free pouvait donc créer une rédaction,
+    // l'écrire en entier, et ne découvrir qu'au moment de demander la correction que
+    // la fonctionnalité ne lui était pas destinée. On refuse dès la création — le
+    // frontend affiche un écran de présentation Premium au lieu d'un formulaire piégé.
+    if (!(await isPremium(supabase, user.email))) {
+      return { error: "La Rédaction est réservée aux membres Premium.", premiumRequired: true };
+    }
 
     // Soft-gate INC.3 : rattachement FACULTATIF à un cours Étude. On ne conserve
     // l'id que s'il correspond à un cours réellement travaillé par l'utilisateur

@@ -108,8 +108,49 @@ export async function publishToCatalog(etudeCoursId: string, titreAffiche: strin
       return { error: error.message };
     }
 
+    // Pré-génération de la banque d'examen, maintenant que le cours est publié.
+    // Sans cela, le PREMIER étudiant Free qui lance un examen sur ce cours attend la
+    // génération complète — mauvaise première impression sur la fonctionnalité qui doit
+    // justement le séduire. Générée une fois ici, elle est ensuite mutualisée par
+    // source_hash entre tous les utilisateurs : aucun appel Gemini supplémentaire.
+    //
+    // Best-effort et volontairement non bloquant : si l'enqueue échoue, la publication
+    // reste valide (la banque sera générée à la première demande, comme avant).
+    await prepareExamBank(cours.id).catch(() => {});
+
     revalidateCatalog();
     return { success: true, entry: data };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
+
+/**
+ * S'assure qu'une banque d'examen existe (ou est en préparation) pour un cours publié.
+ * Utilisable aussi pour rattraper les cours publiés avant l'arrivée des examens catalogue.
+ */
+export async function prepareExamBank(etudeCoursId: string) {
+  try {
+    await requireAdmin();
+
+    const { data: cours } = await supabaseAdmin
+      .from('etude_cours').select('id, pdf_id').eq('id', etudeCoursId).maybeSingle();
+    if (!cours?.pdf_id) return { error: "Cours introuvable." };
+
+    const { data: doc } = await supabaseAdmin
+      .from('documents').select('text_hash').eq('id', cours.pdf_id).maybeSingle();
+
+    // Banque déjà en cache pour ce contenu → rien à faire, surtout pas un nouveau job.
+    if (doc?.text_hash) {
+      const { data: pool } = await supabaseAdmin
+        .from('examen_question_pools').select('id').eq('source_hash', doc.text_hash).maybeSingle();
+      if (pool) return { success: true, alreadyReady: true };
+    }
+
+    const { enqueueAiJob } = await import('@/app/actions/jobs');
+    const res: any = await enqueueAiJob('examen_pool', { documentId: cours.pdf_id });
+    if (res?.error) return { error: res.error };
+    return { success: true, jobId: res.jobId };
   } catch (err: any) {
     return { error: err.message };
   }

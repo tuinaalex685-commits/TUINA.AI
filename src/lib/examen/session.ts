@@ -18,6 +18,7 @@ import {
   seedFrom, CompositionItem, PoolQuestion,
 } from '@/lib/examen/engine';
 import { getExamMasteryMap } from '@/lib/examen/analytics';
+import { resolveDocumentAccess } from '@/lib/access';
 
 export interface SessionDeps {
   poolDb: any;    // service-role : lit examen_question_pools + documents (corrigés jamais exposés)
@@ -33,6 +34,28 @@ async function loadPool(deps: SessionDeps, sourceHash: string): Promise<PoolQues
     .select('questions').eq('source_hash', sourceHash).maybeSingle();
   if (!data?.questions) throw new Error('Banque de questions introuvable pour ce contenu.');
   return data.questions as PoolQuestion[];
+}
+
+/**
+ * Autorise un documentId pour CET utilisateur, et renvoie son texte source.
+ *
+ * Sans ce contrôle, startExam lisait `documents` par id seul avec le service role :
+ * connaître (ou deviner) le documentId d'un autre utilisateur suffisait à composer un
+ * examen sur son cours privé et à en voir les questions. Le corrigé ne fuitait pas
+ * (vueEpuree le retire), mais le contenu privé, si.
+ *
+ * Deux cas légitimes, et deux seulement :
+ *   1. l'utilisateur est propriétaire du document ;
+ *   2. le cours issu de ce document est publié au catalogue public et actif
+ *      (c'est ce qui rend les examens catalogue possibles pour un compte Free).
+ */
+async function loadAuthorizedSourceText(deps: SessionDeps, documentId: string): Promise<string> {
+  const access = await resolveDocumentAccess(deps.poolDb, deps.userId, documentId);
+  if (access === 'denied') throw new Error('Accès refusé à ce document.');
+
+  const { data: doc } = await deps.poolDb.from('documents')
+    .select('extracted_text').eq('id', documentId).maybeSingle();
+  return doc?.extracted_text || '';
 }
 
 async function readSession(deps: SessionDeps, sessionId: string): Promise<any> {
@@ -53,9 +76,7 @@ export async function startExam(
   deps: SessionDeps, args: { documentId: string; mode?: 'standard' | 'adaptatif' }
 ): Promise<{ sessionId: string; deadline: string; dureeSecondes: number }> {
   const mode = args.mode === 'adaptatif' ? 'adaptatif' : 'standard';
-  const { data: doc } = await deps.poolDb.from('documents')
-    .select('extracted_text').eq('id', args.documentId).maybeSingle();
-  const text = doc?.extracted_text || '';
+  const text = await loadAuthorizedSourceText(deps, args.documentId);
   if (!text || text.trim().length < 100) throw new Error('Document sans texte exploitable.');
   const sourceHash = sha256(text);
 

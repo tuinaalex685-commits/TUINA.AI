@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
+import { consumeQuota, refundQuota } from '@/lib/quota';
+import { listCatalogDocuments } from '@/lib/access';
 import { revalidatePath } from 'next/cache';
 import * as session from '@/lib/examen/session';
 import { getExamAnalyse, getExamHistory, getExamCorrection } from '@/lib/examen/analytics';
@@ -37,7 +39,16 @@ export async function startExam(documentId: string, mode?: 'standard' | 'adaptat
   // Examen adaptatif = Premium (coût technique nul — le passage/la correction sont déterministes
   // dans les deux modes — mais forte valeur perçue de personnalisation : verrou produit).
   if (mode === 'adaptatif' && !(await isPremium(d.supabase, d.userEmail))) {
-    return { error: "L'examen adaptatif est réservé aux membres Premium." };
+    return { error: "L'examen adaptatif est réservé aux membres Premium.", premiumRequired: true };
+  }
+
+  // Quota Free : 10 examens par jour. Passer un examen ne coûte AUCUN appel Gemini
+  // (la banque de questions est en cache, mutualisée par source_hash, et la correction
+  // est déterministe) — cette limite est donc un levier produit, pas une protection de
+  // coût. Elle est consommée avant la composition et rendue si celle-ci échoue.
+  const quota = await consumeQuota(d.supabase, d.userId, d.userEmail, 'examen');
+  if (!quota.allowed) {
+    return { error: quota.error, quotaReached: true, used: quota.used, quota: quota.quota };
   }
 
   try {
@@ -45,6 +56,9 @@ export async function startExam(documentId: string, mode?: 'standard' | 'adaptat
     revalidatePath('/app/examen');
     return { success: true, ...res };
   } catch (e: any) {
+    // Banque absente, document refusé, composition vide : aucun examen n'a démarré,
+    // le crédit doit être rendu.
+    if (!quota.unlimited) await refundQuota(d.userId, 'examen');
     return { error: e?.message || 'Impossible de démarrer l’examen.' };
   }
 }
@@ -96,7 +110,34 @@ export async function getExamDashboard() {
   const { data: docs } = await supabaseAdmin
     .from('documents').select('id, nom, text_hash, date_import').eq('user_id', userId)
     .order('date_import', { ascending: false });
-  const docList = docs || [];
+
+  // Les cours du catalogue public s'ajoutent aux documents personnels. Sans cela, un
+  // compte Free — qui ne possède aucun document depuis que l'import est Premium —
+  // arriverait sur un tableau de bord Examen vide, alors que le catalogue est
+  // précisément la porte d'entrée gratuite de SJP.
+  const catalog = await listCatalogDocuments(supabaseAdmin);
+  const ownedIds = new Set((docs || []).map((d: any) => d.id));
+  const catalogDocIds = catalog.map((c) => c.documentId).filter((id) => !ownedIds.has(id));
+
+  const { data: catalogDocs } = catalogDocIds.length
+    ? await supabaseAdmin.from('documents').select('id, text_hash').in('id', catalogDocIds)
+    : { data: [] as any[] };
+  const hashByDoc = new Map((catalogDocs || []).map((d: any) => [d.id, d.text_hash]));
+
+  const docList = [
+    ...(docs || []).map((d: any) => ({ ...d, source: 'perso' as const, catalogId: null })),
+    ...catalog
+      .filter((c) => !ownedIds.has(c.documentId))
+      .map((c) => ({
+        id: c.documentId,
+        nom: c.titre,
+        text_hash: hashByDoc.get(c.documentId) ?? null,
+        date_import: null,
+        source: 'catalogue' as const,
+        catalogId: c.catalogId,
+      })),
+  ];
+
   const ids = docList.map((d: any) => d.id);
   if (ids.length === 0) return { success: true as const, items: [] };
 
@@ -138,6 +179,8 @@ export async function getExamDashboard() {
     }
     return {
       documentId: d.id, nom: d.nom,
+      source: d.source as 'perso' | 'catalogue',
+      catalogId: d.catalogId as string | null,
       bankReady: !!d.text_hash && bankSet.has(d.text_hash),
       nbExamens: h.length,
       derniereNote: h.length ? h[h.length - 1].note : null,
