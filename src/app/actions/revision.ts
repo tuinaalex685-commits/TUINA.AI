@@ -56,21 +56,70 @@ export async function getRevisionSources(): Promise<
   return { success: true, sources, premium };
 }
 
+export type RevisionSourceRef = { type: 'document' | 'cours'; id: string };
+
+/**
+ * Autorise une source de révision. Les cours "classiques" (matières créées à la main)
+ * restent strictement personnels ; seuls les documents peuvent venir du catalogue.
+ */
+async function authorizeSource(userId: string, ref: RevisionSourceRef): Promise<boolean> {
+  if (ref.type === 'document') {
+    return (await resolveDocumentAccess(supabaseAdmin, userId, ref.id)) !== 'denied';
+  }
+  const { data: cours } = await supabaseAdmin
+    .from('cours').select('matiere_id').eq('id', ref.id).maybeSingle();
+  if (!cours) return false;
+  const { data: matiere } = await supabaseAdmin
+    .from('matieres').select('id').eq('id', cours.matiere_id).eq('user_id', userId).maybeSingle();
+  return !!matiere;
+}
+
+function dueCardsQuery(userId: string, ref: RevisionSourceRef) {
+  const q = supabaseAdmin
+    .from('flashcards')
+    .select('id, question, reponse, box, next_review')
+    .eq('user_id', userId)
+    .eq('statut', 'validated')
+    .lte('next_review', new Date().toISOString());
+  return ref.type === 'document' ? q.eq('document_id', ref.id) : q.eq('cours_id', ref.id);
+}
+
+/**
+ * Combien de cartes sont prêtes, SANS consommer de crédit.
+ * Sert uniquement à afficher "12 cartes prêtes" avant que l'étudiant décide de
+ * démarrer : compter n'est pas réviser, et facturer un simple coup d'œil serait
+ * incompréhensible pour lui.
+ */
+export async function countDueCards(ref: RevisionSourceRef) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Non authentifié' };
+  if (!(await authorizeSource(user.id, ref))) return { error: 'Accès refusé.' };
+
+  const { data, error } = await dueCardsQuery(user.id, ref);
+  if (error) return { error: error.message };
+  return { success: true, count: (data || []).length };
+}
+
 /**
  * Ouvre une session de révision : consomme un crédit, puis renvoie les cartes dues.
  *
- * Les cartes transitent par le serveur (service role) plutôt que d'être lues
- * directement par le navigateur : pour un cours du catalogue, elles n'appartiennent
- * pas encore à l'utilisateur, la RLS les lui refuserait. C'est aussi ce qui rend le
- * quota incontournable — il n'existe pas de chemin client vers ces cartes.
+ * Les cartes transitent par le serveur plutôt que d'être lues directement par le
+ * navigateur : c'est ce qui rend le quota incontournable. Tant que la lecture se
+ * faisait côté client, il suffisait de ne pas appeler cette action pour réviser
+ * sans limite.
+ *
+ * Un crédit = une session ouverte. Retourner une carte, s'auto-évaluer et
+ * enchaîner ne consomme plus rien ensuite.
  */
-export async function startRevisionSession(documentId: string) {
+export async function startRevisionSession(ref: RevisionSourceRef) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' };
 
-  const access = await resolveDocumentAccess(supabaseAdmin, user.id, documentId);
-  if (access === 'denied') return { error: 'Contenu introuvable ou accès refusé.' };
+  if (!(await authorizeSource(user.id, ref))) {
+    return { error: 'Contenu introuvable ou accès refusé.' };
+  }
 
   const quota = await consumeQuota(supabase, user.id, user.email, 'revision');
   if (!quota.allowed) {
@@ -78,21 +127,15 @@ export async function startRevisionSession(documentId: string) {
   }
 
   try {
-    const { data: cards, error } = await supabaseAdmin
-      .from('flashcards')
-      .select('id, question, reponse, box, next_review')
-      .eq('user_id', user.id)
-      .eq('document_id', documentId)
-      .lte('next_review', new Date().toISOString())
+    const { data: cards, error } = await dueCardsQuery(user.id, ref)
       .order('next_review', { ascending: true });
-
     if (error) throw new Error(error.message);
 
-    // Aucune carte due : ce n'est pas une session, on rend le crédit. Sans cela,
-    // un étudiant qui a tout révisé perdrait ses crédits en ouvrant des paquets vides.
+    // Aucune carte due : il n'y a pas eu de session, on rend le crédit. Sans cela,
+    // un étudiant qui a déjà tout révisé perdrait ses crédits en ouvrant des paquets vides.
     if (!cards || cards.length === 0) {
       if (!quota.unlimited) await refundQuota(user.id, 'revision');
-      return { success: true, cards: [], empty: true, used: quota.used - 1, quota: quota.quota };
+      return { success: true, cards: [], empty: true, used: Math.max(quota.used - 1, 0), quota: quota.quota };
     }
 
     return { success: true, cards, empty: false, used: quota.used, quota: quota.quota };

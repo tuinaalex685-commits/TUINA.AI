@@ -11,10 +11,16 @@ import { useJob } from '@/lib/hooks/useJob';
 
 export default function RevisionsManager({
   coursList,
-  documentsList
+  documentSources,
+  premium,
+  revisionsUsed,
+  revisionsQuota,
 }: {
   coursList: any[],
-  documentsList: any[]
+  documentSources: { documentId: string; titre: string; source: 'perso' | 'catalogue'; matiere: string | null }[],
+  premium: boolean,
+  revisionsUsed: number,
+  revisionsQuota: number,
 }) {
   const router = useRouter();
 
@@ -22,9 +28,20 @@ export default function RevisionsManager({
   const [selectedSourceId, setSelectedSourceId] = useState<string>('');
 
   const [flashcards, setFlashcards] = useState<any[]>([]);
+  const [dueCount, setDueCount] = useState(0);
   const [isLoadingCards, setIsLoadingCards] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [flashcardCount, setFlashcardCount] = useState(10);
+
+  // Compteur de quota : valeur serveur au chargement, puis ajustée à chaque session
+  // ouverte pour que l'étudiant voie son solde bouger sans recharger la page.
+  const [used, setUsed] = useState(revisionsUsed);
+  const restantes = Math.max(revisionsQuota - used, 0);
+  const quotaEpuise = !premium && restantes === 0;
+
+  const persoSources = documentSources.filter((d) => d.source === 'perso');
+  const catalogueSources = documentSources.filter((d) => d.source === 'catalogue');
 
   // Observation du job async (le frontend n'attend jamais Gemini).
   const [flashcardsJobId, setFlashcardsJobId] = useState<string | null>(null);
@@ -34,7 +51,7 @@ export default function RevisionsManager({
       setIsGenerating(false);
       setFlashcardsJobId(null);
       toast.success('Flashcards prêtes !', { id: flashcardsToastRef.current });
-      fetchFlashcards();
+      refreshDueCount();
       router.refresh();
     },
     onError: (err) => {
@@ -49,40 +66,30 @@ export default function RevisionsManager({
     const channel = supabase
       .channel('realtime-flashcards-rev')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'flashcards' }, (payload) => {
-        if (selectedSourceId) fetchFlashcards();
+        if (selectedSourceId) refreshDueCount();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedSourceId]);
 
-  const fetchFlashcards = async () => {
-    if (!selectedSourceId) return;
-    console.log(`[FLOW 8] Frontend (fetchFlashcards) - Récupération des cartes pour source ID: ${selectedSourceId}`);
+  /**
+   * Combien de cartes sont prêtes — comptage seul, aucun crédit consommé.
+   *
+   * Les cartes elles-mêmes ne sont plus lues ici : elles arrivent du serveur au
+   * démarrage de la session. C'est ce qui rend le quota incontournable — tant que
+   * le navigateur pouvait lire la table directement, il suffisait de ne jamais
+   * déclarer de session pour réviser sans limite.
+   */
+  const refreshDueCount = async () => {
+    if (!selectedSourceId || !selectedSourceType) return;
     setIsLoadingCards(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      // On récupère uniquement les flashcards dont la date de prochaine révision est passée ou égale à maintenant
-      let query = supabase.from('flashcards')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('statut', 'validated')
-        .lte('next_review', new Date().toISOString());
-
-      if (selectedSourceType === 'cours') {
-        query = query.eq('cours_id', selectedSourceId);
-      } else if (selectedSourceType === 'document') {
-        query = query.eq('document_id', selectedSourceId);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-         console.error("[FLOW 8 ERROR] Erreur lors de la récupération :", error);
-      } else if (data) {
-         console.log(`[FLOW 9] Frontend a récupéré ${data.length} flashcards prêtes à réviser. Mise à jour de l'état.`);
-         setFlashcards(data);
-      }
+      const { countDueCards } = await import('@/app/actions/revision');
+      const res: any = await countDueCards({ type: selectedSourceType, id: selectedSourceId });
+      setDueCount(res?.count ?? 0);
     } catch (err) {
       console.error(err);
+      setDueCount(0);
     } finally {
       setIsLoadingCards(false);
     }
@@ -90,9 +97,10 @@ export default function RevisionsManager({
 
   useEffect(() => {
     if (selectedSourceId) {
-      fetchFlashcards();
+      refreshDueCount();
     } else {
       setFlashcards([]);
+      setDueCount(0);
     }
   }, [selectedSourceId, selectedSourceType]);
 
@@ -117,8 +125,8 @@ export default function RevisionsManager({
     let docName = "Source sélectionnée";
 
     if (selectedSourceType === 'document') {
-      const doc = documentsList.find(d => d.id === selectedSourceId);
-      if (doc) docName = doc.nom;
+      const doc = documentSources.find(d => d.documentId === selectedSourceId);
+      if (doc) docName = doc.titre;
     } else {
       const c = coursList.find(c => c.id === selectedSourceId);
       if (c) docName = c.titre;
@@ -158,13 +166,42 @@ export default function RevisionsManager({
   const [sessionStats, setSessionStats] = useState({ mastered: 0, toReview: 0, hard: 0 });
   const [sessionFinished, setSessionFinished] = useState(false);
 
-  const startSession = () => {
-    if (flashcards.length === 0) return;
-    setIsSessionActive(true);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setSessionStats({ mastered: 0, toReview: 0, hard: 0 });
-    setSessionFinished(false);
+  /**
+   * Ouvre la session côté serveur : c'est là que le crédit est consommé et que les
+   * cartes sont réellement délivrées. Un clic = une session, quel que soit le nombre
+   * de cartes qu'elle contient.
+   */
+  const startSession = async () => {
+    if (!selectedSourceId || !selectedSourceType || isStarting) return;
+    setIsStarting(true);
+    try {
+      const { startRevisionSession } = await import('@/app/actions/revision');
+      const res: any = await startRevisionSession({ type: selectedSourceType, id: selectedSourceId });
+
+      if (res?.error) {
+        toast.error(res.error);
+        if (res.quotaReached) setUsed(res.quota);
+        return;
+      }
+      if (res?.empty) {
+        toast('Aucune carte à réviser pour le moment — reviens plus tard.');
+        setDueCount(0);
+        return;
+      }
+
+      setFlashcards(res.cards);
+      if (typeof res.used === 'number') setUsed(res.used);
+      setIsSessionActive(true);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      setSessionStats({ mastered: 0, toReview: 0, hard: 0 });
+      setSessionFinished(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible de démarrer la session.");
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   const handleEvaluation = (evaluation: 'mastered' | 'toReview' | 'hard') => {
@@ -192,7 +229,8 @@ export default function RevisionsManager({
   const endSession = () => {
     setIsSessionActive(false);
     setSessionFinished(false);
-    fetchFlashcards();
+    setFlashcards([]);
+    refreshDueCount();
   };
 
   // VUE DE SESSION TERMINÉE
@@ -267,12 +305,25 @@ export default function RevisionsManager({
             style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)', fontSize: '16px' }}
           >
             <option value="">-- Sélectionnez une source --</option>
-            <optgroup label="Vos Cours">
-              {coursList.map(c => <option key={c.id} value={`cours|${c.id}`}>{c.titre}</option>)}
-            </optgroup>
-            <optgroup label="Vos Documents (PDF)">
-              {documentsList.map(d => <option key={d.id} value={`document|${d.id}`}>{d.nom}</option>)}
-            </optgroup>
+            {catalogueSources.length > 0 && (
+              <optgroup label="Catalogue SJP">
+                {catalogueSources.map(d => (
+                  <option key={d.documentId} value={`document|${d.documentId}`}>
+                    {d.titre}{d.matiere ? ` — ${d.matiere}` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {coursList.length > 0 && (
+              <optgroup label="Vos Cours">
+                {coursList.map(c => <option key={c.id} value={`cours|${c.id}`}>{c.titre}</option>)}
+              </optgroup>
+            )}
+            {persoSources.length > 0 && (
+              <optgroup label="Vos Documents (PDF)">
+                {persoSources.map(d => <option key={d.documentId} value={`document|${d.documentId}`}>{d.titre}</option>)}
+              </optgroup>
+            )}
           </select>
         </div>
 
@@ -281,18 +332,39 @@ export default function RevisionsManager({
       <div style={{ marginTop: 'var(--spacing-large)', paddingTop: 'var(--spacing-large)', borderTop: '1px solid var(--color-border)' }}>
         {isLoadingCards ? (
           <p>Chargement des flashcards...</p>
-        ) : flashcards.length > 0 ? (
+        ) : dueCount > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-standard)' }}>
-            <div style={{ fontSize: '48px' }}>???</div>
-            <h3 style={{ margin: 0 }}>{flashcards.length} Flashcards prêtes</h3>
-            <Button onClick={startSession} style={{ backgroundColor: '#6366f1', fontSize: '18px', padding: '16px 32px' }}>
-              ? Démarrer la session
+            <h3 style={{ margin: 0 }}>{dueCount} flashcard{dueCount > 1 ? 's' : ''} prête{dueCount > 1 ? 's' : ''}</h3>
+            <Button
+              onClick={startSession}
+              disabled={isStarting || quotaEpuise}
+              style={{ backgroundColor: quotaEpuise ? '#9ca3af' : '#6366f1', fontSize: '18px', padding: '16px 32px' }}
+            >
+              {isStarting ? 'Ouverture…' : 'Démarrer la session'}
             </Button>
+            {!premium && (
+              quotaEpuise ? (
+                <div style={{ textAlign: 'center', maxWidth: '420px' }}>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    Tu as atteint tes {revisionsQuota} révisions gratuites aujourd'hui.
+                  </p>
+                  <p style={{ margin: '4px 0 12px', color: 'var(--color-text-secondary)', fontSize: '14px' }}>
+                    Tes crédits reviennent demain — ou passe au Premium pour réviser sans limite.
+                  </p>
+                  <a href="/#pricing" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+                    Passer au Premium — 2 500 FCFA/mois
+                  </a>
+                </div>
+              ) : (
+                <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                  {restantes} révision{restantes > 1 ? 's' : ''} restante{restantes > 1 ? 's' : ''} aujourd'hui
+                </span>
+              )
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-standard)', textAlign: 'center' }}>
-            <span style={{ fontSize: '32px' }}>??</span>
-            <p>Aucune flashcard n'existe pour cette source.</p>
+            <p>Aucune flashcard n'existe encore pour cette source.</p>
             <div style={{ display: 'flex', gap: 'var(--spacing-small)', alignItems: 'center' }}>
               <label htmlFor="count-select">Nombre :</label>
               <select 
@@ -308,7 +380,7 @@ export default function RevisionsManager({
               </select>
             </div>
             <Button onClick={handleGenerateFlashcards} disabled={isGenerating} style={{ backgroundColor: '#10b981' }}>
-              {isGenerating ? 'Génération en cours...' : '? Générer des Flashcards'}
+              {isGenerating ? 'Génération en cours...' : 'Générer des Flashcards'}
             </Button>
           </div>
         )}
