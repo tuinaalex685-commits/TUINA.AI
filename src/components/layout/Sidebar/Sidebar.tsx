@@ -13,7 +13,10 @@ import { supabase } from '@/lib/supabase/client';
  */
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/app/dashboard', icon: '📊' },
-  { label: 'Catalogue', path: '/app/catalogue', icon: '🏛️' },
+  // Le Catalogue est la vitrine de découverte du plan gratuit. Un membre Premium
+  // travaille sur SES propres cours : lui laisser cette entrée reviendrait à lui
+  // proposer en permanence le contenu de démonstration qu'il a justement dépassé.
+  { label: 'Catalogue', path: '/app/catalogue', icon: '🏛️', freeOnly: true },
   { label: 'Objectifs', path: '/app/objectifs', icon: '🎯' },
   { label: 'Matières', path: '/app/matieres', icon: '📚' },
   { label: 'Étude Guidée', path: '/app/etude', icon: '📖' },
@@ -57,7 +60,7 @@ export function Sidebar({ className, isAdmin, premium }: { className?: string, i
         </div>
         
         <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !(item.freeOnly && premium)).map((item) => {
             const isActive = pathname?.startsWith(item.path);
             const locked = !!item.premiumOnly && !premium;
             return (

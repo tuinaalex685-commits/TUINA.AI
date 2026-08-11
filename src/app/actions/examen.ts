@@ -111,11 +111,13 @@ export async function getExamDashboard() {
     .from('documents').select('id, nom, text_hash, date_import').eq('user_id', userId)
     .order('date_import', { ascending: false });
 
-  // Les cours du catalogue public s'ajoutent aux documents personnels. Sans cela, un
-  // compte Free — qui ne possède aucun document depuis que l'import est Premium —
-  // arriverait sur un tableau de bord Examen vide, alors que le catalogue est
-  // précisément la porte d'entrée gratuite de SJP.
-  const catalog = await listCatalogDocuments(supabaseAdmin);
+  // Les cours du catalogue s'ajoutent aux documents personnels POUR LES COMPTES FREE.
+  // Sans cela, un Free — qui ne possède aucun document depuis que l'import est Premium —
+  // arriverait sur un tableau de bord Examen vide. Un membre Premium ne voit que ses
+  // propres cours : le catalogue est une vitrine de découverte, pas une de ses
+  // fonctionnalités.
+  const premiumViewer = await isPremium(supabase, user.email);
+  const catalog = premiumViewer ? [] : await listCatalogDocuments(supabaseAdmin);
   const ownedIds = new Set((docs || []).map((d: any) => d.id));
   const catalogDocIds = catalog.map((c) => c.documentId).filter((id) => !ownedIds.has(id));
 

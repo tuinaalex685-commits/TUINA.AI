@@ -59,15 +59,15 @@ export default function Pricing() {
               </li>
               <li className={styles.featureItem}>
                 <Check className={styles.checkIcon} size={24} />
-                Examen standard illimité
+                10 examens par jour sur les cours du catalogue
               </li>
               <li className={styles.featureItem}>
                 <Check className={styles.checkIcon} size={24} />
-                1 de tes propres cours importé gratuitement
+                5 sessions de révision par jour
               </li>
               <li className={styles.featureItem}>
                 <Check className={styles.checkIcon} size={24} />
-                10 corrections de cas pratique par l'IA offertes
+                15 corrections de cas pratique par l'IA chaque jour
               </li>
             </ul>
 

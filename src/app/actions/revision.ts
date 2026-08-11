@@ -39,8 +39,11 @@ export async function getRevisionSources(): Promise<
     .from('documents').select('id, nom').eq('user_id', user.id)
     .order('date_import', { ascending: false });
 
-  const catalog = await listCatalogDocuments(supabaseAdmin);
+  // Le catalogue ne s'affiche qu'aux comptes Free : c'est leur unique source de
+  // contenu. Un membre Premium travaille sur ses propres documents et n'a pas à
+  // voir le contenu de découverte dans ses listes.
   const ownedIds = new Set((docs || []).map((d: any) => d.id));
+  const catalog = premium ? [] : await listCatalogDocuments(supabaseAdmin);
 
   const sources: RevisionSource[] = [
     ...(docs || []).map((d: any) => ({

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import CatalogueList from './CatalogueList';
 import AdSlot from '@/components/ads/AdSlot';
+import { isPremium } from '@/lib/plan';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,12 @@ export default async function CataloguePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+
+  // Le Catalogue est réservé aux comptes Free. Le retirer du menu ne suffit pas :
+  // l'URL reste devinable et pourrait être partagée. La redirection ferme la porte
+  // côté serveur, sans rien changer aux droits de lecture du catalogue lui-même
+  // (un Premium garde l'accès aux cours qu'il aurait déjà commencés).
+  if (await isPremium(supabase, user.email)) redirect('/app/dashboard');
 
   // Lecture publique du catalogue (RLS : authenticated + actif=true) — client normal, pas besoin
   // du service role ici, la policy de catalog_courses gère déjà exactement cet accès.
