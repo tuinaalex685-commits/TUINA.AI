@@ -82,3 +82,22 @@ export function getHighImpactScript(): string | null {
   if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
   return env('NEXT_PUBLIC_ADSTERRA_HIGH_IMPACT_URL') || null;
 }
+
+/**
+ * Popunder — le seul format Adsterra qui se déclenche réellement AU CLIC de
+ * l'utilisateur. C'est la voie officielle pour "une pub quand il commence quelque
+ * chose" : le script écoute lui-même le premier clic de la session.
+ *
+ * On ne l'implémente PAS à la main (intercepter chaque bouton pour ouvrir un lien
+ * publicitaire) : les régies traitent ce genre de montage comme du trafic forcé, et
+ * cela fait suspendre un compte publisher — revenus non versés compris.
+ */
+export function getPopunderScript(): string | null {
+  if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
+  return env('NEXT_PUBLIC_ADSTERRA_POPUNDER_URL') || null;
+}
+
+/** Tous les scripts globaux à charger pour un compte Free, dans l'ordre. */
+export function getGlobalAdScripts(): string[] {
+  return [getHighImpactScript(), getPopunderScript()].filter((s): s is string => !!s);
+}

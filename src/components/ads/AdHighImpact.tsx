@@ -26,27 +26,32 @@ const ROUTES_SANS_PUB = [
   '/app/redaction',    // rédaction en cours
 ];
 
-export default function AdHighImpact({ scriptUrl }: { scriptUrl: string }) {
+export default function AdHighImpact({ scripts }: { scripts: string[] }) {
   const pathname = usePathname() || '';
   const exclue = ROUTES_SANS_PUB.some((r) => pathname.startsWith(r));
+  const cle = scripts.join('|');
 
   useEffect(() => {
-    if (exclue || !scriptUrl) return;
+    if (exclue || scripts.length === 0) return;
 
-    // Garde d'unicité : Next.js conserve le layout entre les navigations, un montage
-    // par page empilerait les scripts et multiplierait les affichages.
-    const marqueur = 'data-ad-high-impact';
-    if (document.querySelector(`script[${marqueur}]`)) return;
+    for (const url of scripts) {
+      // Garde d'unicité par script : Next.js conserve le layout entre les navigations,
+      // un montage par page empilerait les scripts et multiplierait les affichages.
+      // Le Popunder en particulier se redéclencherait à chaque page visitée.
+      const deja = document.querySelector(`script[data-ad-global="${url}"]`);
+      if (deja) continue;
 
-    const s = document.createElement('script');
-    s.src = scriptUrl;
-    s.async = true;
-    s.setAttribute(marqueur, 'true');
-    document.body.appendChild(s);
+      const s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.setAttribute('data-ad-global', url);
+      s.setAttribute('data-ad-high-impact', 'true');
+      document.body.appendChild(s);
+    }
 
     // Pas de retrait au démontage : ces formats gèrent leur propre cycle de vie et
     // retirer le script en cours de route laisse des éléments orphelins dans la page.
-  }, [scriptUrl, exclue]);
+  }, [cle, exclue, scripts]);
 
   return null;
 }

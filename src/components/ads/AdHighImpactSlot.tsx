@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
-import { getHighImpactScript } from '@/lib/ads/config';
+import { getGlobalAdScripts } from '@/lib/ads/config';
 import AdHighImpact from './AdHighImpact';
 
 /**
@@ -12,8 +12,8 @@ import AdHighImpact from './AdHighImpact';
  * membre Premium — pas de rendu, pas de script, rien à masquer en CSS.
  */
 export default async function AdHighImpactSlot() {
-  const scriptUrl = getHighImpactScript();
-  if (!scriptUrl) return null;
+  const scripts = getGlobalAdScripts();
+  if (scripts.length === 0) return null;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,5 +21,5 @@ export default async function AdHighImpactSlot() {
 
   if (await isPremium(supabase, user.email)) return null;
 
-  return <AdHighImpact scriptUrl={scriptUrl} />;
+  return <AdHighImpact scripts={scripts} />;
 }
