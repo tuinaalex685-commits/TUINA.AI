@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button/Button';
 import { SEUIL_MAITRISE } from '@/lib/config/mastery';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Résultats d’examen | Tuina.ai' };
+export const metadata = { title: 'Résultats d’examen | SJP' };
 
 function Barre({ score }: { score: number | null }) {
   const val = score ?? 0;

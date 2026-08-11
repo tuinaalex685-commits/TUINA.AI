@@ -26,7 +26,7 @@ export default function UpgradeCourseUI({ pdfId }: { pdfId: string }) {
     <div style={{ padding: '60px 20px', textAlign: 'center', marginTop: '50px', background: 'var(--color-bg-secondary)', borderRadius: '16px', maxWidth: '600px', margin: '50px auto' }}>
       <h2 style={{ color: 'var(--color-text-main)', marginBottom: '16px', fontSize: '24px' }}>Mise à jour requise</h2>
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: '32px', lineHeight: '1.6' }}>
-        Ce cours a été généré avec l'ancienne version de Tuina (V1). Pour profiter de la nouvelle **Étude Guidée Interactive V2** (QCM, cas pratiques, mémorisation active), le cours doit être regénéré avec la nouvelle IA.
+        Ce cours a été généré avec l'ancienne version de SJP (V1). Pour profiter de la nouvelle **Étude Guidée Interactive V2** (QCM, cas pratiques, mémorisation active), le cours doit être regénéré avec la nouvelle IA.
       </p>
       <button 
         onClick={handleUpgrade}

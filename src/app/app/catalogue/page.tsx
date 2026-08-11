@@ -8,7 +8,7 @@ import { isPremium } from '@/lib/plan';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Catalogue | Tuina.ai',
+  title: 'Catalogue | SJP',
 };
 
 export default async function CataloguePage() {

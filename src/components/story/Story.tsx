@@ -36,7 +36,7 @@ export default function Story() {
               Le droit est fascinant, mais la charge de travail est écrasante. Entre les centaines de pages de doctrine à lire, la jurisprudence à ficher et la méthodologie stricte, la plupart des étudiants se sentent noyés.
             </p>
             <p>
-              C'est exactement pour cela que Tuina.ai a été créé. C'est <strong>l'outil qu'il nous manquait en L1</strong> pour y voir clair, gagner du temps et réussir sereinement.
+              C'est exactement pour cela que SJP a été créé. C'est <strong>l'outil qu'il nous manquait en L1</strong> pour y voir clair, gagner du temps et réussir sereinement.
             </p>
           </div>
           

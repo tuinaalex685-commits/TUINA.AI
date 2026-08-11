@@ -5,7 +5,7 @@ import { getExamView } from '@/app/actions/examen';
 import ExamRunner from './ExamRunner';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Examen en cours | Tuina.ai' };
+export const metadata = { title: 'Examen en cours | SJP' };
 
 export default async function ExamSessionPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;

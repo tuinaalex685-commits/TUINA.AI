@@ -124,7 +124,7 @@ export default function ExamenManager({
     <div>
       <AnimatePresence>
         {activeJobId && (
-          <ExamenLoadingScreen key="prep" progress={job.progress} phase={job.phase} done={prepDone} />
+          <ExamenLoadingScreen key="prep" progress={job.progress} phase={job.phase} done={prepDone} premium={premium} />
         )}
       </AnimatePresence>
 

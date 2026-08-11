@@ -5,7 +5,7 @@ import { isPremium } from '@/lib/plan';
 import EtudeList from './EtudeList';
 
 export const metadata = {
-  title: 'Étude Guidée | Tuina.ai',
+  title: 'Étude Guidée | SJP',
 };
 
 export default async function EtudeListPage() {

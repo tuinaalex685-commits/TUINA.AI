@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Correction | Tuina.ai' };
+export const metadata = { title: 'Correction | SJP' };
 
 const TYPE_LABEL: Record<string, string> = {
   qcm: 'QCM', vrai_faux: 'Vrai / Faux', trous: 'Texte à trous', association: 'Association', classement: 'Classement',

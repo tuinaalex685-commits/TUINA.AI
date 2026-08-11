@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface Step { key: string; icon: string; title: string; text: string; accent: string; img?: string; }
 const STEPS: Step[] = [
-  { key: 'welcome', icon: '🎓', title: 'Bienvenue sur Tuina.ai', text: 'Ton assistant d’étude en droit, propulsé par l’IA. Voici en 30 secondes comment il t’accompagne, de ton cours jusqu’à la maîtrise.', accent: '#a855f7' },
+  { key: 'welcome', icon: '🎓', title: 'Bienvenue sur SJP', text: 'Ton assistant d’étude en droit, propulsé par l’IA. Voici en 30 secondes comment il t’accompagne, de ton cours jusqu’à la maîtrise.', accent: '#a855f7' },
   { key: 'biblio', icon: '📁', title: '1. Importe ton cours', text: 'Dans la Bibliothèque, dépose ton cours en PDF. C’est le point de départ : tout part de ton propre support.', accent: '#3b82f6', img: '/onboarding/biblio.webp' },
   { key: 'etude', icon: '📖', title: '2. Apprends avec l’Étude Guidée', text: 'L’IA découpe ton cours en thèmes et t’accompagne pas à pas : explications, questions, cas pratiques.', accent: '#a855f7', img: '/onboarding/etude.webp' },
   { key: 'examen', icon: '🎓', title: '3. Teste-toi avec l’Examen', text: 'Un examen chronométré, sans aide. Tu obtiens une note et tu vois exactement quels thèmes retravailler.', accent: '#ec4899', img: '/onboarding/examen.webp' },

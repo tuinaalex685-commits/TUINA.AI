@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AdWaitBanner from '@/components/ads/AdWaitBanner';
 
 interface Props {
   progress: number;        // progression RÉELLE du backend (0-100)
   phase?: string | null;   // libellé de phase émis par le worker
   done?: boolean;          // true → état de succès (bascule instantanée)
+  premium?: boolean;       // un membre Premium ne voit aucune publicité ici
 }
 
 // Phases alignées sur la progression réelle (processing → generating → saving).
@@ -27,7 +29,7 @@ const TIPS = [
   '⏱️ Un chrono s’affiche pendant l’examen : gère ton temps comme le jour J.',
 ];
 
-export default function ExamenLoadingScreen({ progress, phase, done }: Props) {
+export default function ExamenLoadingScreen({ progress, phase, done, premium }: Props) {
   const pct = done ? 100 : Math.max(0, Math.min(99, Math.round(progress)));
 
   const stepIndex = useMemo(() => {
@@ -150,6 +152,11 @@ export default function ExamenLoadingScreen({ progress, phase, done }: Props) {
             ))}
           </div>
         )}
+
+        {/* Publicité pendant l'attente — comptes Free uniquement. Elle occupe un temps
+            que l'étudiant devait de toute façon patienter, et disparaît avec cet écran
+            dès que la génération est terminée : elle ne retarde jamais son travail. */}
+        <AdWaitBanner premium={premium} />
       </motion.div>
     </motion.div>
   );

@@ -55,7 +55,7 @@ export default function Hero() {
       >
         <motion.div variants={fadeUp} className={styles.badge}>
           <span className={styles.badgeDot} />
-          Tuina.ai est officiellement en ligne
+          SJP est officiellement en ligne
         </motion.div>
 
         <motion.h1 variants={fadeUp} className={styles.title}>

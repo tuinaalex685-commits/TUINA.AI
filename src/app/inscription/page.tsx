@@ -57,7 +57,7 @@ export default function InscriptionPage() {
       >
         <Card className={styles.loginCard}>
           <div className={styles.header}>
-            <h1 className={styles.logo}>Tuina.ai</h1>
+            <h1 className={styles.logo}>SJP</h1>
             <p className={styles.subtitle}>Découvre SJP gratuitement</p>
             <div className={styles.trustRow}>
               <span>✓ Sans carte bancaire</span>

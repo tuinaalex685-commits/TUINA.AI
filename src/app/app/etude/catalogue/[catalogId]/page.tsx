@@ -7,7 +7,7 @@ import EtudeEngine from '@/components/etude/EtudeEngine';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Étude en cours | Tuina.ai',
+  title: 'Étude en cours | SJP',
 };
 
 export default async function EtudeCatalogueCoursePage({ params }: { params: Promise<{ catalogId: string }> }) {

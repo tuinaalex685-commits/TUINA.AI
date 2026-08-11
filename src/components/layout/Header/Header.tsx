@@ -21,7 +21,7 @@ const ROUTE_TITLES: Record<string, string> = {
 export function Header({ className, isAdmin = false }: { className?: string, isAdmin?: boolean }) {
   const pathname = usePathname() || '';
   
-  let title = 'Tuina.ai';
+  let title = 'SJP';
   for (const [route, routeTitle] of Object.entries(ROUTE_TITLES)) {
     if (pathname.startsWith(route)) {
       title = routeTitle;

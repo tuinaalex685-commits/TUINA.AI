@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Tuina.ai | L'Élite des Juristes",
+  title: "SJP | L'Élite des Juristes",
   description: "Plateforme éducative premium pour les étudiants en droit francophones d'Afrique",
 };
 

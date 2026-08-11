@@ -15,7 +15,7 @@ export default function AdminLayout({
           <div className={styles.logoIcon}>
             <Shield size={20} />
           </div>
-          <div className={styles.logoText}>Tuina.ai Admin</div>
+          <div className={styles.logoText}>SJP Admin</div>
         </div>
         <div className={styles.actions}>
           <Link href="/app/dashboard" className={styles.switchLink}>

@@ -109,7 +109,7 @@ export default async function AdminDashboard() {
           Tableau de bord Administrateur
         </h1>
         <p style={{ margin: '8px 0 0 0', color: 'var(--color-text-secondary)', fontSize: '16px' }}>
-          Vue globale sur les performances et outils de gestion de Tuina.ai.
+          Vue globale sur les performances et outils de gestion de SJP.
         </p>
       </header>
 

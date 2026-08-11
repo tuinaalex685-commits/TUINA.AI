@@ -8,6 +8,7 @@ import { updateFlashcardReview } from '@/app/actions/ai';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useJob } from '@/lib/hooks/useJob';
+import AdWaitBanner from '@/components/ads/AdWaitBanner';
 
 export default function RevisionsManager({
   coursList,
@@ -382,6 +383,9 @@ export default function RevisionsManager({
             <Button onClick={handleGenerateFlashcards} disabled={isGenerating} style={{ backgroundColor: '#10b981' }}>
               {isGenerating ? 'Génération en cours...' : 'Générer des Flashcards'}
             </Button>
+            {/* Pendant la génération seulement : l'attente existe de toute façon, la
+                publicité l'occupe. Elle disparaît dès que les cartes sont prêtes. */}
+            {isGenerating && <AdWaitBanner premium={premium} />}
           </div>
         )}
       </div>

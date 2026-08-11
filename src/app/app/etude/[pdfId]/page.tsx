@@ -8,7 +8,7 @@ import UpgradeCourseUI from './UpgradeCourseUI';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Étude en cours | Tuina.ai',
+  title: 'Étude en cours | SJP',
 };
 
 export default async function EtudeCoursePage({ params }: { params: Promise<{ pdfId: string }> }) {

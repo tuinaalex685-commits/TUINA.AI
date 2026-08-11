@@ -31,7 +31,7 @@ export default function Different() {
           </motion.p>
           
           <motion.p variants={fadeUp} className={styles.desc}>
-            Oubliez ChatGPT qui invente des lois ou donne des réponses génériques. Tuina.ai est une intelligence artificielle rigoureuse, pensée à 100% pour la méthodologie juridique.
+            Oubliez ChatGPT qui invente des lois ou donne des réponses génériques. SJP est une intelligence artificielle rigoureuse, pensée à 100% pour la méthodologie juridique.
           </motion.p>
         </motion.div>
       </div>

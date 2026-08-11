@@ -7,7 +7,7 @@ import { getDailyUsage, FREE_LIMITS } from '@/lib/quota';
 import ExamenManager from './ExamenManager';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Examen | Tuina.ai' };
+export const metadata = { title: 'Examen | SJP' };
 
 export default async function ExamenPage() {
   const supabase = await createClient();

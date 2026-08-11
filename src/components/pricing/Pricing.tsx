@@ -8,7 +8,7 @@ import { Crown, Check, Sparkles } from "lucide-react";
 
 export default function Pricing() {
   const whatsappNumber = "22657138126";
-  const message = "Bonjour, je souhaite m'abonner à Tuina.ai Premium (2500 FCFA/mois). Comment puis-je procéder au paiement par Mobile Money ?";
+  const message = "Bonjour, je souhaite m'abonner à SJP Premium (2500 FCFA/mois). Comment puis-je procéder au paiement par Mobile Money ?";
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
   return (
@@ -94,7 +94,7 @@ export default function Pricing() {
               2500 <span className={styles.currency}>FCFA</span> <span className={styles.duration}>/ mois</span>
             </div>
             <p className={styles.description}>
-              L'accès complet à l'intelligence juridique de Tuina.ai pour majorer vos examens.
+              L'accès complet à l'intelligence juridique de SJP pour majorer vos examens.
             </p>
             
             <ul className={styles.featuresList}>

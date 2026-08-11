@@ -55,7 +55,7 @@ export default function LoginPage() {
       >
         <Card className={styles.loginCard}>
           <div className={styles.header}>
-            <h1 className={styles.logo}>Tuina.ai</h1>
+            <h1 className={styles.logo}>SJP</h1>
             <p className={styles.subtitle}>Connexion à la plateforme</p>
           </div>
           
@@ -73,7 +73,7 @@ export default function LoginPage() {
               type="password" 
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Mot de passe ou TUINA-XXXXX"
+              placeholder="Mot de passe ou code d'accès"
               required
             />
             

@@ -59,7 +59,7 @@ export function Sidebar({ className, isAdmin, premium }: { className?: string, i
       {isOpen && <div className={styles.overlay} onClick={() => setIsOpen(false)} />}
       <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''} ${className || ''}`}>
         <div className={styles.logoContainer}>
-          <h1 className={styles.logo}>Tuina.ai</h1>
+          <h1 className={styles.logo}>SJP</h1>
           <button className={styles.closeBtn} onClick={() => setIsOpen(false)}>
             <X size={24} />
           </button>

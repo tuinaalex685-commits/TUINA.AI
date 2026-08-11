@@ -16,7 +16,7 @@ export default function Home() {
     <div className={styles.container}>
       {/* Navigation */}
       <nav className={styles.nav}>
-        <div className={styles.logo}>TUINA.AI</div>
+        <div className={styles.logo}>SJP</div>
         <Link href="/login" className={styles.loginBtn}>
           Se connecter
         </Link>
@@ -32,7 +32,7 @@ export default function Home() {
       {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
-          <p className={styles.copyright}>© {new Date().getFullYear()} Tuina.ai. Tous droits réservés.</p>
+          <p className={styles.copyright}>© {new Date().getFullYear()} SJP. Tous droits réservés.</p>
           <div className={styles.footerInfo}>
             <span style={{ fontSize: '18px' }}>🇧🇫</span>
             <span className={styles.separator}>•</span>
