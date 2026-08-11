@@ -20,7 +20,7 @@ import styles from './AdSlot.module.css';
  */
 export default function AdsterraUnit({ unit }: { unit: AdUnitConfig }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [state, setState] = useState<'pending' | 'shown' | 'failed'>('pending');
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -48,20 +48,34 @@ export default function AdsterraUnit({ unit }: { unit: AdUnitConfig }) {
     );
     doc.close();
 
-    // Si la régie ne répond pas (bloqueur de pub, réseau, domaine non validé),
-    // on retire l'emplacement au lieu de laisser un rectangle vide dans la page.
-    const timer = window.setTimeout(() => {
+    // L'emplacement reste invisible tant qu'aucune bannière n'est réellement arrivée :
+    // afficher le libellé "Publicité" au-dessus d'un rectangle vide donne l'impression
+    // d'un site cassé, et c'est le cas courant (bloqueur de pub, régie sans inventaire,
+    // domaine non encore validé). Le document injecté contient 2 <script> au départ —
+    // au-delà, c'est que la régie a écrit quelque chose.
+    //
+    // On sonde régulièrement plutôt qu'une seule fois : le délai de réponse d'une régie
+    // varie beaucoup selon la connexion, et au Burkina Faso elle est souvent lente.
+    let ecoule = 0;
+    const sonde = window.setInterval(() => {
+      ecoule += 500;
       const body = frame.contentDocument?.body;
-      if (!body || body.childElementCount <= 2) setFailed(true);
-    }, 4000);
+      if (body && body.childElementCount > 2) {
+        setState('shown');
+        window.clearInterval(sonde);
+      } else if (ecoule >= 8000) {
+        setState('failed');
+        window.clearInterval(sonde);
+      }
+    }, 500);
 
-    return () => window.clearTimeout(timer);
+    return () => window.clearInterval(sonde);
   }, [unit.key, unit.scriptUrl, unit.width, unit.height]);
 
-  if (failed) return null;
+  if (state === 'failed') return null;
 
   return (
-    <div className={styles.slot} aria-hidden="true">
+    <div className={`${styles.slot} ${state === 'pending' ? styles.pending : ''}`} aria-hidden="true">
       <span className={styles.label}>Publicité</span>
       <iframe
         ref={frameRef}

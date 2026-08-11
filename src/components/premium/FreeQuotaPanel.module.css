@@ -1,0 +1,137 @@
+/* Bandeau de plan Free : informatif, pas culpabilisant. Il annonce ce qu'il reste,
+   jamais ce qui manque — d'où l'affichage "4 / 5" plutôt qu'un décompte à rebours
+   anxiogène, et une jauge qui ne vire à l'alerte qu'une fois le quota épuisé. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-standard);
+  padding: var(--spacing-standard);
+  margin-bottom: var(--spacing-large);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-standard);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.baseline {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  max-width: 52ch;
+  line-height: 1.5;
+}
+
+.lien {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.prix {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.quotasTitre {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.quotas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--spacing-standard);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quota {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quotaHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quotaNom {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.quotaReste,
+.quotaEpuise {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.quotaReste { color: var(--color-text-secondary); }
+.quotaEpuise { color: var(--color-error, #ef4444); }
+
+.jauge {
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--color-bg-main);
+  overflow: hidden;
+}
+
+.jaugeRemplie {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  transition: width 300ms ease;
+}
+
+.jaugePleine {
+  background: var(--color-error, #ef4444);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jaugeRemplie { transition: none; }
+}

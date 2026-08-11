@@ -14,6 +14,9 @@ import ExamenLoadingScreen from './ExamenLoadingScreen';
 interface ExamItem {
   documentId: string;
   nom: string;
+  /** 'catalogue' = cours publié par SJP, accessible à tous ; 'perso' = document importé. */
+  source?: 'perso' | 'catalogue';
+  catalogId?: string | null;
   bankReady: boolean;
   nbExamens: number;
   derniereNote: number | null;
@@ -21,8 +24,21 @@ interface ExamItem {
   canAdaptive: boolean;
 }
 
-export default function ExamenManager({ initialItems }: { initialItems: ExamItem[] }) {
+export default function ExamenManager({
+  initialItems,
+  premium = false,
+  examensUsed = 0,
+  examensQuota = 0,
+}: {
+  initialItems: ExamItem[];
+  premium?: boolean;
+  examensUsed?: number;
+  examensQuota?: number;
+}) {
   const router = useRouter();
+  const [used, setUsed] = useState(examensUsed);
+  const examensRestants = Math.max(examensQuota - used, 0);
+  const quotaEpuise = !premium && examensRestants === 0;
   // Override optimiste : documents dont la banque vient d'être préparée (bascule instantanée en "Prêt").
   const [readyOverride, setReadyOverride] = useState<Set<string>>(new Set());
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -89,9 +105,13 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
       const res = await startExam(documentId, mode);
       if ((res as any).error || !(res as any).sessionId) {
         setBusyDoc(null);
+        // Quota atteint : on aligne le compteur affiché sur la vérité serveur, pour que
+        // le bandeau bascule immédiatement sans attendre un rechargement.
+        if ((res as any).quotaReached) setUsed((res as any).quota);
         toast.error((res as any).error || 'Impossible de démarrer.', { id });
         return;
       }
+      if (!premium) setUsed((u) => u + 1);
       toast.dismiss(id);
       router.push(`/app/examen/${(res as any).sessionId}`);
     } catch {
@@ -143,6 +163,13 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
                   <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: 'var(--color-text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={it.nom}>
                     {it.nom}
                   </h3>
+                  {/* Un cours du catalogue et un document importé se passent de la même
+                      façon, mais l'étudiant doit savoir d'où vient le contenu qu'il révise. */}
+                  {it.source === 'catalogue' && (
+                    <span style={{ display: 'inline-block', marginBottom: '8px', fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(45, 107, 228, 0.1)', color: '#2D6BE4', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Catalogue SJP
+                    </span>
+                  )}
                   <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
                     {it.nbExamens > 0
                       ? <>Examens passés : {it.nbExamens} · Dernière note : <strong style={{ color: 'var(--color-text-main)' }}>{it.derniereNote}/20</strong>{it.meilleureNote !== null && <> · Meilleure : {it.meilleureNote}/20</>}</>
@@ -157,8 +184,8 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {it.bankReady ? (
-                    <Button onClick={() => demarrer(it.documentId)} disabled={busy} style={{ width: '100%', padding: '10px' }}>
-                      {busy ? 'Démarrage…' : it.nbExamens > 0 ? 'Repasser l’examen' : 'Démarrer l’examen'}
+                    <Button onClick={() => demarrer(it.documentId)} disabled={busy || quotaEpuise} style={{ width: '100%', padding: '10px' }}>
+                      {busy ? 'Démarrage…' : quotaEpuise ? 'Limite atteinte aujourd’hui' : it.nbExamens > 0 ? 'Repasser l’examen' : 'Démarrer l’examen'}
                     </Button>
                   ) : (
                     <Button onClick={() => genererBanque(it.documentId)} disabled={busy} style={{ width: '100%', padding: '10px' }}>
@@ -166,8 +193,13 @@ export default function ExamenManager({ initialItems }: { initialItems: ExamItem
                     </Button>
                   )}
                   {it.bankReady && it.canAdaptive && (
-                    <Button onClick={() => demarrer(it.documentId, 'adaptatif')} disabled={busy} style={{ width: '100%', padding: '10px' }}>
-                      🎯 Examen adaptatif (thèmes faibles)
+                    <Button
+                      onClick={() => demarrer(it.documentId, 'adaptatif')}
+                      disabled={busy || !premium}
+                      title={premium ? undefined : 'Réservé aux membres Premium'}
+                      style={{ width: '100%', padding: '10px' }}
+                    >
+                      {premium ? '🎯 Examen adaptatif (thèmes faibles)' : '🔒 Examen adaptatif — Premium'}
                     </Button>
                   )}
                   {it.nbExamens > 0 && (

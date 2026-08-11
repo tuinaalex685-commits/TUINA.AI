@@ -161,7 +161,7 @@ export default function DashboardManager({
               </>
             ) : (
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', margin: 0 }}>
-                Aucune révision prévue pour le moment. Importez des PDF pour générer des flashcards.
+                Aucune révision prévue pour le moment. Ouvre un cours et génère des flashcards pour commencer.
               </p>
             )}
           </div>
