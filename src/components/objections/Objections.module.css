@@ -1,0 +1,171 @@
+.objectionsSection {
+  padding: 120px 24px;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 10;
+  background: var(--color-bg-secondary);
+}
+
+.container {
+  max-width: 1180px;
+  width: 100%;
+}
+
+.title {
+  font-family: var(--font-outfit), sans-serif;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 800;
+  color: var(--color-text-main);
+  letter-spacing: -1px;
+  line-height: 1.15;
+  margin: 0 0 60px;
+  max-width: 720px;
+}
+
+.title span {
+  color: var(--color-accent);
+  font-style: italic;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.card {
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
+  padding: 20px 20px 32px;
+  box-shadow: 0 20px 40px rgba(27, 58, 107, 0.05);
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 28px 56px rgba(27, 58, 107, 0.1);
+}
+
+.photoFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 28px;
+  /* Plaque bleue derrière la photo : elle donne une base commune aux trois
+     portraits, dont les fonds d'origine sont différents. */
+  background: linear-gradient(160deg, var(--color-accent) 0%, var(--color-primary) 100%);
+}
+
+.photo {
+  object-fit: cover;
+  /* Le cadrage part du haut : c'est le visage qu'on veut garder, jamais couper. */
+  object-position: 50% 10%;
+  /* Légère désaturation commune, pour que les trois photos se répondent. */
+  filter: saturate(0.9) contrast(1.03);
+  transform-origin: 50% 15%;
+}
+
+/* Portrait pris de loin : on se rapproche pour que le visage pèse autant que
+   sur un gros plan. */
+.framingWide {
+  transform: scale(1.55);
+}
+
+/* Portrait déjà serré : on le laisse tel quel. */
+.framingClose {
+  transform: scale(1);
+  object-position: 50% 22%;
+}
+
+.photoTint {
+  position: absolute;
+  inset: 0;
+  /* Voile de marque assumé : les trois photos n'ont pas le même fond d'origine
+     (noir, gris, beige). Ce dégradé bleu, plus marqué en bas, leur donne une
+     signature commune et fait tenir la rangée ensemble. */
+  background:
+    linear-gradient(180deg, rgba(45, 107, 228, 0.06) 0%, rgba(45, 107, 228, 0.14) 45%, rgba(27, 58, 107, 0.5) 100%);
+  pointer-events: none;
+}
+
+.quote {
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  letter-spacing: -0.4px;
+  line-height: 1.35;
+  margin: 0 0 12px;
+  padding: 0 4px;
+  /* Deux lignes réservées : sans cela, une question courte et une question longue
+     décalent le texte qui suit d'une carte à l'autre. */
+  min-height: 54px;
+}
+
+.answer {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: var(--color-text-secondary);
+  margin: 0;
+  padding: 0 4px;
+}
+
+.answer strong {
+  color: var(--color-text-main);
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .objectionsSection {
+    padding: 60px 16px;
+  }
+
+  .title {
+    font-size: clamp(26px, 8vw, 34px);
+    margin-bottom: 36px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .card {
+    border-radius: 24px;
+  }
+
+  .photoFrame {
+    /* On garde le format portrait du bureau : en 3/2, le recadrage rapproché
+       coupait le haut du crâne. */
+    aspect-ratio: 4 / 5;
+    margin-bottom: 22px;
+  }
+
+  .quote {
+    font-size: 18px;
+    /* En colonne unique, plus rien n'est à aligner entre les cartes. */
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}

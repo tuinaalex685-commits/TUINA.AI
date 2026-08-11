@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { motion, Variants } from "framer-motion";
 import { Quote } from "lucide-react";
 import styles from "./Story.module.css";
@@ -42,7 +43,13 @@ export default function Story() {
           
           <div className={styles.founderInfo}>
             <div className={styles.avatar}>
-              <span>TZ</span>
+              <Image
+                src="/photos/portrait-alex.png"
+                alt="Tuina Zoubiesse Alex Ulrich, fondateur de SJP"
+                fill
+                className={styles.avatarPhoto}
+                sizes="56px"
+              />
             </div>
             <div className={styles.founderDetails}>
               <strong>Tuina Zoubiesse Alex Ulrich</strong>

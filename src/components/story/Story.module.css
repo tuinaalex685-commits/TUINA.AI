@@ -98,18 +98,26 @@
 }
 
 .avatar {
+  position: relative;
   width: 56px;
   height: 56px;
+  flex-shrink: 0;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 20px;
-  font-family: var(--font-outfit), sans-serif;
+  overflow: hidden;
   box-shadow: 0 4px 12px rgba(45, 107, 228, 0.2);
+}
+
+.avatarPhoto {
+  object-fit: cover;
+  /* Le portrait est un plan large : sans ce rapprochage, le visage serait
+     illisible dans une pastille de 56 px. */
+  /* Source 896x1195 : dans une pastille de 56 px, le portrait entier ne laisse au
+     visage que ~22 px. Ce rapprochage le porte à ~34 px, et l'origine décalée vers
+     le haut garde le visage centré dans le cercle plutôt que rogné. */
+  object-position: 50% 0%;
+  transform: scale(1.55);
+  transform-origin: 50% 18%;
 }
 
 .founderDetails {
