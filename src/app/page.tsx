@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 
 import Hero from "../components/hero/Hero";
-import Objections from "../components/objections/Objections";
+import Collaborateurs from "../components/collaborateurs/Collaborateurs";
 import Story from "../components/story/Story";
 import Features from "../components/features/Features";
 import Different from "../components/different/Different";
@@ -24,8 +24,8 @@ export default function Home() {
       </nav>
 
       <Hero />
-      <Objections />
       <Story />
+      <Collaborateurs />
       <Features />
       <Different />
       <Pricing />
