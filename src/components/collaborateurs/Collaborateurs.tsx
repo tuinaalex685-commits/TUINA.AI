@@ -33,7 +33,7 @@ const MEMBRES: Membre[] = [
     roles: ["Étudiant en droit", "Fondateur"]
   },
   {
-    photo: "/photos/portrait-gris.jpg",
+    photo: "/photos/portrait-ali.jpg",
     framing: styles.framingClose,
     nom: "Ali Conseiga",
     roles: ["Ingénieur Infographe", "Designer Graphique"]

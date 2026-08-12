@@ -86,10 +86,12 @@
   transform: scale(1.55);
 }
 
-/* Portrait déjà serré : on le laisse tel quel. */
+/* Portrait déjà serré (source 853x1280, plan poitrine) : aucun rapprochage.
+   Le cadrage est descendu dans l'image pour remonter le visage — sans cela, la
+   ligne des yeux tombait plus bas que celle des deux autres portraits. */
 .framingClose {
   transform: scale(1);
-  object-position: 50% 22%;
+  object-position: 50% 30%;
 }
 
 .photoTint {
