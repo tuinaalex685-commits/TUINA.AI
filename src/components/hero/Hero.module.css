@@ -61,22 +61,38 @@
 }
 
 .title {
-  font-family: var(--font-outfit), sans-serif;
-  font-size: clamp(48px, 6vw, 72px);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -1.5px;
-  color: #0f172a; /* Rich slate dark color */
-  margin: 0 0 24px 0;
-  text-wrap: balance;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 28px 0;
 }
 
-.title span {
+.sigle {
+  font-family: var(--font-outfit), sans-serif;
+  /* 18vw : le sigle ne fait que trois lettres, il peut occuper toute la largeur
+     sans jamais déborder. */
+  font-size: clamp(72px, 18vw, 190px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -6px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
-  display: inline-block;
-  padding-bottom: 8px;
+  color: transparent;
+  display: block;
+  padding-bottom: 10px;
+}
+
+.definition {
+  font-family: var(--font-outfit), sans-serif;
+  font-size: clamp(18px, 2.6vw, 30px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.5px;
+  color: #0f172a;
+  text-wrap: balance;
 }
 
 .subtitle {
@@ -137,9 +153,12 @@
     height: 300px;
   }
 
-  .title {
-    font-size: clamp(36px, 10vw, 48px);
-    letter-spacing: -1px;
+  .sigle {
+    letter-spacing: -4px;
+  }
+
+  .definition {
+    letter-spacing: 0.2px;
   }
   
   .subtitle {

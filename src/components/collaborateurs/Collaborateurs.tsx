@@ -27,6 +27,12 @@ interface Membre {
  */
 const MEMBRES: Membre[] = [
   {
+    photo: "/photos/portrait-alex.png",
+    framing: styles.framingWide,
+    nom: "Tuina Zoubiesse Alex Ulrich",
+    roles: ["Étudiant en droit", "Fondateur"]
+  },
+  {
     photo: "/photos/portrait-gris.jpg",
     framing: styles.framingClose,
     nom: "Ali Conseiga",
@@ -51,12 +57,11 @@ export default function Collaborateurs() {
         variants={{ visible: { transition: { staggerChildren: 0.12 } } }}
       >
         <motion.h2 variants={fadeUp} className={styles.title}>
-          Collaborateurs
+          Fondateur et collaborateurs
         </motion.h2>
 
         <motion.p variants={fadeUp} className={styles.intro}>
-          SJP n&apos;est pas un outil anonyme. Voici celles et ceux qui le construisent
-          aux côtés du fondateur.
+          SJP n&apos;est pas un outil anonyme. Voici les visages qui le construisent.
         </motion.p>
 
         <div className={styles.grid}>

@@ -58,8 +58,12 @@ export default function Hero() {
           SJP est officiellement en ligne
         </motion.div>
 
+        {/* Le sigle porte le titre de niveau 1, et sa signification est dans le même
+            titre : un « SJP » seul ne dirait rien ni à un moteur de recherche, ni à
+            un lecteur d'écran, ni à un visiteur qui découvre le nom. */}
         <motion.h1 variants={fadeUp} className={styles.title}>
-          Majorez en droit sans sacrifier vos <span>nuits</span>.
+          <span className={styles.sigle}>SJP</span>
+          <span className={styles.definition}>Sciences Juridiques et Politiques</span>
         </motion.h1>
         
         <motion.p variants={fadeUp} className={styles.subtitle}>

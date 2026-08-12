@@ -15,15 +15,20 @@
 
 .title {
   font-family: var(--font-outfit), sans-serif;
-  /* 8.5vw : "COLLABORATEURS" est un mot long et insécable. Au-delà, il déborde
-     de l'écran sur un téléphone — le S final était coupé à 390 px. */
-  font-size: clamp(24px, 8.5vw, 76px);
+  /* Le titre peut désormais passer à la ligne, mais "COLLABORATEURS" reste un mot
+     long et insécable : c'est lui qui fixe la taille maximale tenable sur un
+     téléphone. À 7vw il rentre encore à 360 px. */
+  font-size: clamp(28px, 7vw, 64px);
   font-weight: 800;
+  text-wrap: balance;
+  max-width: 14ch;
   color: var(--color-text-main);
   text-transform: uppercase;
   letter-spacing: -1.5px;
   line-height: 1;
-  margin: 0 0 18px;
+  /* `auto` sur les côtés, et pas margin-inline plus haut : la forme courte
+     `margin` réinitialiserait le centrage. */
+  margin: 0 auto 18px;
 }
 
 .intro {
