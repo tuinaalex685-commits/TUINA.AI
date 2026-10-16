@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { motion, MotionConfig } from 'framer-motion';
 import { Lock, LogOut, Menu, X, UserRound, ShieldCheck } from 'lucide-react';
 import styles from './Sidebar.module.css';
 import { supabase } from '@/lib/supabase/client';
-import { NAV_GROUPS, visibleItems, mobileTabs } from './navItems';
+import { NAV_GROUPS, TONES, visibleItems, mobileTabs, type NavTone } from './navItems';
 
 interface SidebarProps {
   className?: string;
@@ -13,16 +14,35 @@ interface SidebarProps {
   premium?: boolean;
 }
 
+/** Variables CSS de la teinte d'une entrée, lues par Sidebar.module.css. */
+const toneVars = (tone: NavTone) => ({
+  '--tone': TONES[tone].ink,
+  '--tone-soft': TONES[tone].soft,
+  '--tone-glow': TONES[tone].glow,
+}) as React.CSSProperties;
+
+/** Ressort court : la pastille glisse vite d'une entrée à l'autre et se pose sans rebond visible. */
+const PILL_SPRING = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 } as const;
+/** Ressort vif pour l'icône qui « s'allume » : un petit rebond, une seule fois. */
+const ICON_SPRING = { type: 'spring', stiffness: 600, damping: 14 } as const;
+
 /**
  * Ordinateur : menu latéral blanc, regroupé par intention.
  * Tablette  : le même menu réduit à une colonne d'icônes avec libellés courts.
- * Mobile    : barre d'onglets en bas (au pouce) + « Menu » qui ouvre la liste complète.
+ * Mobile    : barre d'onglets en bas (au pouce) + « Menu » qui ouvre la liste complète.
+ *
+ * Chaque section a sa couleur (navItems.ts). L'entrée active est marquée par une pastille
+ * teintée qui glisse d'une entrée à l'autre (layoutId) ; au clic, un halo bref de la même
+ * couleur « allume » l'entrée. Tout est coupé si l'appareil demande moins d'animations.
  */
 export function Sidebar({ className, isAdmin = false, premium = false }: SidebarProps) {
   const pathname = usePathname() || '';
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
+  // Dernière entrée cliquée : le compteur relance le halo même sur un second clic.
+  const [flash, setFlash] = useState<{ path: string; n: number }>({ path: '', n: 0 });
+  const ignite = (path: string) => setFlash((f) => ({ path, n: f.n + 1 }));
 
   // Changement de page → la feuille mobile se referme (ajusté pendant le rendu, sans effet).
   if (pathname !== lastPath) {
@@ -46,7 +66,8 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/');
 
-  const navList = (
+  // `scope` sépare la pastille du menu latéral de celle de la feuille mobile (deux layoutId).
+  const renderNav = (scope: 'side' | 'sheet') => (
     <nav className={styles.nav} aria-label="Navigation principale">
       {NAV_GROUPS.map((group, gi) => {
         const items = visibleItems(group.items, premium);
@@ -64,10 +85,25 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
                   href={item.path}
                   prefetch
                   className={`${styles.navItem} ${active ? styles.active : ''}`}
+                  style={toneVars(item.tone)}
                   aria-current={active ? 'page' : undefined}
                   title={item.label}
+                  onClick={() => ignite(item.path)}
                 >
-                  <Icon size={19} strokeWidth={1.9} className={styles.icon} aria-hidden />
+                  {active && (
+                    <motion.span layoutId={`nav-pill-${scope}`} className={styles.pill} transition={PILL_SPRING} aria-hidden />
+                  )}
+                  {flash.path === item.path && <span key={flash.n} className={styles.halo} aria-hidden />}
+                  <motion.span
+                    key={active ? 'on' : 'off'}
+                    className={styles.iconWrap}
+                    initial={active ? { scale: 0.7, rotate: -12 } : false}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={ICON_SPRING}
+                    whileTap={{ scale: 0.82 }}
+                  >
+                    <Icon size={19} strokeWidth={active ? 2.2 : 1.9} className={styles.icon} aria-hidden />
+                  </motion.span>
                   <span className={styles.label}>{item.label}</span>
                   {/* Le lien reste cliquable : la page présente la fonctionnalité et le Premium. */}
                   {locked && <Lock size={13} className={styles.lock} aria-label="Réservé au Premium" />}
@@ -106,15 +142,16 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
     </div>
   );
 
+  // reducedMotion="user" : si l'appareil demande moins d'animations, framer-motion les coupe.
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       {/* Ordinateur et tablette */}
       <aside className={`${styles.sidebar} ${className || ''}`}>
         <Link href="/app/dashboard" className={styles.brand} aria-label="SJP, accueil">
           <span className={styles.brandMark}>SJP</span>
           <span className={styles.brandName}>Sciences juridiques et politiques</span>
         </Link>
-        {navList}
+        {renderNav('side')}
         {footer}
       </aside>
 
@@ -124,19 +161,35 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
           const Icon = tab.icon;
           const active = isActive(tab.path);
           return (
-            <Link key={tab.path} href={tab.path} prefetch className={`${styles.tab} ${active ? styles.tabActive : ''}`} aria-current={active ? 'page' : undefined}>
-              <Icon size={22} strokeWidth={active ? 2.2 : 1.8} aria-hidden />
+            <Link
+              key={tab.path}
+              href={tab.path}
+              prefetch
+              className={`${styles.tab} ${active ? styles.tabActive : ''}`}
+              style={toneVars(tab.tone)}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => ignite(tab.path)}
+            >
+              <span className={styles.tabIcon}>
+                {active && <motion.span layoutId="tab-pill" className={styles.tabPill} transition={PILL_SPRING} aria-hidden />}
+                {flash.path === tab.path && <span key={flash.n} className={styles.tabHalo} aria-hidden />}
+                <motion.span className={styles.tabGlyph} whileTap={{ scale: 0.8 }}>
+                  <Icon size={22} strokeWidth={active ? 2.2 : 1.8} aria-hidden />
+                </motion.span>
+              </span>
               <span>{tab.label}</span>
             </Link>
           );
         })}
         <button type="button" className={`${styles.tab} ${sheetOpen ? styles.tabActive : ''}`} onClick={() => setSheetOpen(true)} aria-expanded={sheetOpen} aria-controls="menu-mobile">
-          <Menu size={22} strokeWidth={1.8} aria-hidden />
+          <span className={styles.tabIcon}>
+            <span className={styles.tabGlyph}><Menu size={22} strokeWidth={1.8} aria-hidden /></span>
+          </span>
           <span>Menu</span>
         </button>
       </nav>
 
-      {/* Mobile : feuille « Menu » avec toutes les sections */}
+      {/* Mobile : feuille « Menu » avec toutes les sections */}
       {sheetOpen && (
         <div className={styles.sheetLayer}>
           <div className={styles.scrim} onClick={() => setSheetOpen(false)} aria-hidden />
@@ -147,11 +200,11 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
                 <X size={22} />
               </button>
             </div>
-            {navList}
+            {renderNav('sheet')}
             {footer}
           </div>
         </div>
       )}
-    </>
+    </MotionConfig>
   );
 }

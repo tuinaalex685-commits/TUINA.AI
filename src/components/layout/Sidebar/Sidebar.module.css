@@ -69,22 +69,57 @@
   color: var(--ink-2);
   font-size: var(--text-sm);
   font-weight: 500;
-  transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
 
+/* Survol : la teinte de la section affleure, l'icône prend sa couleur et le libellé avance d'un cheveu. */
 .navItem:hover {
-  background: var(--paper-2);
+  background: color-mix(in srgb, var(--tone-soft) 55%, transparent);
   color: var(--ink);
 }
 
-.navItem.active {
-  background: var(--action-soft);
-  color: var(--action);
-  font-weight: 600;
+.navItem:hover .icon {
+  color: var(--tone);
 }
 
-/* Filet d'encre à gauche de l'entrée active : le « marque-page ». */
-.navItem.active::before {
+.label {
+  position: relative;
+  transition: transform 220ms var(--ease-out);
+}
+
+.navItem:hover .label {
+  transform: translateX(2px);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
+}
+
+.navItem.active {
+  color: var(--tone);
+  font-weight: 650;
+}
+
+.navItem.active:hover {
+  background: transparent;
+}
+
+/* Pastille de l'entrée active : elle glisse d'une entrée à l'autre (framer-motion, layoutId). */
+.pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-md);
+  background: var(--tone-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 14%, transparent);
+  animation: ignite 700ms var(--ease-out);
+}
+
+/* Filet coloré à gauche : le « marque-page » de la section ouverte. */
+.pill::before {
   content: '';
   position: absolute;
   left: -12px;
@@ -92,11 +127,63 @@
   bottom: 10px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--action);
+  background: var(--tone);
+  box-shadow: 0 0 10px var(--tone-glow);
+}
+
+/* Halo du clic : une onde de la couleur de la section, qui part de l'icône. */
+.halo {
+  position: absolute;
+  left: 21px;
+  top: 50%;
+  z-index: -1;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--tone-glow) 0%, transparent 70%);
+  pointer-events: none;
+  animation: ripple 620ms var(--ease-out) forwards;
+}
+
+.iconWrap {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 .icon {
   flex-shrink: 0;
+  transition: color 180ms var(--ease-out);
+}
+
+.navItem.active .icon {
+  filter: drop-shadow(0 0 6px var(--tone-glow));
+}
+
+/* L'entrée « s'allume » : un éclat lumineux bref autour de la pastille, puis le calme. */
+@keyframes ignite {
+  0%   { box-shadow: inset 0 0 0 1px var(--tone), 0 0 0 0 var(--tone-glow); }
+  35%  { box-shadow: inset 0 0 0 1px var(--tone), 0 0 18px 2px var(--tone-glow); }
+  100% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 14%, transparent), 0 0 0 0 transparent; }
+}
+
+@keyframes ripple {
+  from { transform: scale(0.4); opacity: 1; }
+  to   { transform: scale(3.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .halo,
+  .tabPill,
+  .tabHalo {
+    animation: none;
+  }
+  .label,
+  .navItem:hover .label {
+    transition: none;
+    transform: none;
+  }
 }
 
 .lock {
@@ -129,6 +216,19 @@
   height: 8px;
   border-radius: 50%;
   background: var(--action);
+  animation: breathe 2.8s ease-in-out infinite;
+}
+
+/* Le point Premium « respire » doucement : l'abonnement est actif. */
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(30, 90, 150, 0.45); }
+  50%      { box-shadow: 0 0 0 5px rgba(30, 90, 150, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planDot {
+    animation: none;
+  }
 }
 
 .upgrade {
@@ -233,8 +333,15 @@
     line-height: 1.15;
     max-width: 76px;
   }
-  .navItem.active::before {
+  .pill::before {
     left: -8px;
+  }
+  .halo {
+    left: 50%;
+    top: 22px;
+  }
+  .navItem:hover .label {
+    transform: none;
   }
   .lock {
     position: absolute;
@@ -279,11 +386,51 @@
   color: var(--ink-3);
   font-size: 11.5px;
   font-weight: 500;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 180ms var(--ease-out);
 }
 
 .tabActive {
-  color: var(--action);
+  color: var(--tone, var(--action));
   font-weight: 700;
+}
+
+/* Icône d'onglet : la pastille teintée glisse d'un onglet à l'autre, comme sur ordinateur. */
+.tabIcon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 30px;
+  isolation: isolate;
+}
+
+.tabPill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  animation: ignite 700ms var(--ease-out);
+}
+
+.tabHalo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--tone-glow) 0%, transparent 70%);
+  pointer-events: none;
+  animation: ripple 620ms var(--ease-out) forwards;
+}
+
+.tabGlyph {
+  display: inline-flex;
 }
 
 .sheetLayer {
