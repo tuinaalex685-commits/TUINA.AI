@@ -1,47 +1,25 @@
-"use client";
+import type { Metadata } from 'next';
+import Landing from '@/components/landing/Landing';
+import { FREE_LIMITS } from '@/lib/quota';
 
-import React from "react";
-import Link from "next/link";
-import styles from "./page.module.css";
+export const metadata: Metadata = {
+  title: 'SJP · Réviser le droit, enfin clairement',
+  description:
+    'Étude guidée, cartes de révision et examens corrigés à partir de ton cours de droit. Pour les étudiants de L1 et L2 en Afrique francophone.',
+};
 
-import Hero from "../components/hero/Hero";
-import Collaborateurs from "../components/collaborateurs/Collaborateurs";
-import Story from "../components/story/Story";
-import Features from "../components/features/Features";
-import Different from "../components/different/Different";
-import Pricing from "../components/pricing/Pricing";
-import Finale from "../components/finale/Finale";
+const WHATSAPP_NUMBER = '22657138126';
+const WHATSAPP_MESSAGE = 'Bonjour, je souhaite passer à SJP Premium (2 500 FCFA pour 30 jours). Comment payer par Mobile Money ?';
 
+/**
+ * Page d'accueil publique. Composant serveur : les limites de l'offre gratuite viennent du
+ * code des quotas (lib/quota.ts), jamais d'un texte recopié qui finirait par diverger.
+ */
 export default function Home() {
   return (
-    <div className={styles.container}>
-      {/* Navigation */}
-      <nav className={styles.nav}>
-        <div className={styles.logo}>SJP</div>
-        <Link href="/login" className={styles.loginBtn}>
-          Se connecter
-        </Link>
-      </nav>
-
-      <Hero />
-      <Story />
-      <Collaborateurs />
-      <Features />
-      <Different />
-      <Pricing />
-      <Finale />
-
-      {/* Footer */}
-      <footer className={styles.footer}>
-        <div className={styles.footerContent}>
-          <p className={styles.copyright}>© {new Date().getFullYear()} SJP. Tous droits réservés.</p>
-          <div className={styles.footerInfo}>
-            <span style={{ fontSize: '18px' }}>🇧🇫</span>
-            <span className={styles.separator}>•</span>
-            <a href="tel:+22657138126" className={styles.contactLink}>Contact : +226 57 13 81 26</a>
-          </div>
-        </div>
-      </footer>
-    </div>
+    <Landing
+      limits={{ examen: FREE_LIMITS.examen, revision: FREE_LIMITS.revision, cas_pratique: FREE_LIMITS.cas_pratique }}
+      whatsappUrl={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`}
+    />
   );
 }
