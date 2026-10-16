@@ -24,6 +24,10 @@ DROP POLICY IF EXISTS "ai_jobs_insert_own" ON public.ai_jobs;
 -- 2. DOCUMENTS : plus aucune insertion depuis le navigateur -----------------------------------
 -- Le serveur enregistre le document (registerDocument) à partir du chemin Storage vérifié.
 DROP POLICY IF EXISTS "insert_documents" ON public.documents;
+-- La policy « ALL » existante autorisait AUSSI insertion et MODIFICATION (url_fichier,
+-- extracted_text…) depuis le navigateur. Elle est remplacée par les policies séparées déjà en
+-- place : lecture (select_documents) et suppression (delete_documents) de SES documents.
+DROP POLICY IF EXISTS "Documents : Accès utilisateur" ON public.documents;
 
 -- 3. FONCTIONS SECURITY DEFINER : réservées au serveur ----------------------------------------
 -- Supabase accorde par défaut EXECUTE à anon et authenticated : REVOKE FROM PUBLIC ne suffit pas.
@@ -89,6 +93,7 @@ COMMIT;
 -- BEGIN;
 -- CREATE POLICY "ai_jobs_insert_own" ON public.ai_jobs FOR INSERT WITH CHECK (auth.uid() = user_id);
 -- CREATE POLICY "insert_documents" ON public.documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- CREATE POLICY "Documents : Accès utilisateur" ON public.documents FOR ALL USING (auth.uid() = user_id);
 -- GRANT EXECUTE ON FUNCTION public.claim_ai_job(timestamptz, timestamptz) TO anon, authenticated;
 -- GRANT EXECUTE ON FUNCTION public.examen_save_answer(uuid, uuid, text, jsonb) TO anon, authenticated;
 -- (la colonne expires_at peut rester : l'ancien code l'ignore)
