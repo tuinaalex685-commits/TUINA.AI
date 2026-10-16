@@ -2,246 +2,182 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { exactEmailPattern, normalizeEmail } from '@/lib/email';
+import { revalidatePath } from 'next/cache';
+import { premiumExpiryFromNow, isCodeCurrentlyActive } from '@/lib/plan';
 
-export async function loginWithAccessCode(email: string, secret: string) {
+/**
+ * AUTHENTIFICATION — email + mot de passe, et activation d'un code Premium UNE FOIS CONNECTÉ.
+ *
+ * Ancien fonctionnement (supprimé) : le code d'accès servait de mot de passe. Un code « vierge »
+ * était rattaché au premier email saisi avec lui, puis le serveur REMPLAÇAIT le mot de passe du
+ * compte portant cet email par le code (updateUserById). Détenir un seul code non utilisé
+ * suffisait donc à prendre le contrôle de n'importe quel compte sans code — administrateur
+ * compris (faille C-01 du master plan). Désormais :
+ *   - aucun chemin ne modifie le mot de passe d'un autre compte que celui de la session ;
+ *   - un code est rattaché à l'email du compte CONNECTÉ, jamais à un email saisi.
+ *
+ * Les étudiants déjà inscrits ont pour mot de passe leur ancien code : ils se connectent donc
+ * comme avant (email + code), puis on leur demande de choisir un mot de passe personnel.
+ */
+
+const GENERIC_LOGIN_ERROR = "Email ou mot de passe incorrect.";
+
+export async function login(email: string, password: string) {
   try {
+    const cleanEmail = normalizeEmail(email);
+    if (!cleanEmail || !password) return { error: GENERIC_LOGIN_ERROR };
+
     const supabase = await createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
 
-    // 1. TENTATIVE CLASSIQUE DE CONNEXION (Email + Mot de passe ou Code utilisé comme mdp)
-    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: secret,
-    });
-
-    if (!signInError && authData.user) {
-      // Succès de la connexion par mot de passe
-      const { data: roleData } = await supabaseAdmin
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', authData.user.id)
-        .single();
-
-      const userRole = roleData?.role || 'student';
-
-      // VERIFICATION DU CODE D'ACCES POUR LES ETUDIANTS — UNIQUEMENT SI CE MOT DE PASSE EST
-      // UN CODE. Un étudiant Free (inscription libre, Phase 2) se connecte avec un vrai mot de
-      // passe personnel qui ne correspond à aucun access_codes.code : c'est un état valide
-      // depuis Phase 2, pas une erreur — le statut Free/Premium réel est recalculé à chaque
-      // requête par le middleware via l'EMAIL, jamais via ce mot de passe.
-      if (userRole !== 'admin') {
-        const { data: accessCode } = await supabaseAdmin
-          .from('access_codes')
-          .select('*')
-          .eq('code', secret)
-          .maybeSingle();
-
-        if (accessCode) {
-          if (accessCode.status === 'inactive') {
-            return { error: "Ce code d'accès a été désactivé par l'administrateur." };
-          }
-          if (accessCode.status === 'blocked') {
-            return { error: "Votre accès à la plateforme a été bloqué." };
-          }
-          // S'assurer que l'email correspond au code (en ignorant la casse)
-          if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
-            return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
-          }
-        }
+    if (error || !data.user) {
+      if (error?.message?.toLowerCase().includes('email not confirmed')) {
+        return { error: "Confirme d'abord ton adresse email : un lien t'a été envoyé à l'inscription." };
       }
-
-      return { success: true, role: userRole };
+      // Message unique : on ne révèle pas si le compte existe (pas d'énumération d'emails).
+      return { error: GENERIC_LOGIN_ERROR };
     }
 
-    // 2. SI ECHEC DE CONNEXION (Mot de passe faux, ou compte inexistant, ou banni)
-    const { count: roleCount, error: countError } = await supabaseAdmin
-      .from('user_roles')
-      .select('*', { count: 'exact', head: true });
+    const { data: roleData } = await supabaseAdmin
+      .from('user_roles').select('role').eq('user_id', data.user.id).maybeSingle();
+    const role = roleData?.role === 'admin' ? 'admin' : 'student';
 
-    if (countError) {
-      return { error: "Erreur technique de vérification des rôles." };
-    }
-
-    // --- CAS A : Aucun utilisateur dans la base (C'est le tout premier compte !) ---
-    if (roleCount === 0) {
-      const { data: newUserData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: secret,
-        email_confirm: true,
-      });
-
-      if (signUpError || !newUserData.user) {
-        return { error: "Erreur lors de la création du compte administrateur." };
-      }
-
-      await supabaseAdmin.from('user_roles').insert({
-        user_id: newUserData.user.id,
-        email: email,
-        role: 'admin'
-      });
-
-      await supabase.auth.signInWithPassword({ email, password: secret });
-      return { success: true, role: 'admin' };
-    }
-
-    // --- CAS B : La base contient déjà des utilisateurs. Vérification du code d'accès fourni ---
-    const { data: accessCode, error: codeError } = await supabaseAdmin
-      .from('access_codes')
-      .select('*')
-      .eq('code', secret)
-      .single();
-
-    if (codeError || !accessCode) {
-      if (signInError && signInError.message.toLowerCase().includes('ban')) {
-        return { error: "Votre compte a été banni." };
-      }
-      return { error: "Identifiants ou code d'accès invalides." };
-    }
-
-    if (accessCode.email && accessCode.email.toLowerCase() !== email.toLowerCase()) {
-      return { error: "Ce code d'accès est déjà assigné à un autre étudiant." };
-    }
-    if (accessCode.status === 'inactive') {
-      return { error: "Ce code d'accès a été désactivé." };
-    }
-    if (accessCode.status === 'blocked') {
-      return { error: "L'accès à ce compte a été bloqué." };
-    }
-
-    // Assigner l'email si ce n'est pas fait (C'est un code vierge)
-    if (!accessCode.email) {
-      // SÉCURITÉ : Vérifier que l'étudiant ne possède pas DÉJÀ un autre code !
-      const { data: existingCodes } = await supabaseAdmin
-        .from('access_codes')
-        .select('id')
-        .ilike('email', email);
-
-      if (existingCodes && existingCodes.length > 0) {
-        return { error: "Vous possédez déjà un code d'accès. Si vous l'avez perdu, demandez à l'administrateur de le réinitialiser." };
-      }
-
-      // Claim ATOMIQUE : n'assigne l'email que si le code est encore vierge (email IS NULL).
-      // Empêche deux étudiants de réclamer le même code simultanément (race condition).
-      const { data: claimedCode, error: updateErr } = await supabaseAdmin
-        .from('access_codes')
-        .update({ email: email })
-        .eq('id', accessCode.id)
-        .is('email', null)
-        .select()
+    // Ancien compte dont le mot de passe EST son code d'accès : l'administrateur voit ce code en
+    // clair dans le tableau de bord, il faut donc le remplacer par un mot de passe personnel.
+    let mustChangePassword = false;
+    if (role !== 'admin') {
+      const { data: code } = await supabaseAdmin
+        .from('access_codes').select('id')
+        .eq('code', password)
+        .ilike('email', exactEmailPattern(cleanEmail))
         .maybeSingle();
-
-      if (updateErr) {
-        console.error("[AUTH] Erreur lors de l'assignation de l'email au code:", updateErr);
-        return { error: "Erreur serveur lors de la validation du code." };
-      }
-      if (!claimedCode) {
-        return { error: "Ce code d'accès vient d'être assigné à un autre étudiant." };
-      }
+      mustChangePassword = !!code;
     }
 
-    // Vérifier si l'étudiant a déjà un compte Auth
-    const { data: existingRole } = await supabaseAdmin
-      .from('user_roles')
-      .select('user_id')
-      .ilike('email', email)
-      .single();
-
-    if (!existingRole) {
-      // Création du compte étudiant
-      const { data: newStudentData, error: studentSignUpError } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: secret,
-        email_confirm: true,
-      });
-
-      if (studentSignUpError || !newStudentData.user) {
-        return { error: "Erreur technique lors de la création du compte." };
-      }
-
-      await supabaseAdmin.from('user_roles').insert({
-        user_id: newStudentData.user.id,
-        email: email,
-        role: 'student'
-      }).select().single();
-    } else {
-      console.log(`[AUTH] Utilisateur existant (role). Mise à jour Auth. uid: ${existingRole.user_id}`);
-      // L'utilisateur existe mais signInWithPassword a échoué (probablement un nouveau code)
-      const { error: updateAuthErr } = await supabaseAdmin.auth.admin.updateUserById(existingRole.user_id, { 
-        password: secret,
-        ban_duration: "none" // Révoque tout ban précédent si le nouveau code est valide
-      });
-
-      if (updateAuthErr) {
-        console.error("[AUTH] Erreur updateUserById:", updateAuthErr);
-        // Si l'utilisateur a été supprimé de auth.users (User not found)
-        if (updateAuthErr.message.includes('not found')) {
-            console.log("[AUTH] Utilisateur introuvable dans auth.users. Recréation...");
-            // Il faut recréer l'utilisateur dans auth.users
-            const { data: recreatedUser, error: recreateErr } = await supabaseAdmin.auth.admin.createUser({
-                email: email,
-                password: secret,
-                email_confirm: true,
-            });
-            if (recreateErr || !recreatedUser.user) {
-                return { error: `Erreur de recréation du compte: ${recreateErr?.message}` };
-            }
-            // Mettre à jour user_roles avec le NOUVEAU user_id
-            await supabaseAdmin.from('user_roles').update({ user_id: recreatedUser.user.id }).eq('email', email);
-            // Mettre à jour les documents avec le NOUVEAU user_id
-            await supabaseAdmin.from('documents').update({ user_id: recreatedUser.user.id }).eq('user_id', existingRole.user_id);
-            console.log(`[AUTH] Compte recréé avec succès. Nouveau uid: ${recreatedUser.user.id}`);
-        } else {
-            return { error: `Erreur de restauration du compte: ${updateAuthErr.message}` };
-        }
-      } else {
-        console.log(`[AUTH] Mise à jour Auth réussie pour ${email}.`);
-      }
-    }
-
-    // Finalement, on connecte l'étudiant
-    console.log(`[AUTH] Tentative de connexion finale avec email=${email}`);
-    const { data: finalAuthData, error: finalSignInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: secret,
-    });
-
-    if (finalSignInError) {
-      console.error("[AUTH] Echec connexion finale:", finalSignInError);
-      return { error: `Impossible de se connecter après validation du code: ${finalSignInError.message}` };
-    }
-    
-    console.log(`[AUTH] Connexion finale réussie pour ${email}`);
-    return { success: true, role: 'student' };
-
-  } catch (err: any) {
-    console.error("Auth server error:", err);
+    return { success: true, role, mustChangePassword };
+  } catch (err) {
+    console.error('[auth] login:', err);
     return { error: "Une erreur inattendue s'est produite." };
   }
 }
 
-// Inscription Free (Phase 2) — le SEUL chemin de création de compte qui passe par le flux
-// PUBLIC signUp() de Supabase (mot de passe réel, confirmation email réelle). Différent de
-// loginWithAccessCode ci-dessus, qui crée un compte via l'API admin (email pré-confirmé,
-// réservé au parcours "code d'accès reçu après paiement"). Aucun access_codes créé ici :
-// l'utilisateur reste Free tant qu'aucun code actif ne lui est assigné par un admin.
+// Inscription Free — flux PUBLIC signUp() de Supabase (mot de passe réel, confirmation email).
+// Un trigger crée la ligne user_roles. L'utilisateur reste Free tant qu'il n'a pas activé de code.
 export async function signUpFree(email: string, password: string) {
   try {
-    if (!email || !password) return { error: "Email et mot de passe requis." };
+    const cleanEmail = normalizeEmail(email);
+    if (!cleanEmail || !password) return { error: "Email et mot de passe requis." };
     if (password.length < 8) return { error: "Le mot de passe doit contenir au moins 8 caractères." };
 
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
 
     if (error) {
-      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
-        return { error: "Un compte existe déjà avec cet email. Connectez-vous plutôt." };
+      const msg = error.message.toLowerCase();
+      if (msg.includes('already registered') || msg.includes('already exists')) {
+        return { error: "Un compte existe déjà avec cet email. Connecte-toi plutôt." };
       }
-      return { error: error.message };
+      if (msg.includes('password')) return { error: "Ce mot de passe est trop faible. Choisis-en un plus long." };
+      console.error('[auth] signUpFree:', error.message);
+      return { error: "Inscription impossible pour le moment. Réessaie dans un instant." };
     }
     if (!data.user) return { error: "Impossible de créer le compte." };
 
     return { success: true, needsConfirmation: !data.session };
-  } catch (err: any) {
-    console.error("Auth signUpFree error:", err);
+  } catch (err) {
+    console.error('[auth] signUpFree:', err);
     return { error: "Une erreur inattendue s'est produite." };
   }
+}
+
+/** Nouveau mot de passe pour le compte CONNECTÉ (et seulement lui). */
+export async function changeMyPassword(newPassword: string) {
+  if (!newPassword || newPassword.length < 8) {
+    return { error: "Le mot de passe doit contenir au moins 8 caractères." };
+  }
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Non authentifié' };
+
+  // Le nouveau mot de passe ne doit pas être un code d'accès (visible par l'administrateur).
+  const { data: isCode } = await supabaseAdmin
+    .from('access_codes').select('id').eq('code', newPassword).maybeSingle();
+  if (isCode) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    console.error('[auth] changeMyPassword:', error.message);
+    return { error: "Modification impossible. Choisis un autre mot de passe ou réessaie." };
+  }
+  return { success: true };
+}
+
+/** Tentatives d'activation par jour : empêche de deviner des codes en boucle. */
+const CODE_ATTEMPTS_PER_DAY = 10;
+
+/**
+ * Active un code Premium sur le compte CONNECTÉ.
+ * Le code doit être actif et soit vierge, soit déjà rattaché à l'email de ce compte.
+ */
+export async function activateAccessCode(rawCode: string) {
+  const code = (rawCode || '').trim();
+  if (!code || code.length > 100) return { error: "Saisis ton code d'accès." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) return { error: 'Non authentifié' };
+  const email = normalizeEmail(user.email);
+
+  // Compteur atomique existant (consume_free_quota est générique : utilisateur + clé + limite).
+  const { data: attempt, error: attemptErr } = await supabaseAdmin.rpc('consume_free_quota', {
+    p_user_id: user.id, p_feature: 'code_attempt', p_limit: CODE_ATTEMPTS_PER_DAY,
+  });
+  if (attemptErr) {
+    console.error('[auth] compteur de tentatives indisponible:', attemptErr.message);
+    return { error: "Activation impossible pour le moment. Réessaie dans un instant." };
+  }
+  const attemptRow = Array.isArray(attempt) ? attempt[0] : attempt;
+  if (attemptRow?.allowed !== true) {
+    return { error: "Trop de tentatives aujourd'hui. Réessaie demain ou contacte l'administrateur." };
+  }
+
+  const { data: accessCode } = await supabaseAdmin
+    .from('access_codes').select('*').eq('code', code).maybeSingle();
+
+  const invalid = { error: "Ce code n'est pas valide. Vérifie-le ou contacte l'administrateur." };
+  if (!accessCode || accessCode.status !== 'active') return invalid;
+
+  if (accessCode.email) {
+    // Déjà rattaché : valable uniquement pour son titulaire.
+    if (normalizeEmail(accessCode.email) !== email) return invalid;
+    if (!isCodeCurrentlyActive(accessCode)) {
+      return { error: "Ton abonnement Premium a expiré. Contacte l'administrateur pour le renouveler." };
+    }
+    return { success: true, alreadyActive: true };
+  }
+
+  // Claim ATOMIQUE : n'assigne l'email que si le code est encore vierge (email IS NULL).
+  // Le mois de Premium démarre à cet instant (expires_at).
+  const claim = (patch: Record<string, string>) => supabaseAdmin
+    .from('access_codes')
+    .update(patch)
+    .eq('id', accessCode.id)
+    .is('email', null)
+    .select('id')
+    .maybeSingle();
+  let { data: claimed, error: claimErr } = await claim({ email, expires_at: premiumExpiryFromNow() });
+  if (claimErr?.code === '42703') {
+    // Migration expires_at non appliquée : activation sans date (comportement historique).
+    ({ data: claimed, error: claimErr } = await claim({ email }));
+  }
+
+  if (claimErr) {
+    console.error('[auth] activation du code:', claimErr.message);
+    return { error: "Activation impossible pour le moment. Réessaie dans un instant." };
+  }
+  if (!claimed) return invalid; // réclamé par quelqu'un d'autre entre-temps
+
+  revalidatePath('/app', 'layout');
+  return { success: true };
 }

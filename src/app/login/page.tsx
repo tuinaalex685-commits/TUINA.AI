@@ -7,12 +7,12 @@ import { Input } from '@/components/ui/Input/Input';
 import styles from './login.module.css';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { loginWithAccessCode } from '@/app/actions/auth';
+import { login } from '@/app/actions/auth';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
@@ -22,8 +22,7 @@ export default function LoginPage() {
     setLoading(true);
     setMessage('');
     
-    // Appel sécurisé au backend unifié
-    const result = await loginWithAccessCode(email, code);
+    const result = await login(email, password);
 
     if (result.error) {
       setMessage(result.error);
@@ -31,6 +30,9 @@ export default function LoginPage() {
     } else if (result.success) {
       if (result.role === 'admin') {
         router.push('/admin/dashboard');
+      } else if (result.mustChangePassword) {
+        // Ancien compte : le mot de passe est encore le code d'accès → mot de passe personnel.
+        router.push('/app/compte?motdepasse=1');
       } else {
         router.push('/app/dashboard');
       }
@@ -69,13 +71,17 @@ export default function LoginPage() {
               required
             />
             <Input 
-              label="Mot de passe ou Code d'accès" 
+              label="Mot de passe" 
               type="password" 
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Mot de passe ou code d'accès"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Ton mot de passe"
+              autoComplete="current-password"
               required
             />
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '-4px 0 0' }}>
+              Déjà inscrit avec un code d&apos;accès ? Saisis ton code comme mot de passe : on te proposera ensuite d&apos;en choisir un personnel.
+            </p>
             
             {message && <p className={styles.message}>{message}</p>}
             

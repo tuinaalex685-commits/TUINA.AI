@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import PremiumLock from '@/components/premium/PremiumLock';
 import ObjectifsManager from './ObjectifsManager';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function ObjectifsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 

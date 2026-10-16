@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import { getDailyUsage, FREE_LIMITS, type FreeFeature } from '@/lib/quota';
 import styles from './FreeQuotaPanel.module.css';
+import { getCurrentUser } from '@/lib/viewer';
 
 /**
  * BANDEAU DE PLAN — ce que l'étudiant Free peut encore faire aujourd'hui.
@@ -15,7 +16,7 @@ import styles from './FreeQuotaPanel.module.css';
  * Les quotas sont affichés avant même d'être atteints : découvrir une limite au
  * moment où elle bloque est la meilleure façon de faire fuir quelqu'un.
  */
-const LIBELLES: Record<FreeFeature, string> = {
+const LIBELLES: Partial<Record<FreeFeature, string>> = {
   examen: 'Examens',
   revision: 'Révisions',
   cas_pratique: 'Cas pratiques',
@@ -23,13 +24,15 @@ const LIBELLES: Record<FreeFeature, string> = {
 
 export default async function FreeQuotaPanel() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   if (await isPremium(supabase, user.email)) return null;
 
   const usage = await getDailyUsage(user.id);
-  const features = Object.keys(FREE_LIMITS) as FreeFeature[];
+  // Seuls les quotas que le Free rencontre réellement sont affichés (les Évaluations portent
+  // sur des documents personnels, donc sur un usage Premium dans les faits).
+  const features = (Object.keys(FREE_LIMITS) as FreeFeature[]).filter((f) => LIBELLES[f]);
 
   return (
     <section className={styles.panel} aria-label="Votre plan">

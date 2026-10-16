@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import PremiumLock from '@/components/premium/PremiumLock';
 import MatiereManager from './MatiereManager';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function MatieresPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   // Organiser ses propres matières n'a de sens qu'avec ses propres cours : c'est le
   // prolongement direct de l'import personnel, donc du Premium.

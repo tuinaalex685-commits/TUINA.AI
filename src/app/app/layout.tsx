@@ -5,6 +5,7 @@ import styles from './layout.module.css';
 import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import AdHighImpactSlot from '@/components/ads/AdHighImpactSlot';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function AppLayout({
   children,
@@ -12,7 +13,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   let isAdmin = false;
   let premium = false;

@@ -3,6 +3,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { premiumExpiryFromNow } from '@/lib/plan';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE ---
 async function requireAdmin() {
@@ -67,14 +68,18 @@ export async function updateAccessCodeStatus(id: string, status: 'active' | 'ina
   try {
     await requireAdmin(); // Vérification de sécurité obligatoire
 
-    // 1. Mettre à jour le statut du code
-    const { data: codeData, error } = await supabaseAdmin
-      .from('access_codes')
-      .update({ status })
-      .eq('id', id)
-      .select('email')
-      .single();
+    // Réactiver un code déjà rattaché à un étudiant = une nouvelle période d'un mois de Premium
+    // à partir d'aujourd'hui. Un code vierge n'a pas de date : son mois démarre à l'activation.
+    const { data: current } = await supabaseAdmin
+      .from('access_codes').select('email').eq('id', id).maybeSingle();
+    const patch: Record<string, string> = { status };
+    if (status === 'active' && current?.email) patch.expires_at = premiumExpiryFromNow();
 
+    let { error } = await supabaseAdmin.from('access_codes').update(patch).eq('id', id);
+    if (error?.code === '42703') {
+      // Migration expires_at non appliquée : mise à jour du statut seul.
+      ({ error } = await supabaseAdmin.from('access_codes').update({ status }).eq('id', id));
+    }
     if (error) return { error: error.message };
 
     revalidatePath('/admin/dashboard/users');

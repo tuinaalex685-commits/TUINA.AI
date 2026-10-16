@@ -52,7 +52,9 @@ export default function ChapitreManager({
           } else if (payload.eventType === 'DELETE') {
             setDocuments(prev => prev.filter(d => d.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE') {
-            setDocuments(prev => prev.map(d => d.id === payload.new.id ? { ...d, ...payload.new } : d));
+            // Seul le nom peut changer à l'écran. Fusionner toute la ligne réinjectait le texte
+            // intégral du PDF (extracted_text) et remplaçait le lien signé par l'URL brute.
+            setDocuments(prev => prev.map(d => d.id === payload.new.id ? { ...d, nom: (payload.new as any).nom ?? d.nom } : d));
           }
         }
       )

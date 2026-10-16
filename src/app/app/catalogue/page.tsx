@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import CatalogueList from './CatalogueList';
 import AdSlot from '@/components/ads/AdSlot';
 import { isPremium } from '@/lib/plan';
+import { getCurrentUser } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const metadata = {
 
 export default async function CataloguePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   // Le Catalogue est réservé aux comptes Free. Le retirer du menu ne suffit pas :

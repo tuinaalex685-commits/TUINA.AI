@@ -106,16 +106,17 @@ export async function getDailyRedactionUsage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
-  
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const { count } = await supabase
-    .from('redactions')
-    .select('*', { count: 'exact', head: true })
+
+  // Même compteur que celui qui AUTORISE la correction (consume_free_quota, feature 'redaction',
+  // jour UTC) : l'affichage ne peut plus diverger de la règle appliquée côté serveur.
+  const jour = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('free_daily_usage')
+    .select('count')
     .eq('user_id', user.id)
-    .eq('statut', 'analyse')
-    .gte('date_creation', startOfDay.toISOString());
-    
-  return count || 0;
+    .eq('jour', jour)
+    .eq('feature', 'redaction')
+    .maybeSingle();
+
+  return data?.count || 0;
 }

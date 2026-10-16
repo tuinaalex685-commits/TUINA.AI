@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { isPremium } from '@/lib/plan';
 import EtudeList from './EtudeList';
+import { getCurrentUser } from '@/lib/viewer';
 
 export const metadata = {
   title: 'Étude Guidée | SJP',
@@ -10,7 +11,7 @@ export const metadata = {
 
 export default async function EtudeListPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     redirect('/login');

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import EtudeEngine from '@/components/etude/EtudeEngine';
 import UpgradeCourseUI from './UpgradeCourseUI';
+import { getCurrentUser } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
   const { pdfId } = await params;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) redirect('/login');
 
@@ -23,21 +24,23 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
   // indépendant de la RLS). C'est ce qui autorise ensuite la lecture du contenu du cours via le
   // service role — la RLS sur etude_cours/sections/themes bloque les étudiants en lecture, ce qui
   // laissait la page bloquée sur l'écran de génération à 95%.
-  const { data: ownedDoc } = await supabaseAdmin
-    .from('documents')
-    .select('id, intelligence_pedagogique')
-    .eq('id', pdfId)
-    .eq('user_id', user.id)
-    .maybeSingle();
+  // Document et cours lus EN PARALLÈLE (latence C-15). Le cours n'est utilisé qu'après la
+  // vérification d'appartenance ci-dessous : le lire en même temps ne fuit rien.
+  const [{ data: ownedDoc }, { data: cours }] = await Promise.all([
+    supabaseAdmin
+      .from('documents')
+      .select('id, intelligence_pedagogique')
+      .eq('id', pdfId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('etude_cours')
+      .select('id, statut_generation')
+      .eq('pdf_id', pdfId)
+      .maybeSingle(),
+  ]);
 
   if (!ownedDoc) redirect('/app/etude');
-
-  // Lecture du cours via service role (contenu partagé non sensible ; appartenance déjà vérifiée).
-  const { data: cours } = await supabaseAdmin
-    .from('etude_cours')
-    .select('*')
-    .eq('pdf_id', pdfId)
-    .single();
 
   if (!cours || cours.statut_generation !== 'pret') {
     // Pass generating flag
@@ -56,20 +59,21 @@ export default async function EtudeCoursePage({ params }: { params: Promise<{ pd
     return <UpgradeCourseUI pdfId={pdfId} />;
   }
 
-  // Fetch all themes for these sections
+  // Thèmes et progression des sections : indépendants, lus en parallèle (latence C-15).
   const sectionIds = sections?.map(s => s.id) || [];
-  const { data: themes } = await supabaseAdmin
-    .from('etude_themes')
-    .select('*')
-    .in('section_id', sectionIds)
-    .order('ordre', { ascending: true });
-
-  // 9. Progression persistante : récupérer l'état exact (Couche 2). Filtre user_id explicite.
-  const { data: progSections } = await supabaseAdmin
-    .from('etude_progression_sections')
-    .select('*')
-    .eq('user_id', user.id)
-    .in('section_id', sectionIds);
+  const [{ data: themes }, { data: progSections }] = await Promise.all([
+    supabaseAdmin
+      .from('etude_themes')
+      .select('*')
+      .in('section_id', sectionIds)
+      .order('ordre', { ascending: true }),
+    // 9. Progression persistante : récupérer l'état exact (Couche 2). Filtre user_id explicite.
+    supabaseAdmin
+      .from('etude_progression_sections')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('section_id', sectionIds),
+  ]);
 
   const { data: progThemes } = await supabaseAdmin
     .from('etude_progression_themes')

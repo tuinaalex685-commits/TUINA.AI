@@ -5,13 +5,14 @@ import { getExamDashboard } from '@/app/actions/examen';
 import { isPremium } from '@/lib/plan';
 import { getDailyUsage, FREE_LIMITS } from '@/lib/quota';
 import ExamenManager from './ExamenManager';
+import { getCurrentUser } from '@/lib/viewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Examen | SJP' };
 
 export default async function ExamenPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const res = await getExamDashboard();

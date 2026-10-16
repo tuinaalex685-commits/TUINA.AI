@@ -1,5 +1,7 @@
+import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { exactEmailPattern } from '@/lib/email';
 
 /**
  * STATUT FREE / PREMIUM — source de vérité unique de toute l'application.
@@ -28,22 +30,48 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  *     authentifiée : on ne lit jamais que la ligne de l'utilisateur courant.
  */
 
-async function hasActiveAccessCode(email: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
-    .from('access_codes').select('status').ilike('email', email);
+/** Durée d'un abonnement Premium à partir de l'activation (ou de la réactivation) du code. */
+export const PREMIUM_DURATION_DAYS = 30;
+
+/** Date d'expiration d'un code activé ou réactivé maintenant. */
+export function premiumExpiryFromNow(): string {
+  return new Date(Date.now() + PREMIUM_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Un code donne le Premium s'il est 'active' ET non expiré. L'expiration est DÉRIVÉE à la
+ * lecture : à la date prévue, l'étudiant redevient Free à sa requête suivante, sans tâche
+ * planifiée. L'administrateur réactive le code → nouvelle période d'un mois.
+ */
+export function isCodeCurrentlyActive(c: { status: string; expires_at?: string | null }): boolean {
+  if (c.status !== 'active') return false;
+  if (!c.expires_at) return true; // code non encore daté (avant migration) : comportement historique
+  return new Date(c.expires_at).getTime() > Date.now();
+}
+
+// Mutualisé par rendu serveur (React cache) : layout, menu, encarts et page posent la même
+// question pour le même email ; une seule lecture suffit. Sans effet hors rendu (actions, API).
+const hasActiveAccessCode = cache(async (email: string): Promise<boolean> => {
+  let { data, error } = await supabaseAdmin
+    .from('access_codes').select('status, expires_at').ilike('email', exactEmailPattern(email));
+  if (error?.code === '42703') {
+    // Colonne expires_at pas encore créée (migration non appliquée) : lecture sans expiration.
+    ({ data, error } = await supabaseAdmin
+      .from('access_codes').select('status').ilike('email', exactEmailPattern(email)) as any);
+  }
   if (error) {
     // Fail closed : en cas de panne, on ne distribue pas du Premium gratuitement.
     console.error('[plan] lecture access_codes impossible:', error.message);
     return false;
   }
-  return !!data?.some((c: { status: string }) => c.status === 'active');
-}
+  return !!data?.some((c: any) => isCodeCurrentlyActive(c));
+});
 
-async function isAdminEmail(email: string): Promise<boolean> {
+const isAdminEmail = cache(async (email: string): Promise<boolean> => {
   const { data } = await supabaseAdmin
-    .from('user_roles').select('role').ilike('email', email).maybeSingle();
+    .from('user_roles').select('role').ilike('email', exactEmailPattern(email)).maybeSingle();
   return data?.role === 'admin';
-}
+});
 
 /**
  * Signature inchangée pour rester compatible avec tous les appels existants

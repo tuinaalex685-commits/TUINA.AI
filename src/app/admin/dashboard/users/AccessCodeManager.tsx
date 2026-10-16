@@ -36,8 +36,15 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     setLoading(false);
   };
 
-  const handleStatusChange = (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+  // Un code actif dont le mois est écoulé ne donne plus le Premium : l'étudiant est repassé
+  // en Free. « Réactiver » repart pour un mois à partir d'aujourd'hui.
+  // Heure de référence figée au montage (un rendu doit rester pur) ; router.refresh() la renouvelle.
+  const [now] = useState(() => Date.now());
+  const isExpired = (code: any) => !!code.expires_at && new Date(code.expires_at).getTime() <= now;
+  const isLive = (code: any) => code.status === 'active' && !isExpired(code);
+
+  const handleStatusChange = (id: string, live: boolean) => {
+    const newStatus = live ? 'inactive' : 'active';
     setActiveActionId(`${id}-status`);
     startTransition(async () => {
       await updateAccessCodeStatus(id, newStatus as any);
@@ -94,7 +101,8 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
               <th style={{ padding: 'var(--spacing-small) 0' }}>Email</th>
               <th style={{ padding: 'var(--spacing-small) 0' }}>Code d'accès</th>
               <th style={{ padding: 'var(--spacing-small) 0' }}>Statut</th>
-              <th style={{ padding: 'var(--spacing-small) 0' }}>Date</th>
+              <th style={{ padding: 'var(--spacing-small) 0' }}>Créé le</th>
+              <th style={{ padding: 'var(--spacing-small) 0' }}>Premium jusqu'au</th>
               <th style={{ padding: 'var(--spacing-small) 0', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
@@ -110,22 +118,25 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                   </code>
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0' }}>
-                  <Badge status={code.status === 'active' ? 'mastered' : 'review'}>
-                    {code.status}
+                  <Badge status={isLive(code) ? 'mastered' : 'review'}>
+                    {isLive(code) ? 'actif' : code.status === 'active' ? 'expiré' : code.status === 'blocked' ? 'bloqué' : 'inactif'}
                   </Badge>
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0', color: 'var(--color-text-secondary)' }}>
-                  {new Date(code.created_at).toLocaleDateString()}
+                  {new Date(code.created_at).toLocaleDateString('fr-FR')}
+                </td>
+                <td style={{ padding: 'var(--spacing-standard) 0', color: isExpired(code) ? 'var(--color-error)' : 'var(--color-text-secondary)' }}>
+                  {code.expires_at ? new Date(code.expires_at).toLocaleDateString('fr-FR') : code.email ? '—' : "à l'activation"}
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0', textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                     <Button 
                       variant="secondary" 
-                      onClick={() => handleStatusChange(code.id, code.status)}
+                      onClick={() => handleStatusChange(code.id, isLive(code))}
                       disabled={isPending && activeActionId === `${code.id}-status`}
                       style={{ padding: '6px 12px', fontSize: '12px' }}
                     >
-                      {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : code.status === 'active' ? 'Désactiver' : 'Activer'}
+                      {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : isLive(code) ? 'Désactiver' : code.email ? 'Réactiver (1 mois)' : 'Activer'}
                     </Button>
                     <Button
                       variant="secondary"

@@ -6,6 +6,8 @@ import {
   BANQUE_MIN_QUESTIONS_VALIDES, BANQUE_REPARTITION_TYPES, BANQUE_REPARTITION_DIFFICULTE,
   TAILLE_BANQUE, EXAMEN_TYPES, EXAMEN_DIFFICULTES
 } from '@/lib/config/examen';
+import { resolveDocumentAccess } from '@/lib/access';
+import { downloadDocumentPdf } from '@/lib/storage';
 import crypto from 'crypto';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
@@ -86,7 +88,11 @@ async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHa
 // Contrôles via payload : mockDelayMs (temps de génération simulé), mockFailTimes + mockFailKind
 // ('transient'|'permanent') pour tester déterministiquement retries / erreur permanente.
 // ===========================================================================
-const isMockJob = (job: any) => job?.payload?.mock === true;
+// Le générateur simulé n'est JAMAIS actif en production, quel que soit le payload : un payload
+// `mock: true` venu d'un client remplissait sinon les caches partagés avec des données factices.
+// Activation explicite pour les tests de charge/locaux : AI_MOCK_ENABLED=1 hors production.
+const MOCK_ALLOWED = process.env.AI_MOCK_ENABLED === '1' && process.env.VERCEL_ENV !== 'production';
+const isMockJob = (job: any) => MOCK_ALLOWED && job?.payload?.mock === true;
 
 // Journalise une "génération" simulée à coût 0 → les tests comptent les générations (dédup) sans dépenser.
 async function trackMockGeneration(feature: string, userId: string | undefined, documentId: string | undefined) {
@@ -172,15 +178,14 @@ async function waitForData<T>(check: () => Promise<T | null>, maxMs: number, ste
 async function getDocumentText(documentId: string): Promise<{ text: string; intelligence: any; coursId: string | null }> {
   const { data: doc, error } = await supabaseAdmin
     .from('documents')
-    .select('id, url_fichier, extracted_text, intelligence_pedagogique, cours_id')
+    .select('id, user_id, url_fichier, extracted_text, intelligence_pedagogique, cours_id')
     .eq('id', documentId)
     .single();
   if (error || !doc) throw new Error(`Document introuvable (${documentId}).`);
 
   let text = doc.extracted_text || '';
   if (!text && doc.url_fichier) {
-    const resp = await fetch(doc.url_fichier);
-    const buf = Buffer.from(await resp.arrayBuffer());
+    const buf = await downloadDocumentPdf(doc);
     if (buf.length > 25 * 1024 * 1024) throw new Error('PDF trop volumineux (max 25 Mo).');
     const parsed = await pdfParse(buf);
     text = parsed.text || '';
@@ -204,13 +209,12 @@ async function getSourceText(documentId?: string, coursId?: string | null): Prom
     let text = '';
     const { data: chapitres } = await supabaseAdmin.from('chapitres').select('titre, contenu_texte').eq('cours_id', coursId);
     if (chapitres?.length) text += chapitres.map((c: any) => `${c.titre}\n${c.contenu_texte || ''}`).join('\n\n');
-    const { data: docs } = await supabaseAdmin.from('documents').select('id, url_fichier, extracted_text').eq('cours_id', coursId);
+    const { data: docs } = await supabaseAdmin.from('documents').select('id, user_id, url_fichier, extracted_text').eq('cours_id', coursId);
     for (const doc of docs || []) {
       let t = doc.extracted_text || '';
       if (!t && doc.url_fichier) {
         try {
-          const r = await fetch(doc.url_fichier);
-          const b = Buffer.from(await r.arrayBuffer());
+          const b = await downloadDocumentPdf(doc);
           if (b.length <= 25 * 1024 * 1024) {
             const pd = await pdfParse(b);
             t = pd.text || '';
@@ -271,7 +275,8 @@ async function processEvaluation(job: any, ctx: JobCtx): Promise<any> {
   if (!documentId) throw new Error('documentId manquant.');
 
   const { text, intelligence, coursId } = await getDocumentText(documentId);
-  const sourceHash = sha256(text);
+  // Préfixe 'mock:' : les données simulées n'atterrissent jamais dans le cache réel partagé.
+  const sourceHash = isMockJob(job) ? `mock:${sha256(text)}` : sha256(text);
   let result = job.result || {};
 
   // Phase A : obtenir les questions (result → cache DB → single-flight → Gemini)
@@ -342,7 +347,7 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
   const documentId = p.documentId;
 
   const { text, coursId } = await getSourceText(documentId, p.coursId);
-  const sourceHash = sha256(text);
+  const sourceHash = isMockJob(job) ? `mock:${sha256(text)}` : sha256(text);
   let result = job.result || {};
   if (result.inserted) return result; // idempotent : déjà fait
 
@@ -941,6 +946,44 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
 }
 
 // ---------------------------------------------------------------------------
+// CONTRÔLE D'ACCÈS (défense en profondeur)
+// Le worker lit les contenus avec le service role, qui ignore la RLS. Un job peut avoir été créé
+// par un autre chemin que enqueueAiJob (insertion directe tant que la policy INSERT existait) :
+// on revérifie donc ici que job.user_id a le droit d'utiliser la ressource visée.
+// ---------------------------------------------------------------------------
+class AccessDeniedError extends Error {}
+
+async function assertJobAccess(job: any): Promise<void> {
+  const p = job.payload || {};
+  const userId = job.user_id;
+  if (!userId) throw new AccessDeniedError('Accès refusé : job sans propriétaire.');
+
+  if (job.type === 'redaction') {
+    const { data } = await supabaseAdmin.from('redactions').select('user_id').eq('id', p.redactionId).maybeSingle();
+    if (!data || data.user_id !== userId) throw new AccessDeniedError('Accès refusé à cette rédaction.');
+    return;
+  }
+
+  if (p.documentId && p.documentId !== 'dummy') {
+    const access = await resolveDocumentAccess(supabaseAdmin, userId, p.documentId);
+    const catalogAllowed = job.type === 'flashcards' || job.type === 'examen_pool';
+    if (access === 'owner' || (access === 'catalog' && catalogAllowed)) return;
+    throw new AccessDeniedError('Accès refusé à ce document.');
+  }
+
+  if (job.type === 'flashcards' && p.coursId) {
+    const { data: cours } = await supabaseAdmin.from('cours').select('matiere_id').eq('id', p.coursId).maybeSingle();
+    const { data: matiere } = cours
+      ? await supabaseAdmin.from('matieres').select('id').eq('id', cours.matiere_id).eq('user_id', userId).maybeSingle()
+      : { data: null };
+    if (matiere) return;
+    throw new AccessDeniedError('Accès refusé à ce cours.');
+  }
+
+  throw new AccessDeniedError('Accès refusé : ressource manquante.');
+}
+
+// ---------------------------------------------------------------------------
 // BOUCLE WORKER : lease atomique → dispatch → done/retry → chaînage
 // ---------------------------------------------------------------------------
 export async function runAiWorker(workerUrl?: string): Promise<any> {
@@ -987,6 +1030,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
   const ctx = makeCtx(leased.id);
 
   try {
+    await assertJobAccess(leased);
     let result: any;
     if (leased.type === 'evaluation') result = await processEvaluation(leased, ctx);
     else if (leased.type === 'flashcards') result = await processFlashcards(leased, ctx);
@@ -1014,8 +1058,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
-    const transient = isRetryableError(err);
-    const maxAttempts = transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
+    const transient = !(err instanceof AccessDeniedError) && isRetryableError(err);
+    // Un refus d'accès ne se corrige pas en réessayant : échec immédiat.
+    const maxAttempts = err instanceof AccessDeniedError ? 1 : transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
     const willRetry = attempts < maxAttempts;
 
     if (willRetry) {

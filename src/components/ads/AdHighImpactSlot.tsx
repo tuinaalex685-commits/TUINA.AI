@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import { getGlobalAdScripts } from '@/lib/ads/config';
 import AdHighImpact from './AdHighImpact';
+import { getCurrentUser } from '@/lib/viewer';
 
 /**
  * Décide, CÔTÉ SERVEUR, si le format publicitaire haute visibilité doit exister.
@@ -16,7 +17,7 @@ export default async function AdHighImpactSlot() {
   if (scripts.length === 0) return null;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   if (await isPremium(supabase, user.email)) return null;

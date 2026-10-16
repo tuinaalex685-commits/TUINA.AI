@@ -8,10 +8,11 @@ import { getCoursMasteryBreakdown } from '@/lib/etude/mastery';
 import { isPremium } from '@/lib/plan';
 import PremiumLock from '@/components/premium/PremiumLock';
 import RedactionManager from './RedactionManager';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function RedactionPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 

@@ -3,11 +3,13 @@ export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import CoursManager from './CoursManager';
+import { getCurrentUser } from '@/lib/viewer';
+import { withSignedUrls } from '@/lib/storage';
 
 export default async function MatiereDetailsPage({ params }: { params: { matiereId: string } }) {
   const resolvedParams = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 
@@ -25,18 +27,13 @@ export default async function MatiereDetailsPage({ params }: { params: { matiere
   }
 
   // 2. Récupérer les cours de cette matière
-  const { data: cours } = await supabase
-    .from('cours')
-    .select('*')
-    .eq('matiere_id', matiere.id)
-    .order('created_at', { ascending: true });
-
-  // 3. Récupérer les documents de cette matière
-  const { data: documents } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('matiere_id', matiere.id)
-    .order('created_at', { ascending: false });
+  // 2 et 3. Cours et documents de la matière : lectures indépendantes, faites en parallèle.
+  // Colonnes ciblées : '*' sur documents embarquait le texte intégral de chaque PDF (C-16).
+  const [{ data: cours }, { data: rawDocuments }] = await Promise.all([
+    supabase.from('cours').select('*').eq('matiere_id', matiere.id).order('created_at', { ascending: true }),
+    supabase.from('documents').select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('matiere_id', matiere.id).order('date_import', { ascending: false }),
+  ]);
+  const documents = await withSignedUrls(rawDocuments || []);
 
   return (
     <div style={{ padding: 'var(--spacing-large) 0' }}>

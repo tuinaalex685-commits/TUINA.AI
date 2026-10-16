@@ -8,10 +8,11 @@ import { getRevisionSources } from '@/app/actions/revision';
 import { getDailyUsage } from '@/lib/quota';
 import { FREE_LIMITS } from '@/lib/quota';
 import RevisionsManager from './RevisionsManager';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function RevisionsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 

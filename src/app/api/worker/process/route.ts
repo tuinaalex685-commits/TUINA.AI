@@ -446,6 +446,12 @@ export async function runWorker(workerUrlStr?: string) {
 // FAIL CLOSED : si CRON_SECRET n'est pas configuré dans l'environnement, la route refuse TOUT appel —
 // jamais de repli permissif (CRON_SECRET est posé en production ; en local, l'ajouter à .env.local).
 function workerAuthorized(req: NextRequest): boolean {
+  // ANCIEN PIPELINE D'ÉTUDE — DÉSACTIVÉ. Il tournait en parallèle du moteur unifié
+  // (/api/worker/ai) : il prenait pour « zombies » les cours que le nouveau worker était en
+  // train de générer (heartbeat nul), les repassait en 'pending' et relançait Gemini → double
+  // génération. Le moteur unifié reprend tout cours non prêt dès que l'étudiant l'ouvre.
+  // Réactivation volontaire uniquement : LEGACY_ETUDE_WORKER=1.
+  if (process.env.LEGACY_ETUDE_WORKER !== '1') return false;
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   const auth = req.headers.get('authorization') || '';

@@ -3,10 +3,11 @@ import { Card } from '@/components/ui/Card/Card';
 import { createClient } from '@/lib/supabase/server';
 import { getCoursMasteryBreakdown, rollupGlobal } from '@/lib/etude/mastery';
 import { SEUIL_MAITRISE } from '@/lib/config/mastery';
+import { getCurrentUser } from '@/lib/viewer';
 
 export default async function ProgressionPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 

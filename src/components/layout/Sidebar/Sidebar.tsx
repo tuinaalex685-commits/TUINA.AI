@@ -100,6 +100,9 @@ export function Sidebar({ className, isAdmin, premium }: { className?: string, i
                 Passer au Premium
                 <span className={styles.planPrice}>2 500 FCFA/mois</span>
               </Link>
+              <Link href="/app/compte" className={styles.planCodeLink}>
+                J&apos;ai un code d&apos;accès
+              </Link>
             </>
           )}
         </div>

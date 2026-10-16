@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import { getAdUnit, type AdPlacement } from '@/lib/ads/config';
 import AdsterraUnit from './AdsterraUnit';
+import { getCurrentUser } from '@/lib/viewer';
 
 /**
  * EMPLACEMENT PUBLICITAIRE — seul point d'entrée de la publicité dans SJP.
@@ -22,7 +23,7 @@ export default async function AdSlot({ placement }: { placement: AdPlacement }) 
   if (!unit) return null;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   if (await isPremium(supabase, user.email)) return null;

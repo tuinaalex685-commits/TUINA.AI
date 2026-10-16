@@ -3,6 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/Button/Button';
+import { registerDocument } from '@/app/actions/documents';
 import styles from './DocumentUploader.module.css';
 
 interface DocumentUploaderProps {
@@ -42,7 +43,7 @@ export function DocumentUploader({ chapitreId, matiereId, coursId, onUploadCompl
       if (!user) throw new Error("Non authentifié");
 
       // 1. Upload vers le bucket Supabase Storage
-      const fileExt = file.name.split('.').pop();
+      const fileExt = 'pdf';
       const parentId = coursId || matiereId || chapitreId || 'unknown';
       const fileName = `${user.id}/${parentId}_${Date.now()}.${fileExt}`;
       
@@ -55,41 +56,18 @@ export function DocumentUploader({ chapitreId, matiereId, coursId, onUploadCompl
 
       if (uploadError) throw new Error("Erreur lors de l'envoi du fichier : " + uploadError.message);
 
-      // 2. Récupération de l'URL publique
-      const { data: publicUrlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-
-      // 3. Enregistrement des métadonnées dans la base de données
-      console.log("=== DEBUG UPLOAD ===");
-      console.log("1. User ID envoyé:", user.id);
-      
-      const payload = {
+      // 2. Enregistrement côté SERVEUR : il vérifie le dossier, la taille réelle et les
+      //    rattachements, puis construit lui-même l'URL (plus d'insertion depuis le navigateur).
+      const res = await registerDocument({
+        path: fileName,
         nom: file.name,
-        type: 'pdf', 
-        url: publicUrlData.publicUrl, 
-        url_fichier: publicUrlData.publicUrl,
-        taille: file.size,
-        chapitre_id: chapitreId || null,
-        matiere_id: matiereId || null,
-        cours_id: coursId || null,
-        user_id: user.id
-      };
-      console.log("2. Payload d'insertion (table documents):", payload);
-
-      const { data: insertData, error: dbError } = await supabase
-        .from('documents')
-        .insert([payload])
-        .select('*'); // Demander le retour de la ligne insérée pour loguer
-
-      console.log("3. Réponse Supabase (Erreur):", dbError);
-      console.log("4. Contenu retourné par Supabase (Succès):", insertData);
-      console.log("=====================");
-
-      if (dbError) {
-        // Éviter un fichier orphelin dans le Storage si l'insertion en base échoue.
+        chapitreId: chapitreId || null,
+        matiereId: matiereId || null,
+        coursId: coursId || null,
+      });
+      if ('error' in res && res.error) {
         await supabase.storage.from('documents').remove([fileName]).catch(() => {});
-        throw new Error("Erreur base de données : " + dbError.message);
+        throw new Error(res.error);
       }
 
       // Succès

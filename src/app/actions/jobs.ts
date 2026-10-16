@@ -3,76 +3,132 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
+import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
 export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude' | 'examen_pool';
 
+const JOB_TYPES: AiJobType[] = ['evaluation', 'flashcards', 'redaction', 'etude', 'examen_pool'];
+
+/**
+ * Champs autorisés dans le payload, par type de job. Tout le reste est ignoré.
+ *
+ * Avant, le payload du client était enregistré tel quel : un client pouvait y glisser
+ * `mock: true` (générateur de test) et remplir les caches PARTAGÉS (flashcards,
+ * evaluation_cache) avec des données factices servies ensuite aux autres étudiants.
+ */
+const PAYLOAD_FIELDS: Record<AiJobType, string[]> = {
+  evaluation: ['documentId', 'coursId', 'type', 'count', 'documentName'],
+  flashcards: ['documentId', 'coursId', 'count', 'documentName'],
+  redaction: ['redactionId'],
+  etude: ['documentId'],
+  examen_pool: ['documentId'],
+};
+
+function sanitizePayload(type: AiJobType, raw: Record<string, unknown>): Record<string, string | number> {
+  const clean: Record<string, string | number> = {};
+  for (const key of PAYLOAD_FIELDS[type]) {
+    const v = raw?.[key];
+    if (typeof v === 'string' && v.length > 0 && v.length <= 300) clean[key] = v;
+    else if (typeof v === 'number' && Number.isFinite(v)) clean[key] = v;
+  }
+  return clean;
+}
+
+/** Corrections de Rédaction par jour (tous plans : la Rédaction est déjà réservée au Premium). */
+const REDACTION_DAILY_LIMIT = 3;
+
 /**
  * Crée un job IA et le renvoie immédiatement (le frontend ne fait qu'observer ensuite).
  * Ne bloque JAMAIS sur Gemini. Déclenche le worker en best-effort ; le cron garantit le traitement.
+ *
+ * C'est le SEUL chemin de création d'un job côté utilisateur : propriété, Premium et quotas
+ * sont vérifiés ici, et le worker revérifie la propriété avant de lire un contenu privé.
  */
-export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>) {
+export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, unknown>) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' };
+  if (!JOB_TYPES.includes(type)) return { error: 'Type de traitement inconnu.' };
 
-  // Rédaction = fonctionnalité Premium (verrou total, cf. Phase 2). Vérifié ici, côté serveur —
-  // jamais seulement via un verrou frontend.
-  if (type === 'redaction' && !(await isPremium(supabase, user.email))) {
+  const payload = sanitizePayload(type, rawPayload || {});
+  const premium = await isPremium(supabase, user.email);
+
+  // Rédaction et Étude d'un document personnel = Premium, vérifié ici côté serveur. Avant,
+  // l'Étude n'était contrôlée que dans /api/etude/generate : passer par cette action
+  // contournait le Premium et la limite horaire.
+  if (type === 'redaction' && !premium) {
     return { error: "La Rédaction est réservée aux membres Premium." };
   }
-
-  // Quota Rédaction (3 corrections IA / jour) : jusqu'ici vérifié UNIQUEMENT côté client
-  // (RedactionManager.tsx) — contournable en appelant cette action directement. Revérifié ici,
-  // côté serveur, sur la même règle (statut 'analyse' du jour), avant toute création de job.
-  if (type === 'redaction') {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const { count, error: usageError } = await supabase
-      .from('redactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('statut', 'analyse')
-      .gte('date_creation', startOfDay.toISOString());
-    if (usageError) return { error: "Erreur serveur lors de la vérification du quota." };
-    if ((count || 0) >= 3) {
-      return { error: "Vous avez atteint votre limite de 3 corrections de Rédaction pour aujourd'hui. Réessayez demain." };
-    }
+  if (type === 'etude' && !premium) {
+    return { error: "L'import de tes propres cours est réservé aux membres Premium.", premiumRequired: true };
   }
 
-  // Anti-IDOR : flashcards / evaluation / examen_pool transportent un documentId (et parfois un
-  // coursId legacy pour les flashcards) dans le payload, fourni par le client. Avant cette vérification,
-  // rien n'empêchait d'enqueue un job sur le documentId/coursId d'UN AUTRE utilisateur — le worker lit
-  // le texte via le service role (getSourceText/getDocumentText) sans revérifier l'appartenance, donc un
-  // job accepté aurait généré du contenu IA à partir d'un document privé d'autrui.
+  // Rédaction : la copie doit appartenir à l'appelant. Sans ce contrôle, un job pouvait
+  // cibler la copie d'un autre étudiant, réécrire sa correction et l'exposer dans ai_jobs.result.
+  if (type === 'redaction') {
+    if (typeof payload.redactionId !== 'string') return { error: 'Rédaction manquante.' };
+    const { data: red } = await supabaseAdmin
+      .from('redactions').select('id').eq('id', payload.redactionId).eq('user_id', user.id).maybeSingle();
+    if (!red) return { error: 'Rédaction introuvable ou accès refusé.' };
+  }
+
+  // Anti-IDOR : le worker lit le texte via le service role ; sans ce contrôle, un job aurait
+  // généré du contenu à partir du document privé d'autrui.
   const docId = typeof payload.documentId === 'string' ? payload.documentId : null;
   const coursId = typeof payload.coursId === 'string' ? payload.coursId : null;
 
   if (docId && docId !== 'dummy') {
     const access = await resolveDocumentAccess(supabaseAdmin, user.id, docId);
-
-    // Un cours publié au catalogue est ouvert UNIQUEMENT aux deux types de contenu
-    // mutualisés par source_hash : flashcards et banque d'examen. Pour ces deux-là, le
-    // deuxième utilisateur et les suivants clonent le contenu déjà généré — coût Gemini
-    // nul. C'est ce qui rend les Révisions et les Examens possibles pour un compte Free
-    // qui ne possède aucun document.
-    //
-    // Les autres types restent réservés au propriétaire : 'etude' régénérerait le cours
-    // d'autrui, 'evaluation' et 'redaction' produisent du contenu personnel non
-    // mutualisable — les ouvrir au catalogue transformerait chaque cours publié en
-    // robinet à appels Gemini.
+    // Un cours du catalogue n'est ouvert qu'aux contenus mutualisés par source_hash
+    // (flashcards, banque d'examen) : coût Gemini nul dès le deuxième utilisateur.
     const catalogAllowed = type === 'flashcards' || type === 'examen_pool';
     const ok = access === 'owner' || (access === 'catalog' && catalogAllowed);
     if (!ok) return { error: "Document introuvable ou accès refusé." };
-  } else if (coursId) {
+  } else if (coursId && type === 'flashcards') {
     const { data: cours } = await supabaseAdmin
       .from('cours').select('matiere_id').eq('id', coursId).maybeSingle();
     const { data: matiere } = cours
       ? await supabaseAdmin.from('matieres').select('id').eq('id', cours.matiere_id).eq('user_id', user.id).maybeSingle()
       : { data: null };
     if (!cours || !matiere) return { error: "Cours introuvable ou accès refusé." };
+  } else if (type !== 'redaction') {
+    return { error: 'Document manquant.' };
+  }
+
+  // Étude : même garde-fou que /api/etude/generate (5 générations par heure).
+  if (type === 'etude') {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recent } = await supabaseAdmin
+      .from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('type', 'etude').gte('created_at', oneHourAgo);
+    if ((recent || 0) >= 5) return { error: "Limite atteinte : 5 études par heure maximum. Réessayez plus tard." };
+  }
+
+  // Quotas. Rédaction : compteur journalier ATOMIQUE (consume_free_quota est générique :
+  // utilisateur + fonctionnalité + limite). Avant, on comptait les copies CRÉÉES aujourd'hui :
+  // une copie d'hier se faisait corriger sans limite, et deux clics simultanés passaient tous
+  // les deux. Évaluations : quota Free (un appel Gemini par contenu/type/nombre).
+  let refund: (() => Promise<void>) | null = null;
+  if (type === 'redaction') {
+    const { data, error } = await supabaseAdmin.rpc('consume_free_quota', {
+      p_user_id: user.id, p_feature: 'redaction', p_limit: REDACTION_DAILY_LIMIT,
+    });
+    if (error) {
+      console.error('[jobs] quota redaction indisponible:', error.message);
+      return { error: "Vérification du quota impossible pour le moment. Réessaie dans un instant." };
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.allowed !== true) {
+      return { error: `Vous avez atteint votre limite de ${REDACTION_DAILY_LIMIT} corrections de Rédaction pour aujourd'hui. Réessayez demain.` };
+    }
+    refund = () => refundQuota(user.id, 'redaction');
+  } else if (type === 'evaluation') {
+    const quota = await consumeQuota(supabase, user.id, user.email, 'evaluation');
+    if (!quota.allowed) return { error: quota.error, quotaReached: true };
+    if (!quota.unlimited) refund = () => refundQuota(user.id, 'evaluation');
   }
 
   const content_hash = crypto.createHash('sha256')
@@ -84,7 +140,12 @@ export async function enqueueAiJob(type: AiJobType, payload: Record<string, any>
     .select('id, status')
     .single();
 
-  if (error || !job) return { error: error?.message || "Impossible de créer le job." };
+  if (error || !job) {
+    // Aucun job créé : l'étudiant ne perd pas son crédit pour notre incident.
+    if (refund) await refund();
+    console.error('[jobs] insertion ai_jobs impossible:', error?.message);
+    return { error: "Impossible de créer le traitement. Réessaie dans un instant." };
+  }
 
   // Déclenchement immédiat (best-effort). Si tué (rechargement) → le cron reprend dans la minute.
   try {

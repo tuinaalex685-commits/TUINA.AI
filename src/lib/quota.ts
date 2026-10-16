@@ -25,6 +25,9 @@ export const FREE_LIMITS = {
    *  chaque correction est une réponse personnelle de l'étudiant, donc impossible à
    *  mutualiser ou mettre en cache — un appel Gemini à chaque fois. */
   cas_pratique: 15,
+  /** Évaluations générées par jour. Un appel Gemini par (contenu, type, nombre de questions),
+   *  mis en cache ensuite ; la limite empêche un compte d'enchaîner les générations. */
+  evaluation: 3,
 } as const;
 
 export type FreeFeature = keyof typeof FREE_LIMITS;
@@ -34,6 +37,7 @@ const FEATURE_LABEL: Record<FreeFeature, string> = {
   examen: 'examens',
   revision: 'révisions',
   cas_pratique: 'corrections de cas pratique',
+  evaluation: 'évaluations',
 };
 
 export interface QuotaResult {
@@ -100,7 +104,7 @@ export async function consumeQuota(
 }
 
 /** Rend un crédit consommé quand l'opération qui suivait a échoué techniquement. */
-export async function refundQuota(userId: string, feature: FreeFeature): Promise<void> {
+export async function refundQuota(userId: string, feature: FreeFeature | 'redaction'): Promise<void> {
   const { error } = await supabaseAdmin.rpc('refund_free_quota', {
     p_user_id: userId,
     p_feature: feature,
@@ -114,7 +118,7 @@ export async function refundQuota(userId: string, feature: FreeFeature): Promise
  */
 export async function getDailyUsage(userId: string): Promise<Record<FreeFeature, number>> {
   const jour = new Date().toISOString().slice(0, 10); // UTC = heure locale au Burkina Faso
-  const empty = { examen: 0, revision: 0, cas_pratique: 0 } as Record<FreeFeature, number>;
+  const empty = { examen: 0, revision: 0, cas_pratique: 0, evaluation: 0 } as Record<FreeFeature, number>;
 
   const { data, error } = await supabaseAdmin
     .from('free_daily_usage')

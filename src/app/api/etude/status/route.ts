@@ -33,12 +33,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Cours introuvable" }, { status: 404 });
     }
 
-    // Sécurité : Si c'est en attente, on s'assure que le worker tourne
-    if (coursEtude.statut_generation === 'pending') {
-      import('@/app/api/worker/process/route').then((m) => {
-        m.runWorker().catch(() => {});
-      });
-    }
+    // La génération est pilotée par le moteur unifié (ai_jobs + /api/worker/ai) : ce statut
+    // n'est plus qu'une lecture. L'ancien déclenchement de /api/worker/process est retiré (C-07).
 
     return NextResponse.json({ 
       success: true, 

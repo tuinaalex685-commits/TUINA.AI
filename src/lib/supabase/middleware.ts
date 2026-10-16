@@ -42,8 +42,12 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // Vérification de sécurité CRITIQUE pour les utilisateurs connectés
-  if (user && !isLogoutRoute) {
+  // Le rôle n'est lu QUE là où il sert (routes /admin et /login) : le lire à chaque navigation
+  // ajoutait un aller-retour en base avant chaque page de l'application (latence C-15).
+  const path = request.nextUrl.pathname
+  const needsRole = path.startsWith('/admin') || path === '/login'
+
+  if (user && !isLogoutRoute && needsRole) {
     // 1. Obtenir le rôle
     const { data: roleData } = await supabase
       .from('user_roles')

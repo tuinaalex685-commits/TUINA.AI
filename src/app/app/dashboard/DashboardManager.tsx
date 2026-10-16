@@ -44,11 +44,13 @@ export default function DashboardManager({
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        // Debounce pour éviter de spammer router.refresh()
+        // router.refresh() relance TOUT le rendu serveur du tableau de bord. L'écoute porte sur
+        // tout le schéma (chaque battement de cœur d'un job IA déclenchait un rechargement) :
+        // on regroupe les changements sur 5 s et on ne recharge que si l'onglet est visible.
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
-          router.refresh();
-        }, 1000);
+          if (document.visibilityState === 'visible') router.refresh();
+        }, 5000);
       })
       .subscribe();
 

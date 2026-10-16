@@ -4,10 +4,12 @@ import { createClient } from '@/lib/supabase/server';
 import { isPremium } from '@/lib/plan';
 import PremiumLock from '@/components/premium/PremiumLock';
 import BibliothequeManager from './BibliothequeManager';
+import { getCurrentUser } from '@/lib/viewer';
+import { withSignedUrls } from '@/lib/storage';
 
 export default async function BibliothequePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
 
@@ -31,7 +33,9 @@ export default async function BibliothequePage() {
 
   const { data: documents, error: docsError } = await supabase
     .from('documents')
-    .select('*')
+    // Colonnes affichées uniquement : '*' embarquait le texte intégral de chaque PDF
+    // (extracted_text) et l'analyse IA, envoyés au navigateur pour rien (latence C-16).
+    .select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id')
     .eq('user_id', user.id)
     .order('date_import', { ascending: false });
 
@@ -42,7 +46,7 @@ export default async function BibliothequePage() {
   return (
     <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
       <BibliothequeManager 
-        initialDocuments={documents || []} 
+        initialDocuments={await withSignedUrls(documents || [])} 
       />
     </div>
   );
