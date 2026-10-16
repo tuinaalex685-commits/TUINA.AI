@@ -1,240 +1,189 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/Badge/Badge';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, BookOpenText, Layers, GraduationCap, Upload, Library } from 'lucide-react';
 import styles from './dashboard.module.css';
 import { supabase } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import OnboardingGuide from '@/components/onboarding/OnboardingGuide';
 import { markOnboardingSeen } from '@/app/actions/onboarding';
-import { 
-  BookOpen, 
-  Library, 
-  FileText, 
-  BrainCircuit, 
-  CheckSquare, 
-  PenTool, 
-  ArrowRight,
-  Target,
-  Zap
-} from 'lucide-react';
+import { formatDate } from '@/lib/format';
 
-export default function DashboardManager({
-  user,
-  stats,
-  objectifs,
-  flashcardsCount,
-  onboardingSeen = true,
-}: {
-  user: any;
-  stats: any;
-  objectifs: any[];
-  flashcardsCount: number;
+export interface ResumeItem { title: string; href: string; finished: boolean }
+export interface ExamItem { id: string; title: string; score: number | null; date: string | null; documentId: string | null }
+
+interface Props {
+  premium: boolean;
+  resume: ResumeItem | null;
+  dueCount: number;
+  stats: { documents: number; flashcards: number; redactions: number };
+  exams: ExamItem[];
+  objectifs: { id: string; titre: string; progression: number; cible: number }[];
   onboardingSeen?: boolean;
-}) {
+}
+
+function todayLabel(): string {
+  const s = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Ouagadougou' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export default function DashboardManager({ premium, resume, dueCount, stats, exams, objectifs, onboardingSeen = true }: Props) {
   const router = useRouter();
-  // Guide d'accueil : ouvert d'office à la 1re connexion (onboarding non vu) ; rejouable via le bouton.
   const [guideOpen, setGuideOpen] = useState(!onboardingSeen);
+  const [today] = useState(todayLabel);
   const closeGuide = () => { setGuideOpen(false); markOnboardingSeen().catch(() => {}); };
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
+    let timeoutId: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        // router.refresh() relance TOUT le rendu serveur du tableau de bord. L'écoute porte sur
-        // tout le schéma (chaque battement de cœur d'un job IA déclenchait un rechargement) :
-        // on regroupe les changements sur 5 s et on ne recharge que si l'onglet est visible.
+        // router.refresh() relance tout le rendu serveur : on regroupe les changements sur 5 s
+        // et on ne recharge que si l'onglet est visible.
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           if (document.visibilityState === 'visible') router.refresh();
         }, 5000);
       })
       .subscribe();
-
     return () => {
       clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, [router]);
 
-  const totalActivities = (stats.matieresCount || 0) + (stats.examensCount || 0) + flashcardsCount + (stats.redactionsCount || 0);
-  const progression = totalActivities > 0 ? Math.min(100, Math.round(totalActivities * 2)) : 0;
-
   return (
-    <div className={styles.dashboard}>
-      <OnboardingGuide open={guideOpen} onClose={closeGuide} />
-      <header className={styles.header} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 className={styles.welcome}>Bonjour, {user.email?.split('@')[0]} 👋</h1>
-          <p className={styles.subtitle}>Prêt à exceller ? Voici votre espace de pilotage.</p>
-        </div>
-        <button onClick={() => setGuideOpen(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 10, border: '1px solid var(--color-border)', background: 'var(--color-bg-main)', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-          🧭 Revoir le guide
-        </button>
+    <div className={styles.page}>
+      <OnboardingGuide open={guideOpen} onClose={closeGuide} premium={premium} />
+
+      <header className={styles.head}>
+        <p className={styles.date}>{today}</p>
+        <h1 className={styles.title}>Bonjour</h1>
       </header>
 
-      <div className={styles.grid}>
-        {/* Progression Globale */}
-        <div className={`${styles.cardPremium} ${styles.progressCard}`}>
-          <div className={styles.progressHeader}>
-            <h3>Activité Globale</h3>
-            {progression > 0 ? <Badge status="mastered">En cours</Badge> : <Badge status="neutral">Nouveau</Badge>}
-          </div>
-          <div className={styles.donutContainer}>
-            <svg viewBox="0 0 36 36" className={styles.circularChart}>
-              <defs>
-                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#2D6BE4" />
-                  <stop offset="100%" stopColor="#7C5CFF" />
-                </linearGradient>
-              </defs>
-              <path className={styles.circleBg}
-                d="M18 2.0845
-                  a 15.9155 15.9155 0 0 1 0 31.831
-                  a 15.9155 15.9155 0 0 1 0 -31.831"
-              />
-              {progression > 0 && (
-                <path className={styles.circle}
-                  strokeDasharray={`${progression}, 100`}
-                  d="M18 2.0845
-                    a 15.9155 15.9155 0 0 1 0 31.831
-                    a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              )}
-              <text x="18" y="20.8" className={styles.percentage}>{progression}%</text>
-            </svg>
-            <p className={styles.donutSubtitle}>Indice de régularité</p>
-          </div>
-        </div>
-
-        {/* Section Objectifs */}
-        <div className={`${styles.cardPremium} ${styles.objectivesCard}`}>
-          <div className={styles.objectivesHeader}>
-            <h3>Vos Objectifs Actifs</h3>
-            <Link href="/app/objectifs" className={styles.link}>
-              Gérer <ArrowRight size={16} />
+      {/* L'action principale : reprendre, ou commencer. */}
+      <section className={styles.hero} aria-labelledby="reprendre">
+        {resume ? (
+          <>
+            <p className={styles.heroKicker} id="reprendre">{resume.finished ? 'Dernier cours terminé' : 'Reprendre où tu t’es arrêté'}</p>
+            <h2 className={styles.heroTitle}>{resume.title}</h2>
+            <Link href={resume.href} className={styles.heroCta}>
+              <BookOpenText size={18} aria-hidden />
+              {resume.finished ? 'Revoir le cours' : 'Continuer l’étude guidée'}
             </Link>
+          </>
+        ) : premium ? (
+          <>
+            <p className={styles.heroKicker} id="reprendre">Pour commencer</p>
+            <h2 className={styles.heroTitle}>Importe ton premier cours en PDF</h2>
+            <p className={styles.heroText}>SJP le découpe en notions, te l’explique pas à pas, puis t’entraîne dessus.</p>
+            <Link href="/app/bibliotheque" className={styles.heroCta}>
+              <Upload size={18} aria-hidden /> Importer un cours
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className={styles.heroKicker} id="reprendre">Pour commencer</p>
+            <h2 className={styles.heroTitle}>Choisis un cours dans le catalogue</h2>
+            <p className={styles.heroText}>Étude guidée, révisions et examens sont prêts sur chaque cours du catalogue.</p>
+            <Link href="/app/catalogue" className={styles.heroCta}>
+              <Library size={18} aria-hidden /> Ouvrir le catalogue
+            </Link>
+          </>
+        )}
+      </section>
+
+      <div className={styles.grid}>
+        {/* Révisions dues */}
+        <section className={styles.panel} aria-labelledby="reviser">
+          <div className={styles.panelHead}>
+            <Layers size={18} className={styles.panelIcon} aria-hidden />
+            <h3 id="reviser" className={styles.panelTitle}>À réviser aujourd’hui</h3>
           </div>
-          {objectifs.length > 0 ? (
-            <ul className={styles.objectivesList}>
-              {objectifs.map((obj: any) => (
-                <li key={obj.id} className={styles.objectiveItem}>
-                  <div className={styles.objectiveInfo}>
-                    <div className={styles.objectiveIcon}>
-                      <Target size={20} />
-                    </div>
-                    <div>
-                      <div className={styles.objectiveTitle}>{obj.titre || obj.type || 'Objectif'}</div>
-                    </div>
-                  </div>
-                  <div className={styles.objectiveProgressContainer}>
-                    <span className={styles.objectiveProgressText}>{obj.progression || 0} / {obj.cible || 1}</span>
-                  </div>
+          {dueCount > 0 ? (
+            <>
+              <p className={styles.bigNumber}><span className="tabular">{dueCount}</span> <span className={styles.bigUnit}>{dueCount > 1 ? 'cartes' : 'carte'}</span></p>
+              <Link href="/app/revisions" className={styles.panelLink}>Commencer la révision <ArrowRight size={16} aria-hidden /></Link>
+            </>
+          ) : (
+            <p className={styles.muted}>
+              {stats.flashcards > 0
+                ? 'Rien de dû aujourd’hui. Tes cartes reviendront au bon moment.'
+                : 'Pas encore de cartes. Elles se créent depuis un cours, dans Révisions.'}
+            </p>
+          )}
+        </section>
+
+        {/* Derniers examens */}
+        <section className={styles.panel} aria-labelledby="examens">
+          <div className={styles.panelHead}>
+            <GraduationCap size={18} className={styles.panelIcon} aria-hidden />
+            <h3 id="examens" className={styles.panelTitle}>Derniers examens</h3>
+          </div>
+          {exams.length > 0 ? (
+            <ul className={styles.list}>
+              {exams.map((e) => (
+                <li key={e.id} className={styles.listRow}>
+                  <Link href={e.documentId ? `/app/examen/resultats/${e.documentId}` : '/app/examen'} className={styles.listLink}>
+                    <span className={styles.listTitle}>{e.title}</span>
+                    <span className={styles.listMeta}>{formatDate(e.date)}</span>
+                  </Link>
+                  {e.score !== null && (
+                    <span className={`${styles.score} tabular ${e.score >= 10 ? styles.scoreOk : styles.scoreLow}`}>
+                      {e.score.toFixed(1).replace('.', ',')}/20
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
           ) : (
-            <div style={{ padding: '24px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-              Aucun objectif en cours. Fixez-vous des buts pour rester motivé !
-            </div>
+            <>
+              <p className={styles.muted}>Aucun examen passé pour l’instant.</p>
+              <Link href="/app/examen" className={styles.panelLink}>Passer un examen <ArrowRight size={16} aria-hidden /></Link>
+            </>
           )}
-        </div>
+        </section>
 
-        {/* Section Prochaines révisions */}
-        <div className={`${styles.cardPremium} ${styles.revisionsCard}`}>
-          <div className={styles.revisionsHeader}>
-            <h3>À réviser aujourd'hui</h3>
-            {flashcardsCount > 0 ? <Badge status="review">{flashcardsCount} éléments</Badge> : <Badge status="neutral">Prêt</Badge>}
-          </div>
-          <div className={styles.revisionsContent}>
-            {flashcardsCount > 0 ? (
-              <>
-                <div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: 'var(--color-text-main)' }}>Entraînement de l'esprit</h4>
-                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-secondary)' }}>Vous avez {flashcardsCount} flashcards qui vous attendent.</p>
-                </div>
-                <Link href="/app/revisions" prefetch={true} className={styles.startSessionButton}>
-                  <Zap size={18} /> Lancer la session
-                </Link>
-              </>
+        {/* Objectifs (Premium) */}
+        {premium && (
+          <section className={styles.panel} aria-labelledby="objectifs">
+            <div className={styles.panelHead}>
+              <h3 id="objectifs" className={styles.panelTitle}>Objectifs</h3>
+              <Link href="/app/objectifs" className={styles.headLink}>Gérer</Link>
+            </div>
+            {objectifs.length > 0 ? (
+              <ul className={styles.list}>
+                {objectifs.map((o) => {
+                  const pct = Math.min(100, Math.round((o.progression / Math.max(1, o.cible)) * 100));
+                  return (
+                    <li key={o.id} className={styles.goal}>
+                      <div className={styles.goalTop}>
+                        <span className={styles.listTitle}>{o.titre}</span>
+                        <span className={`${styles.listMeta} tabular`}>{o.progression}/{o.cible}</span>
+                      </div>
+                      <div className={styles.bar} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={o.titre}>
+                        <span style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
-              <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', margin: 0 }}>
-                Aucune révision prévue pour le moment. Ouvre un cours et génère des flashcards pour commencer.
-              </p>
+              <p className={styles.muted}>Fixe-toi un objectif simple, par exemple « réviser 30 cartes cette semaine ».</p>
             )}
-          </div>
-        </div>
-
-        {/* Statistiques Réelles (Mosaïque) */}
-        <div className={styles.statsContainer}>
-          <h3 style={{ margin: '0 0 20px 0', fontSize: '20px', fontWeight: 700, letterSpacing: '-0.5px' }}>Vos Connaissances</h3>
-          <div className={styles.statsGrid}>
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(27, 58, 107, 0.1)', color: 'var(--color-primary)' }}>
-                <Library size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{stats.matieresCount || 0}</p>
-                <p className={styles.statWidgetLabel}>Matières</p>
-              </div>
-            </div>
-
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(45, 107, 228, 0.1)', color: 'var(--color-accent)' }}>
-                <BookOpen size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{stats.coursCount || 0}</p>
-                <p className={styles.statWidgetLabel}>Cours</p>
-              </div>
-            </div>
-
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(220, 38, 38, 0.1)', color: '#DC2626' }}>
-                <FileText size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{stats.documentsCount || 0}</p>
-                <p className={styles.statWidgetLabel}>PDF Indexés</p>
-              </div>
-            </div>
-
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' }}>
-                <BrainCircuit size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{flashcardsCount}</p>
-                <p className={styles.statWidgetLabel}>Flashcards</p>
-              </div>
-            </div>
-
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(22, 163, 74, 0.1)', color: '#16A34A' }}>
-                <CheckSquare size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{stats.examensCount || 0}</p>
-                <p className={styles.statWidgetLabel}>Examens</p>
-              </div>
-            </div>
-
-            <div className={styles.statWidget}>
-              <div className={styles.statWidgetIcon} style={{ background: 'rgba(124, 92, 255, 0.1)', color: '#7C5CFF' }}>
-                <PenTool size={24} />
-              </div>
-              <div>
-                <p className={styles.statWidgetValue}>{stats.redactionsCount || 0}</p>
-                <p className={styles.statWidgetLabel}>Rédactions</p>
-              </div>
-            </div>
-          </div>
-        </div>
+          </section>
+        )}
       </div>
+
+      <footer className={styles.footer}>
+        <dl className={styles.stats}>
+          {premium && (<div><dt>Documents</dt><dd className="tabular">{stats.documents}</dd></div>)}
+          <div><dt>Cartes de révision</dt><dd className="tabular">{stats.flashcards}</dd></div>
+          {premium && (<div><dt>Rédactions</dt><dd className="tabular">{stats.redactions}</dd></div>)}
+        </dl>
+        <button type="button" className={styles.guideLink} onClick={() => setGuideOpen(true)}>Revoir le guide de démarrage</button>
+      </footer>
     </div>
   );
 }

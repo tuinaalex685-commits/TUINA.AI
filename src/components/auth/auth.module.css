@@ -1,0 +1,196 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--paper);
+}
+
+/* ---------- Panneau gauche : l'article annoté (ordinateur uniquement) ---- */
+.visual {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .page {
+    grid-template-columns: minmax(420px, 1fr) minmax(440px, 520px);
+  }
+  .visual {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: var(--s-10) clamp(40px, 6vw, 88px);
+    background: var(--paper-2);
+    border-right: 1px solid var(--rule);
+  }
+}
+
+.brand {
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--sjp-blue);
+}
+
+.excerpt {
+  margin: 0;
+  max-width: 34rem;
+}
+
+.source {
+  margin-bottom: var(--s-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--sjp-blue);
+}
+
+.article {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.mark {
+  color: inherit;
+  background: linear-gradient(transparent 58%, var(--highlight) 58%);
+  padding: 0 0.08em;
+}
+
+/* Annotation en marge, à l'encre bleue. */
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-5) 0 0;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--action);
+}
+
+.noteLine {
+  width: 40px;
+  height: 1.5px;
+  background: var(--action);
+}
+
+.tagline {
+  margin: 0;
+  max-width: 28rem;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+/* ---------- Côté formulaire ---------------------------------------------- */
+.formSide {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--s-8) var(--s-5) var(--s-12);
+}
+
+.mobileBrand {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--sjp-blue);
+  margin-bottom: var(--s-10);
+}
+
+@media (min-width: 960px) {
+  .formSide {
+    padding: var(--s-10) var(--s-12);
+  }
+  .mobileBrand {
+    display: none;
+  }
+}
+
+.formBox {
+  width: 100%;
+  max-width: 400px;
+}
+
+.title {
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--s-2);
+}
+
+.lead {
+  margin: 0 0 var(--s-8);
+  color: var(--ink-2);
+  font-size: var(--text-md);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.hint {
+  margin: calc(var(--s-2) * -1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.switch {
+  margin: var(--s-6) 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.switch a {
+  color: var(--action);
+  font-weight: 600;
+}
+
+.switch a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.points {
+  list-style: none;
+  margin: 0 0 var(--s-8);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.points li {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+
+.points li::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 0.5em;
+  border-radius: 50%;
+  background: var(--action);
+}
+
+.done {
+  padding: var(--s-5);
+  border-radius: var(--radius-lg);
+  background: var(--action-soft);
+  color: var(--ink);
+}

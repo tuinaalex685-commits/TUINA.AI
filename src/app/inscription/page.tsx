@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Card } from '@/components/ui/Card/Card';
-import { Button } from '@/components/ui/Button/Button';
-import { Input } from '@/components/ui/Input/Input';
-import styles from '../login/login.module.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/Button/Button';
+import { Input } from '@/components/ui/Input/Input';
+import { AuthShell } from '@/components/auth/AuthShell';
+import styles from '@/components/auth/auth.module.css';
 import { signUpFree } from '@/app/actions/auth';
-import { motion } from 'framer-motion';
 
 export default function InscriptionPage() {
   const router = useRouter();
@@ -29,85 +28,72 @@ export default function InscriptionPage() {
       setMessage(result.error);
       setLoading(false);
     } else if (result.needsConfirmation) {
-      // Confirmation email requise (Option A) : le compte existe mais n'a pas encore de session.
+      // Confirmation email exigée par Supabase : le compte existe mais n'a pas encore de session.
       setDone(true);
       setLoading(false);
     } else {
-      // Confirmation désactivée côté Supabase (Option B) : signUp() a déjà ouvert une session,
-      // les cookies sont posés — direction directe vers l'app, pas de "vérifie ta boîte mail" trompeur.
+      // Confirmation désactivée : signUp() a déjà ouvert la session.
       router.push('/app/dashboard');
       router.refresh();
     }
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.background}>
-        <div className={`${styles.glow} ${styles.glow1}`} />
-        <div className={`${styles.glow} ${styles.glow2}`} />
-        <div className={styles.toque} />
-        <div className={styles.vignette} />
-      </div>
+    <AuthShell>
+      <h1 className={styles.title}>Crée ton compte gratuit</h1>
+      <p className={styles.lead}>Commence tout de suite avec les cours du catalogue.</p>
 
-      <motion.div
-        className={styles.formWrapper}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        <Card className={styles.loginCard}>
-          <div className={styles.header}>
-            <h1 className={styles.logo}>SJP</h1>
-            <p className={styles.subtitle}>Découvre SJP gratuitement</p>
-            <div className={styles.trustRow}>
-              <span>✓ Sans carte bancaire</span>
-              <span>✓ Accès immédiat</span>
-            </div>
-          </div>
+      {done ? (
+        <div className={styles.done}>
+          <p>
+            Un lien de confirmation vient d’être envoyé à <strong>{email}</strong>. Ouvre-le pour activer ton compte.
+          </p>
+          <Link href="/login">
+            <Button block>Aller à la connexion</Button>
+          </Link>
+        </div>
+      ) : (
+        <>
+          <ul className={styles.points}>
+            <li>Études guidées, révisions et examens sur les cours du catalogue</li>
+            <li>Sans carte bancaire</li>
+            <li>Passe au Premium quand tu veux travailler sur tes propres cours</li>
+          </ul>
 
-          {done ? (
-            <div style={{ textAlign: 'center', color: '#e5e7eb' }}>
-              <p style={{ marginBottom: '20px' }}>
-                Vérifie ta boîte mail (<strong>{email}</strong>) et clique sur le lien de confirmation pour activer ton compte.
-              </p>
-              <Link href="/login">
-                <Button style={{ width: '100%' }}>Aller à la connexion</Button>
-              </Link>
-            </div>
-          ) : (
-            <form className={styles.form} onSubmit={handleSignup}>
-              <Input
-                label="Adresse email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="votre.email@exemple.com"
-                required
-              />
-              <Input
-                label="Mot de passe"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="8 caractères minimum"
-                required
-              />
+          <form className={styles.form} onSubmit={handleSignup}>
+            <Input
+              label="Adresse email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="prenom.nom@exemple.com"
+              required
+            />
+            <Input
+              label="Mot de passe"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              placeholder="8 caractères minimum"
+              required
+            />
 
-              {message && <p className={styles.message}>{message}</p>}
+            {message && <p className={styles.error} role="alert">{message}</p>}
 
-              <div className={styles.actions}>
-                <Button type="submit" disabled={loading} style={{ width: '100%' }}>
-                  {loading ? 'Création...' : 'Créer mon compte gratuit'}
-                </Button>
-              </div>
+            <Button type="submit" block disabled={loading}>
+              {loading ? 'Création du compte…' : 'Créer mon compte'}
+            </Button>
+          </form>
 
-              <p style={{ textAlign: 'center', fontSize: '13px', color: '#9ca3af', marginTop: '8px' }}>
-                Déjà un compte ? <Link href="/login" style={{ color: '#a5b4fc' }}>Se connecter</Link>
-              </p>
-            </form>
-          )}
-        </Card>
-      </motion.div>
-    </div>
+          <p className={styles.switch}>
+            Déjà un compte ? <Link href="/login">Se connecter</Link>
+          </p>
+        </>
+      )}
+    </AuthShell>
   );
 }

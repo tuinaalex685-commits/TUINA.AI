@@ -72,7 +72,7 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
       {askPasswordChange && (
         <Card>
           <p style={{ margin: 0, color: 'var(--color-text-main)', lineHeight: 1.6 }}>
-            <strong>Choisis ton mot de passe personnel.</strong> Jusqu&apos;ici, tu te connectais avec ton code d&apos;accès.
+            <strong>Choisis ton mot de passe personnel.</strong> Jusqu’ici, tu te connectais avec ton code d’accès.
             Pour protéger ton compte, remplace-le par un mot de passe que toi seul connais.
           </p>
         </Card>
@@ -83,12 +83,12 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
         {premium ? (
           <p style={{ margin: 0, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
             Tu es en <strong style={{ color: 'var(--color-text-main)' }}>Premium</strong>
-            {until ? <> jusqu&apos;au <strong style={{ color: 'var(--color-text-main)' }}>{until}</strong>.</> : '.'}
+            {until ? <> jusqu’au <strong style={{ color: 'var(--color-text-main)' }}>{until}</strong>.</> : '.'}
           </p>
         ) : (
           <>
             <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-              Tu utilises la version gratuite. Saisis le code d&apos;accès reçu après ton paiement pour passer en Premium pendant un mois.
+              Tu utilises la version gratuite. Saisis le code d’accès reçu après ton paiement pour passer en Premium pendant un mois.
             </p>
             <form onSubmit={handleActivate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Input

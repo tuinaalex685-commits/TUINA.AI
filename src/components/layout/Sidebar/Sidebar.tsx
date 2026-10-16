@@ -16,7 +16,7 @@ interface SidebarProps {
 /**
  * Ordinateur : menu latéral blanc, regroupé par intention.
  * Tablette  : le même menu réduit à une colonne d'icônes avec libellés courts.
- * Mobile    : barre d'onglets en bas (au pouce) + « Menu » qui ouvre la liste complète.
+ * Mobile    : barre d'onglets en bas (au pouce) + « Menu » qui ouvre la liste complète.
  */
 export function Sidebar({ className, isAdmin = false, premium = false }: SidebarProps) {
   const pathname = usePathname() || '';
@@ -89,7 +89,7 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
           <p className={styles.upgradeTitle}>Version gratuite</p>
           <p className={styles.upgradeText}>Importe tes propres cours et débloque la Rédaction.</p>
           <Link href="/#pricing" className={styles.upgradeCta}>Passer au Premium · 2 500 FCFA/mois</Link>
-          <Link href="/app/compte" className={styles.codeLink}>J&apos;ai un code d&apos;accès</Link>
+          <Link href="/app/compte" className={styles.codeLink}>J’ai un code d’accès</Link>
         </div>
       )}
       {isAdmin && (
@@ -136,7 +136,7 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
         </button>
       </nav>
 
-      {/* Mobile : feuille « Menu » avec toutes les sections */}
+      {/* Mobile : feuille « Menu » avec toutes les sections */}
       {sheetOpen && (
         <div className={styles.sheetLayer}>
           <div className={styles.scrim} onClick={() => setSheetOpen(false)} aria-hidden />

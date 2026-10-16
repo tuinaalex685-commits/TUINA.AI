@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Card } from '@/components/ui/Card/Card';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
-import styles from './login.module.css';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { AuthShell } from '@/components/auth/AuthShell';
+import styles from '@/components/auth/auth.module.css';
 import { login } from '@/app/actions/auth';
-import { motion } from 'framer-motion';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,7 +20,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage('');
-    
+
     const result = await login(email, password);
 
     if (result.error) {
@@ -40,63 +39,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className={styles.container}>
-      {/* Background elements */}
-      <div className={styles.background}>
-        <div className={`${styles.glow} ${styles.glow1}`} />
-        <div className={`${styles.glow} ${styles.glow2}`} />
-        <div className={styles.toque} />
-        <div className={styles.vignette} />
-      </div>
+    <AuthShell>
+      <h1 className={styles.title}>Content de te revoir</h1>
+      <p className={styles.lead}>Connecte-toi pour reprendre là où tu t’es arrêté.</p>
 
-      <motion.div 
-        className={styles.formWrapper}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        <Card className={styles.loginCard}>
-          <div className={styles.header}>
-            <h1 className={styles.logo}>SJP</h1>
-            <p className={styles.subtitle}>Connexion à la plateforme</p>
-          </div>
-          
-          <form className={styles.form} onSubmit={handleLogin}>
-            <Input 
-              label="Adresse email" 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="votre.email@exemple.com"
-              required
-            />
-            <Input 
-              label="Mot de passe" 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Ton mot de passe"
-              autoComplete="current-password"
-              required
-            />
-            <p style={{ fontSize: '12px', color: '#9ca3af', margin: '-4px 0 0' }}>
-              Déjà inscrit avec un code d&apos;accès ? Saisis ton code comme mot de passe : on te proposera ensuite d&apos;en choisir un personnel.
-            </p>
-            
-            {message && <p className={styles.message}>{message}</p>}
-            
-            <div className={styles.actions}>
-              <Button type="submit" disabled={loading} style={{width: '100%'}}>
-                {loading ? 'Vérification...' : 'Se connecter'}
-              </Button>
-            </div>
+      <form className={styles.form} onSubmit={handleLogin}>
+        <Input
+          label="Adresse email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="prenom.nom@exemple.com"
+          required
+        />
+        <Input
+          label="Mot de passe"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          required
+        />
+        <p className={styles.hint}>
+          Inscrit avant avec un code d’accès ? Saisis ce code comme mot de passe, puis choisis-en un personnel.
+        </p>
 
-            <p style={{ textAlign: 'center', fontSize: '13px', color: '#9ca3af', marginTop: '8px' }}>
-              Pas encore de compte ? <Link href="/inscription" style={{ color: '#a5b4fc' }}>Essayer gratuitement</Link>
-            </p>
-          </form>
-        </Card>
-      </motion.div>
-    </div>
+        {message && <p className={styles.error} role="alert">{message}</p>}
+
+        <Button type="submit" block disabled={loading}>
+          {loading ? 'Connexion…' : 'Se connecter'}
+        </Button>
+      </form>
+
+      <p className={styles.switch}>
+        Pas encore de compte ? <Link href="/inscription">Créer un compte gratuit</Link>
+      </p>
+    </AuthShell>
   );
 }
