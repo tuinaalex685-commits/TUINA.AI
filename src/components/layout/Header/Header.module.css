@@ -1,70 +1,58 @@
 .header {
-  background-color: var(--color-bg-main);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--spacing-standard);
-  width: 100%;
+  gap: var(--s-3);
+  padding: 0 var(--s-4);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
 }
 
-.titleContainer {
-  display: flex;
-  align-items: center;
+.mobileBrand {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--sjp-blue);
 }
 
 .title {
+  flex: 1;
   margin: 0;
-  font-size: 20px;
-  color: var(--color-text-main);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.hamburgerBtn {
-  display: none;
-  background: none;
-  border: none;
-  color: var(--color-text-main);
-  padding: 8px;
-  margin-right: 8px;
-  margin-left: -8px;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.hamburgerBtn:active {
-  background: var(--color-bg-secondary);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-standard);
-}
-
-.profileAvatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: var(--color-bg-secondary);
-  color: var(--color-primary);
+.avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-  border: 1px solid var(--color-border);
-  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--action-soft);
+  color: var(--action);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
 }
 
-@media (max-width: 768px) {
-  .title {
-    font-size: 18px;
+.avatar:hover {
+  background: var(--paper-3);
+}
+
+@media (min-width: 768px) {
+  .header {
+    padding: 0 var(--s-8);
   }
-  .mobileHidden {
+  .mobileBrand {
     display: none;
   }
-  .hamburgerBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .title {
+    font-size: var(--text-lg);
+    font-family: var(--font-serif);
   }
 }

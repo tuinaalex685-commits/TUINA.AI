@@ -36,7 +36,7 @@ export default async function AppLayout({
     <div className={styles.appContainer}>
       <Sidebar className={styles.sidebar} isAdmin={isAdmin} premium={premium} />
       <div className={styles.mainWrapper}>
-        <Header className={styles.header} isAdmin={isAdmin} />
+        <Header className={styles.header} initial={(user?.email || '?').charAt(0)} />
         <main className={styles.mainContent}>
           {children}
         </main>

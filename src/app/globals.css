@@ -1,105 +1,152 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* ==========================================================================
+   SJP — système visuel « le Code annoté »
+   Papier blanc, encre bleue, et un seul accent : le surligneur, réservé à ce
+   qu'il faut retenir. Les polices sont chargées par next/font (layout.tsx),
+   jamais par @import (requête bloquante sur réseau lent).
+   ========================================================================== */
 
 :root {
-  /* Colors */
-  --color-primary: #1B3A6B; /* Royal blue */
-  --color-accent: #2D6BE4; /* Accent blue */
-  
-  /* Embellishments */
-  --color-orange: #F59E0B;
-  --color-green: #10B981;
-  --color-brown: #8B5A2B;
-  
-  /* Backgrounds */
-  --color-bg-main: #FFFFFF;
-  --color-bg-secondary: #F8FAFC; /* Light slate gray */
-  
-  /* Text */
-  --color-text-main: #1A1A2E;
-  --color-text-secondary: #6B7280;
-  
-  /* States */
-  --color-success: #16A34A;
-  --color-error: #DC2626;
-  --color-warning: #F59E0B; /* orange doux */
-  
-  /* Borders */
-  --color-border: #E5E7EB;
+  /* --- Palette --------------------------------------------------------- */
+  --paper: #FFFFFF;          /* fond des surfaces de travail */
+  --paper-2: #F5F7FB;        /* fond de l'application, aplats calmes */
+  --paper-3: #EAEFF7;        /* survols, zones actives discrètes */
+  --ink: #14213D;            /* texte principal */
+  --ink-2: #4A5470;          /* texte secondaire (contraste AA sur blanc) */
+  --ink-3: #616B85;          /* légendes, métadonnées (AA sur blanc) */
+  --rule: #E3E8F0;           /* filets et bordures */
+  --rule-strong: #CBD3E1;
 
-  /* Spacing System */
-  --spacing-micro: 4px;
-  --spacing-small: 8px;
-  --spacing-standard: 16px;
-  --spacing-section: 24px;
-  --spacing-large: 32px;
-  --spacing-major: 48px;
+  --sjp-blue: #1B3A6B;       /* bleu SJP : identité, titres forts */
+  --action: #2350D6;         /* bleu d'action : boutons, liens, focus */
+  --action-hover: #1B40B0;
+  --action-soft: #E8EEFC;    /* fond d'élément actif */
 
-  /* Typography */
-  --font-inter: 'Inter', sans-serif;
-  
-  /* Radii */
-  --radius-card: 12px;
-  --radius-button: 8px;
+  --highlight: #FFE36E;      /* surligneur — UNIQUEMENT « à retenir » */
+  --highlight-soft: #FFF6C7;
+
+  --success: #127A4B;
+  --success-soft: #E5F4EC;
+  --danger: #B42318;
+  --danger-soft: #FCEBEA;
+  --warning: #9A5B00;
+  --warning-soft: #FFF2DB;
+
+  /* --- Typographie ----------------------------------------------------- */
+  --font-sans: var(--font-source-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, 'Times New Roman', serif;
+
+  --text-xs: 0.8125rem;   /* 13 */
+  --text-sm: 0.9375rem;   /* 15 */
+  --text-md: 1.0625rem;   /* 17 — corps */
+  --text-lg: 1.25rem;     /* 20 */
+  --text-xl: 1.625rem;    /* 26 */
+  --text-2xl: 2.125rem;   /* 34 */
+  --text-3xl: 2.75rem;    /* 44 */
+
+  /* --- Espacements (échelle de 4) -------------------------------------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  /* --- Formes ---------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-raise: 0 1px 2px rgba(20, 33, 61, 0.06), 0 2px 8px rgba(20, 33, 61, 0.04);
+  --shadow-float: 0 8px 28px rgba(20, 33, 61, 0.14);
+  --focus-ring: 0 0 0 3px rgba(35, 80, 214, 0.28);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --nav-height-mobile: 64px;
+
+  /* --- Anciens noms (compatibilité) ------------------------------------
+     Les écrans existants utilisent ces variables, souvent en style en ligne.
+     Elles pointent vers la nouvelle palette : tout l'existant change d'aspect
+     tout de suite, avant même la refonte écran par écran. */
+  --color-primary: var(--sjp-blue);
+  --color-accent: var(--action);
+  --color-orange: var(--warning);
+  --color-green: var(--success);
+  --color-brown: var(--ink-2);
+  --color-bg-main: var(--paper);
+  --color-bg-secondary: var(--paper-2);
+  --color-text-main: var(--ink);
+  --color-text-secondary: var(--ink-2);
+  --color-success: var(--success);
+  --color-error: var(--danger);
+  --color-warning: var(--warning);
+  --color-border: var(--rule);
+
+  --spacing-micro: var(--s-1);
+  --spacing-small: var(--s-2);
+  --spacing-standard: var(--s-4);
+  --spacing-section: var(--s-6);
+  --spacing-large: var(--s-8);
+  --spacing-major: var(--s-12);
+
+  --font-inter: var(--font-sans);
+  --font-outfit: var(--font-sans);
+  --font-space-mono: var(--font-sans);
+
+  --radius-card: var(--radius-lg);
+  --radius-button: var(--radius-md);
   --radius-badge: 9999px;
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-sm: var(--shadow-raise);
+  --shadow-md: var(--shadow-raise);
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-inter);
-  background-color: var(--color-bg-main);
-  color: var(--color-text-main);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-input, textarea, [contenteditable="true"] {
-  -webkit-user-select: text;
-  user-select: text;
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
-h1 {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: var(--spacing-standard);
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--paper-2);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-h2 {
-  font-size: 24px;
+body {
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+/* Titres : serif, le registre du texte juridique. */
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
+  color: var(--ink);
+  line-height: 1.2;
+  margin: 0 0 var(--s-3);
   font-weight: 600;
-  margin-bottom: var(--spacing-small);
+  letter-spacing: -0.01em;
 }
 
-h3 {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: var(--spacing-micro);
-}
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+h4 { font-size: var(--text-md); }
 
-p, body {
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1.5;
+p {
+  margin: 0 0 var(--s-3);
 }
 
 small, .small {
-  font-size: 13px;
-  font-weight: 400;
+  font-size: var(--text-xs);
 }
 
 .caption {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--ink-3);
 }
 
 a {
@@ -108,21 +155,50 @@ a {
 }
 
 button {
-  font-family: var(--font-inter);
+  font-family: inherit;
   cursor: pointer;
-  transition: all 150ms ease;
   border: none;
   background: none;
+  color: inherit;
 }
 
-input, textarea {
-  font-family: var(--font-inter);
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 1rem; /* ≥ 16 px : évite le zoom forcé d'iOS au focus */
 }
 
-/* Micro-interactions: Feedback tactile immédiat (Priorité 1) */
-button:active:not(:disabled),
-a:active:not(.no-scale):not(:disabled),
-.interactive-card:active {
-  transform: scale(0.97) !important;
-  transition: transform 50ms ease !important;
+/* Focus visible pour la navigation au clavier, jamais supprimé. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* « À retenir » : le seul usage du surligneur. */
+.surligne {
+  background: linear-gradient(transparent 55%, var(--highlight) 55%);
+  padding: 0 0.1em;
+}
+
+/* Chiffres alignés dans les tableaux, scores et compteurs. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Retour tactile immédiat sur les boutons. */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

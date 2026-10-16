@@ -1,56 +1,63 @@
+/* Mobile d'abord : une colonne, la barre d'onglets est fixée en bas (Sidebar). */
 .appContainer {
   display: flex;
-  height: 100vh; /* Fallback */
-  height: 100dvh;
-  width: 100%;
-  overflow: hidden;
-  background-color: var(--color-bg-secondary);
+  min-height: 100dvh;
+  background-color: var(--paper-2);
 }
 
 .sidebar {
-  width: 260px;
   flex-shrink: 0;
-  border-right: 1px solid var(--color-border);
 }
 
 .mainWrapper {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  width: 100%;
 }
 
 .header {
-  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 56px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--color-border);
 }
 
 .mainContent {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: var(--spacing-large);
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s-5) var(--s-4) calc(var(--nav-height-mobile) + var(--s-8) + env(safe-area-inset-bottom, 0px));
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
+/* Tablette : colonne d'icônes à gauche. */
+@media (min-width: 768px) {
   .appContainer {
-    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
   }
-
   .sidebar {
-    display: block; /* Managed by Sidebar component now */
+    width: 96px;
   }
-
   .mainWrapper {
-    width: 100%;
-    padding-bottom: 0;
+    overflow-y: auto;
   }
-
+  .header {
+    height: 64px;
+  }
   .mainContent {
-    padding: var(--spacing-standard);
+    padding: var(--s-8) var(--s-8) var(--s-12);
   }
 }
 
+/* Ordinateur : menu complet. */
+@media (min-width: 1024px) {
+  .sidebar {
+    width: 252px;
+  }
+  .mainContent {
+    padding: var(--s-10) var(--s-10) var(--s-16);
+  }
+}

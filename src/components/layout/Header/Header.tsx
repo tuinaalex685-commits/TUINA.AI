@@ -1,59 +1,45 @@
 "use client";
 import React from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import styles from './Header.module.css';
-import { Button } from '@/components/ui/Button/Button';
-import Link from 'next/link';
-import { Menu } from 'lucide-react';
 
-const ROUTE_TITLES: Record<string, string> = {
-  '/app/dashboard': 'Dashboard',
-  '/app/matieres': 'Mes Matières',
-  '/app/bibliotheque': 'Bibliothèque Documentaire',
-  '/app/revisions': 'Centre de Révision',
-  '/app/examen': 'Examen',
-  '/app/evaluations': 'Évaluations & Quiz',
-  '/app/redaction': 'Rédaction Juridique',
-  '/app/objectifs': 'Mes Objectifs',
-  '/app/progression': 'Ma Progression',
-};
+const ROUTE_TITLES: [string, string][] = [
+  ['/app/dashboard', 'Accueil'],
+  ['/app/catalogue', 'Catalogue de cours'],
+  ['/app/etude', 'Études guidées'],
+  ['/app/matieres', 'Mes matières'],
+  ['/app/bibliotheque', 'Mes documents'],
+  ['/app/revisions', 'Révisions'],
+  ['/app/examen', 'Examens'],
+  ['/app/evaluations', 'Évaluations'],
+  ['/app/redaction', 'Rédaction'],
+  ['/app/objectifs', 'Objectifs'],
+  ['/app/progression', 'Progression'],
+  ['/app/compte', 'Mon compte'],
+];
 
-export function Header({ className, isAdmin = false }: { className?: string, isAdmin?: boolean }) {
+interface HeaderProps {
+  className?: string;
+  /** Initiale de l'étudiant (calculée côté serveur à partir de son compte). */
+  initial?: string;
+}
+
+/**
+ * Barre supérieure : le titre de la section et l'accès au compte. Rien d'autre :
+ * l'ancien bouton « Nouveau » ne faisait rien et l'avatar affichait « ED » pour tout le monde.
+ */
+export function Header({ className, initial = '?' }: HeaderProps) {
   const pathname = usePathname() || '';
-  
-  let title = 'SJP';
-  for (const [route, routeTitle] of Object.entries(ROUTE_TITLES)) {
-    if (pathname.startsWith(route)) {
-      title = routeTitle;
-      break;
-    }
-  }
+  const title = ROUTE_TITLES.find(([route]) => pathname.startsWith(route))?.[1] ?? 'SJP';
 
   return (
     <header className={`${styles.header} ${className || ''}`}>
-      <button 
-        className={styles.hamburgerBtn}
-        onClick={() => window.dispatchEvent(new CustomEvent('toggle-sidebar'))}
-        aria-label="Open Menu"
-      >
-        <Menu size={24} />
-      </button>
-      <div className={styles.titleContainer}>
-        <h2 className={styles.title}>{title}</h2>
-      </div>
-      <div className={styles.actions}>
-        {isAdmin && (
-          <Link href="/admin/dashboard">
-            <Button variant="secondary" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
-              Retour Admin
-            </Button>
-          </Link>
-        )}
-        <Button variant="secondary" className={styles.mobileHidden}>Nouveau</Button>
-        <div className={styles.profileAvatar}>
-          <span>ED</span>
-        </div>
-      </div>
+      <span className={styles.mobileBrand} aria-hidden>SJP</span>
+      <p className={styles.title}>{title}</p>
+      <Link href="/app/compte" className={styles.avatar} aria-label="Mon compte">
+        {initial}
+      </Link>
     </header>
   );
 }

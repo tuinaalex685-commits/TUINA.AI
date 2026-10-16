@@ -1,13 +1,23 @@
+/* Surface de travail. Pas de soulèvement au survol : une carte n'est pas un bouton.
+   Les cartes cliquables reçoivent la classe .interactive. */
 .card {
-  background-color: var(--color-bg-main);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 150ms ease, transform 150ms ease;
+  background-color: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  padding: var(--s-5);
 }
 
-.card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+.interactive {
+  transition: border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+
+.interactive:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-raise);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--s-6);
+  }
 }
