@@ -119,13 +119,14 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
-      <form onSubmit={handlePublish} style={{ display: 'flex', gap: 'var(--spacing-standard)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '260px' }}>
-          <label style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>Cours prêt à publier</label>
+      <form onSubmit={handlePublish} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-standard)', alignItems: 'end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label htmlFor="cours-a-publier" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Cours prêt à publier</label>
           <select
+            id="cours-a-publier"
             value={selectedCoursId}
             onChange={(e) => setSelectedCoursId(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)' }}
+            style={{ minHeight: '48px', padding: '0 12px', borderRadius: '10px', border: '1px solid var(--rule-strong)', background: 'var(--paper)', color: 'var(--ink)' }}
           >
             <option value="">— Choisir —</option>
             {publishableCourses.map(c => (
@@ -138,7 +139,7 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
         </div>
         <Input label="Titre affiché aux étudiants" value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex: Droit constitutionnel" />
         <Input label="Matière (optionnel)" value={matiere} onChange={(e) => setMatiere(e.target.value)} placeholder="Ex: Droit public" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '150px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label htmlFor="niveau-publication" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Niveau</label>
           <select id="niveau-publication" value={niveau} onChange={(e) => setNiveau(e.target.value)} style={{ minHeight: '48px', padding: '0 12px', borderRadius: '10px', border: '1px solid var(--rule-strong)', background: 'var(--paper)' }}>
             <option value="">Tous les niveaux</option>
