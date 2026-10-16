@@ -1,43 +1,35 @@
 import React from 'react';
-export const dynamic = 'force-dynamic';
+import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
-import CoursManager from './CoursManager';
 import { getCurrentUser } from '@/lib/viewer';
-import { withSignedUrls } from '@/lib/storage';
+import CoursManager from './CoursManager';
 
-export default async function MatiereDetailsPage({ params }: { params: { matiereId: string } }) {
-  const resolvedParams = await params;
-  const supabase = await createClient();
+export const dynamic = 'force-dynamic';
+
+/**
+ * Une matière : ses cours (intercalaires) avec leur nombre de PDF.
+ * Trois lectures en parallèle ; le nombre de PDF vient d'un comptage côté base
+ * (`documents(count)`), pas du chargement des documents eux-mêmes.
+ */
+export default async function MatiereDetailsPage({ params }: { params: Promise<{ matiereId: string }> }) {
+  const { matiereId } = await params;
   const user = await getCurrentUser();
+  if (!user) redirect('/login');
+  const supabase = await createClient();
 
-  if (!user) return null;
-
-  // 1. Récupérer la matière
-  const { data: matiere, error: matiereError } = await supabase
-    .from('matieres')
-    .select('*')
-    .eq('id', resolvedParams.matiereId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (matiereError || !matiere) {
-    console.error("ERREUR DE RÉCUPÉRATION MATIÈRE :", { matiereId: resolvedParams.matiereId, userId: user.id, error: matiereError });
-    notFound();
-  }
-
-  // 2. Récupérer les cours de cette matière
-  // 2 et 3. Cours et documents de la matière : lectures indépendantes, faites en parallèle.
-  // Colonnes ciblées : '*' sur documents embarquait le texte intégral de chaque PDF (C-16).
-  const [{ data: cours }, { data: rawDocuments }] = await Promise.all([
-    supabase.from('cours').select('*').eq('matiere_id', matiere.id).order('created_at', { ascending: true }),
-    supabase.from('documents').select('id, user_id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('matiere_id', matiere.id).order('date_import', { ascending: false }),
+  const [{ data: matiere }, { data: cours }, { count: looseCount }] = await Promise.all([
+    supabase.from('matieres').select('id, titre, description').eq('id', matiereId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('cours').select('id, titre, created_at, documents(count)').eq('matiere_id', matiereId).order('created_at', { ascending: true }),
+    supabase.from('documents').select('id', { count: 'exact', head: true }).eq('matiere_id', matiereId).is('cours_id', null).eq('user_id', user.id),
   ]);
-  const documents = await withSignedUrls(rawDocuments || []);
+  if (!matiere) notFound();
 
-  return (
-    <div style={{ padding: 'var(--spacing-large) 0' }}>
-      <CoursManager matiere={matiere} initialCours={cours || []} initialDocuments={documents || []} />
-    </div>
-  );
+  const coursList = (cours || []).map((c) => ({
+    id: c.id as string,
+    titre: c.titre as string,
+    created_at: c.created_at as string,
+    nbDocuments: (c.documents as unknown as { count: number }[] | null)?.[0]?.count ?? 0,
+  }));
+
+  return <CoursManager matiere={matiere} initialCours={coursList} looseCount={looseCount ?? 0} />;
 }

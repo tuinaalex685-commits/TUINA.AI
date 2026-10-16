@@ -1,151 +1,156 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useOptimistic } from 'react';
-import { Card } from '@/components/ui/Card/Card';
-import { Button } from '@/components/ui/Button/Button';
-import { Badge } from '@/components/ui/Badge/Badge';
-import { Input } from '@/components/ui/Input/Input';
-import { Modal } from '@/components/ui/Modal/Modal';
-import styles from './matieres.module.css';
+import React, { useOptimistic, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { createMatiere } from '@/app/actions/student';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
-import { formatDate } from '@/lib/format';
+import toast from 'react-hot-toast';
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
+import { Plus } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal/Modal';
+import { Input } from '@/components/ui/Input/Input';
+import { createMatiere, deleteMatiere } from '@/app/actions/student';
+import { RowMenu } from './RowMenu';
+import styles from './matieres.module.css';
 
-export default function MatiereManager({ initialMatieres }: { initialMatieres: any[] }) {
+interface MatiereItem {
+  id: string;
+  titre: string;
+  description: string | null;
+  created_at: string;
+  nbCours: number;
+  nbDocuments: number;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+
+export default function MatiereManager({ initialMatieres }: { initialMatieres: MatiereItem[] }) {
   const router = useRouter();
-  
-  const [matieres, setMatieres] = useState<any[]>(initialMatieres);
-  const [isPending, startTransition] = useTransition();
-
-  const [optimisticMatieres, addOptimisticMatiere] = useOptimistic(
-    matieres,
-    (state: any[], action: { type: 'add' | 'delete', data: any }) => {
-      if (action.type === 'add') {
-        return [action.data, ...state];
-      }
-      if (action.type === 'delete') {
-        return state.filter(m => m.id !== action.data.id);
-      }
-      return state;
-    }
-  );
-
-  useEffect(() => {
-    setMatieres(initialMatieres);
-  }, [initialMatieres]);
+  const [, startTransition] = useTransition();
+  const [matieres, removeMatiere] = useOptimistic(initialMatieres, (state, id: string) => state.filter((m) => m.id !== id));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [titre, setTitre] = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    const value = titre.trim();
+    if (!value) { setError('Donne un titre à la matière.'); return; }
+    setSaving(true);
     setError('');
-
-    const optimisticId = `temp-${Date.now()}`;
-    const newMatiere = { id: optimisticId, titre, description, created_at: new Date().toISOString() };
-
-    startTransition(() => {
-      addOptimisticMatiere({ type: 'add', data: newMatiere });
-    });
-
+    const res = await createMatiere(value, description.trim());
+    setSaving(false);
+    if (res.error) { setError('Création impossible. Réessaie.'); return; }
     setTitre('');
     setDescription('');
     setIsModalOpen(false);
+    toast.success(`Matière « ${value} » créée`);
+    router.refresh();
+  };
 
-    const res = await createMatiere(newMatiere.titre, newMatiere.description);
-    if (res.error) {
-      setError(res.error);
-      router.refresh(); // revert on error
-    }
-    setLoading(false);
+  const handleDelete = (m: MatiereItem) => {
+    startTransition(async () => {
+      removeMatiere(m.id);
+      const res = await deleteMatiere(m.id);
+      if (res.error) toast.error('Suppression impossible. Réessaie.');
+      else toast.success(`« ${m.titre} » supprimée`);
+      router.refresh();
+    });
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <p className={styles.description}>
-          Gérez vos matières juridiques et organisez vos cours en chapitres pour un apprentissage structuré.
-        </p>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)}>Nouvelle Matière</Button>
-      </div>
-
-      <div className={styles.grid}>
-        {optimisticMatieres.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)' }}>
-            <p>Vous n'avez pas encore de matière. Créez-en une pour commencer !</p>
+    <MotionConfig reducedMotion="user">
+      <div className={styles.page}>
+        <header className={styles.head}>
+          <div>
+            <h1 className={styles.title}>Mes matières</h1>
+            <p className={styles.lead}>Un classeur par enseignement, tes cours à l’intérieur, chaque PDF rangé dans son cours.</p>
           </div>
+          {matieres.length > 0 && (
+            <button type="button" className={styles.primary} onClick={() => setIsModalOpen(true)}>
+              <Plus size={18} aria-hidden /> Nouvelle matière
+            </button>
+          )}
+        </header>
+
+        {matieres.length === 0 ? (
+          <section className={styles.empty}>
+            <h2 className={styles.emptyTitle}>Crée ta première matière</h2>
+            <p className={styles.emptyText}>
+              Par exemple « Droit des personnes et de la famille ». Tu y ajouteras ensuite tes cours, puis les PDF de
+              chaque cours.
+            </p>
+            <button type="button" className={styles.primary} style={{ alignSelf: 'center' }} onClick={() => setIsModalOpen(true)}>
+              <Plus size={18} aria-hidden /> Nouvelle matière
+            </button>
+          </section>
+        ) : (
+          <ul className={styles.binders}>
+            <AnimatePresence initial={false}>
+              {matieres.map((m, i) => (
+                <motion.li
+                  key={m.id}
+                  layout
+                  className={styles.binder}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.04, duration: 0.25 } }}
+                  exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18 } }}
+                >
+                  <Link href={`/app/matieres/${m.id}`} className={styles.binderLink} aria-label={`Ouvrir la matière ${m.titre}`} />
+                  <h2 className={styles.binderTitle}>{m.titre}</h2>
+                  {m.description && <p className={styles.binderDesc}>{m.description}</p>}
+                  <p className={styles.binderFoot}>
+                    <span><strong>{m.nbCours}</strong> cours</span>
+                    <span><strong>{m.nbDocuments}</strong> PDF</span>
+                  </p>
+                  <div className={styles.cornerMenu}>
+                    <RowMenu
+                      label={`Plus d’actions pour ${m.titre}`}
+                      deleteLabel="Supprimer la matière"
+                      deleteNote={`${plural(m.nbCours, 'cours', 'cours')} et ${plural(m.nbDocuments, 'PDF', 'PDF')} seront supprimés avec elle.`}
+                      onDelete={() => handleDelete(m)}
+                    />
+                  </div>
+                </motion.li>
+              ))}
+              <motion.li key="new" layout>
+                <button type="button" className={styles.newBinder} onClick={() => setIsModalOpen(true)}>
+                  <Plus size={22} aria-hidden /> Nouvelle matière
+                </button>
+              </motion.li>
+            </AnimatePresence>
+          </ul>
         )}
-        {optimisticMatieres.map((matiere) => (
-          <Link href={`/app/matieres/${matiere.id}`} key={matiere.id} style={{ textDecoration: 'none' }}>
-            <Card className={styles.matiereCard} style={{ cursor: 'pointer', height: '100%' }}>
-              <div className={styles.cardHeader}>
-                <h3 style={{ color: 'var(--color-primary)' }}>{matiere.titre}</h3>
-                {/* On simulera le nb de cours plus tard */}
-                <Badge status="neutral">Cours</Badge> 
-              </div>
-              <p className={styles.cardDesc}>{matiere.description || "Aucune description"}</p>
-              <div className={styles.cardFooter}>
-                <span className={styles.progressText}>Créé le {formatDate(matiere.created_at)}</span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}`); }}>Ouvrir</Button>
-                  <Button variant="secondary" onClick={(e) => { 
-                    e.preventDefault(); 
-                    if(confirm('Voulez-vous vraiment supprimer cette matière et tout son contenu ?')) { 
-                      startTransition(async () => {
-                        addOptimisticMatiere({ type: 'delete', data: { id: matiere.id } });
-                        const { deleteMatiere } = await import('@/app/actions/student');
-                        await deleteMatiere(matiere.id); 
-                      });
-                    } 
-                  }} disabled={isPending} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
-                    🗑️
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
-        
-        {/* Empty State Card */}
-        <Card 
-          className={`${styles.matiereCard} ${styles.emptyState}`} 
-          style={{ cursor: 'pointer' }}
-          onClick={() => setIsModalOpen(true)}
-        >
-          <div className={styles.emptyContent}>
-            <span className={styles.emptyIcon}>+</span>
-            <p>Ajouter une nouvelle matière</p>
-          </div>
-        </Card>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Créer une nouvelle matière">
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)' }}>
-          <Input 
-            label="Titre de la matière" 
-            value={titre} 
-            onChange={e => setTitre(e.target.value)} 
-            placeholder="Ex: Droit Pénal Général" 
-            required 
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nouvelle matière">
+        <form onSubmit={handleCreate} className={styles.form}>
+          <Input
+            label="Titre de la matière"
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Ex. : Droit des personnes et de la famille"
+            maxLength={120}
+            required
+            autoFocus
           />
-          <Input 
-            label="Description (optionnelle)" 
-            value={description} 
-            onChange={e => setDescription(e.target.value)} 
-            placeholder="Ex: Concepts fondamentaux de l'infraction..." 
+          <Input
+            label="Description (facultative)"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ex. : L1, premier semestre"
+            maxLength={240}
           />
-          {error && <p style={{ color: 'red', fontSize: '13px' }}>{error}</p>}
-          <Button type="submit" disabled={loading} style={{ alignSelf: 'flex-end', marginTop: 'var(--spacing-small)' }}>
-            {loading ? 'Création...' : 'Créer la matière'}
-          </Button>
+          {error && <p className={styles.formError}>{error}</p>}
+          <div className={styles.formActions}>
+            <button type="submit" className={styles.primary} disabled={saving}>
+              {saving ? 'Création…' : 'Créer la matière'}
+            </button>
+          </div>
         </form>
       </Modal>
-    </div>
+    </MotionConfig>
   );
 }

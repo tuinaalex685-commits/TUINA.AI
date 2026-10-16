@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
+import { revalidatePath } from 'next/cache';
+import { removeOwnedFiles } from '@/lib/storage';
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
@@ -48,7 +50,7 @@ export async function registerDocument(input: {
   }
 
   // Les rattachements doivent appartenir à l'utilisateur.
-  const matiereId = input.matiereId || null;
+  let matiereId = input.matiereId || null;
   const coursId = input.coursId || null;
   const chapitreId = input.chapitreId || null;
   if (matiereId) {
@@ -60,7 +62,10 @@ export async function registerDocument(input: {
     const { data: m } = c
       ? await supabaseAdmin.from('matieres').select('id').eq('id', c.matiere_id).eq('user_id', user.id).maybeSingle()
       : { data: null };
-    if (!m) return { error: 'Cours introuvable.' };
+    if (!m || !c) return { error: 'Cours introuvable.' };
+    // La matière d'un PDF rangé dans un cours est TOUJOURS celle du cours (jamais celle envoyée
+    // par le navigateur) : sinon les compteurs et le rangement de la matière seraient faux.
+    matiereId = c.matiere_id;
   }
   if (chapitreId) {
     const { data: ch } = await supabaseAdmin.from('chapitres').select('cours_id').eq('id', chapitreId).maybeSingle();
@@ -105,32 +110,17 @@ export async function deleteDocument(documentId: string, _clientUrl?: string) {
     // On va chercher le document correspondant à cet ID ET à cet utilisateur.
     const { data: document, error: fetchError } = await supabase
       .from('documents')
-      .select('url')
+      .select('url, url_fichier')
       .eq('id', documentId)
       .eq('user_id', user.id)
       .single();
 
-    if (fetchError || !document) {
-      // Le document n'existe pas ou n'appartient pas à l'utilisateur
-      throw new Error("Accès refusé ou document introuvable.");
-    }
+    // Absent ou pas à l'utilisateur : rien à supprimer. Succès idempotent (un double clic
+    // n'affiche pas d'erreur) ; on ne révèle pas si le document existe chez quelqu'un d'autre.
+    if (fetchError || !document) return { success: true };
 
-    // 2. Extraire le chemin du fichier depuis l'URL de la BDD
-    const urlParts = document.url.split('/public/documents/');
-    if (urlParts.length === 2) {
-      const filePath = urlParts[1];
-      
-      // 3. Supprimer du Bucket Storage
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([filePath]);
-
-      if (storageError) {
-        console.error("Storage delete error:", storageError);
-      }
-    }
-
-    // 4. Supprimer de la base de données
+    // 2. Supprimer la ligne d'abord, puis le fichier (voir removeOwnedFiles). Avant, le fichier
+    // était retiré par le client de l'étudiant, ce que le bucket privé peut refuser en silence.
     const { error: dbError } = await supabase
       .from('documents')
       .delete()
@@ -139,8 +129,47 @@ export async function deleteDocument(documentId: string, _clientUrl?: string) {
 
     if (dbError) throw new Error(dbError.message);
 
+    await removeOwnedFiles(user.id, [document.url_fichier, document.url]);
+    revalidatePath('/app/matieres', 'layout');
     return { success: true };
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err) {
+    console.error('[documents] suppression impossible:', err instanceof Error ? err.message : err);
+    return { error: 'Suppression impossible. Réessaie.' };
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Range un document de l'étudiant dans un cours de la même matière.
+ *
+ * Sert aux PDF importés avant que le cours soit enregistré à l'import (cours_id vide) : ils
+ * n'apparaissent plus dans tous les cours de la matière, l'étudiant les range lui-même.
+ * Aucune policy UPDATE n'existe sur `documents` (volontaire, phase B) : l'écriture passe par
+ * le service role, APRÈS avoir vérifié avec le client de l'étudiant (RLS) que le document,
+ * le cours et la matière lui appartiennent.
+ */
+export async function assignDocumentToCours(documentId: string, coursId: string) {
+  if (!UUID_RE.test(documentId) || !UUID_RE.test(coursId)) return { error: 'Requête invalide.' };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Non authentifié' };
+
+  const [{ data: doc }, { data: cours }] = await Promise.all([
+    supabase.from('documents').select('id, matiere_id, cours_id').eq('id', documentId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('cours').select('id, matiere_id, matieres!inner(user_id)').eq('id', coursId).eq('matieres.user_id', user.id).maybeSingle(),
+  ]);
+  if (!doc || !cours) return { error: 'Document ou cours introuvable.' };
+  if (doc.cours_id === cours.id) return { success: true }; // Déjà rangé : idempotent.
+  if (doc.matiere_id !== cours.matiere_id) return { error: 'Ce document appartient à une autre matière.' };
+
+  // Condition sur l'état lu : si un autre onglet l'a rangé entre-temps, rien n'est écrasé.
+  const base = supabaseAdmin.from('documents').update({ cours_id: cours.id }).eq('id', doc.id).eq('user_id', user.id);
+  const { data: updated, error } = await (doc.cours_id ? base.eq('cours_id', doc.cours_id) : base.is('cours_id', null)).select('id');
+  if (error) return { error: 'Rangement impossible. Réessaie.' };
+  if (!updated?.length) return { error: 'Ce document vient d’être déplacé ailleurs. Recharge la page.' };
+
+  revalidatePath(`/app/matieres/${cours.matiere_id}`, 'layout');
+  return { success: true };
 }

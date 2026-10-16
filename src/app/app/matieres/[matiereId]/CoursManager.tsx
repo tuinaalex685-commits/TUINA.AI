@@ -1,145 +1,161 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from 'react';
-import { Card } from '@/components/ui/Card/Card';
-import { Button } from '@/components/ui/Button/Button';
-import { Input } from '@/components/ui/Input/Input';
-import { Modal } from '@/components/ui/Modal/Modal';
+import React, { useOptimistic, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { createCours } from '@/app/actions/student';
-import { deleteDocument } from '@/app/actions/documents';
-import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
-import { formatDate } from '@/lib/format';
+import toast from 'react-hot-toast';
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
+import { ChevronRight, Plus } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal/Modal';
+import { Input } from '@/components/ui/Input/Input';
+import { createCours, deleteCours } from '@/app/actions/student';
+import { RowMenu } from '../RowMenu';
+import styles from '../matieres.module.css';
 
-export default function CoursManager({ matiere, initialCours, initialDocuments = [] }: { matiere: any, initialCours: any[], initialDocuments?: any[] }) {
+interface CoursItem {
+  id: string;
+  titre: string;
+  created_at: string;
+  nbDocuments: number;
+}
+
+type Action = { type: 'add'; cours: CoursItem } | { type: 'remove'; id: string };
+
+const pdfLabel = (n: number) => (n === 0 ? 'Aucun PDF' : n === 1 ? '1 PDF' : `${n} PDF`);
+
+export default function CoursManager({ matiere, initialCours, looseCount }: {
+  matiere: { id: string; titre: string; description: string | null };
+  initialCours: CoursItem[];
+  looseCount: number;
+}) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [coursList, apply] = useOptimistic(initialCours, (state, a: Action) =>
+    a.type === 'add' ? [...state, a.cours] : state.filter((c) => c.id !== a.id));
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [titre, setTitre] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
 
-  const [coursList, setCoursList] = useState<any[]>(initialCours);
-  const [isPending, startTransition] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('realtime-cours')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'cours', filter: `matiere_id=eq.${matiere.id}` },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            router.refresh();
-          } else if (payload.eventType === 'DELETE') {
-            setCoursList(prev => prev.filter(c => c.id !== payload.old.id));
-          } else if (payload.eventType === 'UPDATE') {
-            setCoursList(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [router, matiere.id]);
-
-  useEffect(() => {
-    setCoursList(initialCours);
-  }, [initialCours]);
+  const totalPdf = coursList.reduce((s, c) => s + c.nbDocuments, 0);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    const value = titre.trim();
+    if (!value) { setError('Donne un titre au cours.'); return; }
+    setSaving(true);
     setError('');
+    const res = await createCours(matiere.id, value);
+    setSaving(false);
+    if (res.error) { setError('Création impossible. Réessaie.'); return; }
+    setTitre('');
+    setIsModalOpen(false);
+    toast.success(`Cours « ${value} » créé`);
+    router.refresh();
+  };
 
-    const res = await createCours(matiere.id, titre);
-    if (res.error) {
-      setError(res.error);
-    } else {
-      setTitre('');
-      setIsModalOpen(false);
+  const handleDelete = (c: CoursItem) => {
+    startTransition(async () => {
+      apply({ type: 'remove', id: c.id });
+      const res = await deleteCours(c.id, matiere.id);
+      if (res.error) toast.error('Suppression impossible. Réessaie.');
+      else toast.success(`« ${c.titre} » supprimé`);
       router.refresh();
-    }
-    setLoading(false);
+    });
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <Button variant="secondary" onClick={() => router.push('/app/matieres')} style={{ marginBottom: 'var(--spacing-standard)', padding: '6px 12px', fontSize: '14px' }}>
-            ← Retour aux matières
-          </Button>
-          <h1 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '28px' }}>{matiere.titre}</h1>
-          {matiere.description && <p style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-small)' }}>{matiere.description}</p>}
-        </div>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)}>Nouveau Cours</Button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--spacing-standard)' }}>
-        {coursList.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)' }}>
-            <p>Ce cours ne contient aucun sous-cours pour l'instant.</p>
+    <MotionConfig reducedMotion="user">
+      <div className={styles.page}>
+        <header>
+          <nav className={styles.crumbs} aria-label="Fil d’Ariane">
+            <Link href="/app/matieres">Mes matières</Link>
+          </nav>
+          <div className={styles.head}>
+            <div>
+              <h1 className={styles.title}>{matiere.titre}</h1>
+              {matiere.description && <p className={styles.lead}>{matiere.description}</p>}
+              <div className={styles.stats}>
+                <span className={styles.stat}>{coursList.length} cours</span>
+                <span className={styles.stat}>{pdfLabel(totalPdf + looseCount)}</span>
+              </div>
+            </div>
+            <button type="button" className={styles.primary} onClick={() => setIsModalOpen(true)}>
+              <Plus size={18} aria-hidden /> Nouveau cours
+            </button>
           </div>
+        </header>
+
+        {looseCount > 0 && coursList.length > 0 && (
+          <p className={styles.notice} role="status">
+            <strong>{looseCount === 1 ? '1 PDF n’est rangé dans aucun cours.' : `${looseCount} PDF ne sont rangés dans aucun cours.`}</strong>
+            Ouvre le cours concerné : tu pourras les y ranger en un geste.
+          </p>
         )}
-        {coursList.map((cours) => (
-          <Link href={`/app/matieres/${matiere.id}/cours/${cours.id}`} key={cours.id} style={{ textDecoration: 'none' }}>
-            <Card style={{ cursor: 'pointer', transition: 'transform 0.2s ease', border: '1px solid var(--color-border)', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <h3 style={{ margin: '0 0 var(--spacing-small)', color: 'var(--color-text-main)' }}>{cours.titre}</h3>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>Créé le {formatDate(cours.created_at)}</p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: 'var(--spacing-standard)' }}>
-                <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}/cours/${cours.id}`); }} style={{ flex: 1 }}>Ouvrir</Button>
-                <Button variant="secondary" onClick={(e) => { 
-                  e.preventDefault(); 
-                  if(confirm('Voulez-vous vraiment supprimer ce cours ?')) { 
-                    setDeletingId(cours.id);
-                    startTransition(async () => {
-                      const { deleteCours } = await import('@/app/actions/student');
-                      await deleteCours(cours.id, matiere.id); 
-                      setDeletingId(null);
-                    });
-                  } 
-                }} disabled={isPending && deletingId === cours.id} style={{ padding: '6px', color: '#e53e3e', borderColor: '#fc8181' }}>
-                  {isPending && deletingId === cours.id ? '⌛' : '🗑️'}
-                </Button>
-              </div>
-            </Card>
-          </Link>
-        ))}
-        
-        {/* Empty State Card */}
-        <Card 
-          style={{ cursor: 'pointer', border: '1px dashed var(--color-border)', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '150px' }}
-          onClick={() => setIsModalOpen(true)}
-        >
-          <span style={{ fontSize: '24px', color: 'var(--color-primary)', marginBottom: '8px' }}>+</span>
-          <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>Ajouter un nouveau cours</p>
-        </Card>
+
+        {coursList.length === 0 ? (
+          <section className={styles.empty}>
+            <h2 className={styles.emptyTitle}>Crée le premier cours de cette matière</h2>
+            <p className={styles.emptyText}>
+              Un cours par partie de ton programme, par exemple « Les personnes et les incapacités ». Tu y rangeras
+              ensuite les PDF correspondants.
+            </p>
+            <button type="button" className={styles.primary} style={{ alignSelf: 'center' }} onClick={() => setIsModalOpen(true)}>
+              <Plus size={18} aria-hidden /> Nouveau cours
+            </button>
+          </section>
+        ) : (
+          <ul className={styles.tabs}>
+            <AnimatePresence initial={false}>
+              {coursList.map((c, i) => (
+                <motion.li
+                  key={c.id}
+                  layout
+                  className={styles.tabRow}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.035, duration: 0.22 } }}
+                  exit={{ opacity: 0, x: -16, transition: { duration: 0.18 } }}
+                >
+                  <span className={styles.tabMark} aria-hidden />
+                  <div className={styles.tabMain}>
+                    <p className={styles.tabTitle}>{c.titre}</p>
+                    <p className={styles.tabMeta}>{pdfLabel(c.nbDocuments)}</p>
+                  </div>
+                  <Link href={`/app/matieres/${matiere.id}/cours/${c.id}`} className={styles.rowLink} aria-label={`Ouvrir le cours ${c.titre}`} />
+                  <RowMenu
+                    label={`Plus d’actions pour ${c.titre}`}
+                    deleteLabel="Supprimer le cours"
+                    deleteNote="Le cours et tous ses PDF seront supprimés."
+                    onDelete={() => handleDelete(c)}
+                  />
+                  <ChevronRight size={20} className={styles.tabChevron} aria-hidden />
+                </motion.li>
+              ))}
+            </AnimatePresence>
+          </ul>
+        )}
       </div>
 
-      {/* La section d'importation globale a été retirée pour éviter les doublons avec celle du Cours */}
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Nouveau cours dans ${matiere.titre}`}>
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)' }}>
-          <Input 
-            label="Titre du cours" 
-            value={titre} 
-            onChange={e => setTitre(e.target.value)} 
-            placeholder="Ex: Titre 1 - Les personnes physiques" 
-            required 
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Nouveau cours dans « ${matiere.titre} »`}>
+        <form onSubmit={handleCreate} className={styles.form}>
+          <Input
+            label="Titre du cours"
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Ex. : Les personnes et les incapacités"
+            maxLength={120}
+            required
+            autoFocus
           />
-          {error && <p style={{ color: 'red', fontSize: '13px' }}>{error}</p>}
-          <Button type="submit" disabled={loading} style={{ alignSelf: 'flex-end', marginTop: 'var(--spacing-small)' }}>
-            {loading ? 'Création...' : 'Créer le cours'}
-          </Button>
+          {error && <p className={styles.formError}>{error}</p>}
+          <div className={styles.formActions}>
+            <button type="submit" className={styles.primary} disabled={saving}>
+              {saving ? 'Création…' : 'Créer le cours'}
+            </button>
+          </div>
         </form>
       </Modal>
-    </div>
+    </MotionConfig>
   );
 }

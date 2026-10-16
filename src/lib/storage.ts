@@ -21,7 +21,9 @@ export function extractStoragePath(url: string | null | undefined): string | nul
   if (!url) return null;
   const m = url.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/documents\/([^?#]+)/);
   if (!m) return null;
-  const path = decodeURIComponent(m[1]);
+  // Une URL héritée mal encodée (« % » isolé) ne doit pas faire planter la page : on l'ignore.
+  let path: string;
+  try { path = decodeURIComponent(m[1]); } catch { return null; }
   if (path.includes('..') || path.startsWith('/')) return null;
   return path;
 }
@@ -63,4 +65,19 @@ export async function withSignedUrls<T extends { url_fichier?: string | null; us
     const signed = p ? byPath.get(p) : null;
     return { ...d, url_fichier: signed ?? null };
   });
+}
+
+/**
+ * Supprime du bucket les fichiers d'un étudiant, APRÈS la suppression des lignes `documents`.
+ * Ordre volontaire : si le stockage échoue, il ne reste qu'un fichier orphelin (coût), jamais
+ * une ligne qui pointe vers un fichier disparu. Seuls les chemins rangés dans le dossier de
+ * l'étudiant sont acceptés ; l'échec est journalisé, pas propagé.
+ */
+export async function removeOwnedFiles(userId: string, urls: (string | null | undefined)[]): Promise<void> {
+  const paths = urls
+    .map((u) => extractStoragePath(u))
+    .filter((p): p is string => !!p && p.startsWith(`${userId}/`));
+  if (paths.length === 0) return;
+  const { error } = await supabaseAdmin.storage.from(BUCKET).remove(paths);
+  if (error) console.error('[storage] suppression de fichiers impossible', { count: paths.length, message: error.message });
 }
