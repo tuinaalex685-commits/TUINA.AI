@@ -2,9 +2,9 @@
 
 > Document de référence du projet SGP / SJP (dépôt `TUINA.AI`). À mettre à jour après chaque intervention significative.
 >
-> **Version 1.1 — 2026-10-16** — Audit (phase A), correctifs de sécurité et de latence (phase B, en production), début de la refonte du design, intégration de la **directive générale de développement** (sections 26 à 33).
+> **Version 1.2 — 2026-10-16** — Audit (phase A), correctifs de sécurité et de latence (phase B, en production), refonte du design, **directive générale de développement** (sections 26 à 33) et **règles pédagogiques validées** : étude commencée, notes, six examens, points et bonus BD (sections 34 à 39).
 >
-> Organisation : sections 1 à 7 = constats techniques ; 8 à 24 = **exigences pédagogiques** (prompts 1 à 4) ; 25 = journal ; 26 à 33 = **méthode, design, accès et capacité** (directive générale). Les exigences pédagogiques restent la référence produit : la directive les complète, elle ne les remplace pas.
+> Organisation : sections 1 à 7 = constats techniques ; 8 à 24 = **exigences pédagogiques** (prompts 1 à 4) ; 25 = journal ; 26 à 33 = **méthode, design, accès et capacité** (directive générale) ; 34 à 39 = **règles pédagogiques validées** (elles priment sur les propositions des § 13 et 15). Les exigences pédagogiques restent la référence produit : la directive les complète, elle ne les remplace pas.
 >
 > Légende des statuts de constat :
 > - **CONFIRMÉ (code)** : prouvé par la lecture du code ; reste à reproduire par un test.
@@ -41,6 +41,13 @@
 23. Plan de développement par étapes
 24. Questions à trancher
 25. Journal des décisions, changements et tests
+26 à 33. Directive générale (méthode, design, accès, capacité)
+34. Q-01 — Étude guidée « commencée »
+35. Q-03 — Note retenue quand un examen est repassé
+36. Q-05 / Q-06 — Les six examens de maîtrise et l'après-échec
+37. Q-12 — Points de progression et bonus BD
+38. Conséquences sur les sections précédentes
+39. Décisions encore attendues
 
 ---
 
@@ -475,6 +482,8 @@ Pour une copie rattachée à un cours, la correction reçoit **les passages pert
 
 ## 13. Examens : progression par paliers (tableau à valider)
 
+> ⚠️ **Mis à jour le 2026-10-16 : les règles validées sont au § 36**, qui remplace ce tableau sur l'accès à l'examen 1, le passage de groupe, l'échec et les nouvelles tentatives.
+>
 > **Ne pas développer avant ta validation** (prompt 4, § 3). Le prompt 4 remplace la règle « 18/20 » du prompt 3 par une **moyenne de 15/20 sur 3 examens**. L'ancienne ambiguïté sur les 18/20 devient sans objet, sauf si tu souhaites la conserver.
 
 ### 13.1 Proposition
@@ -543,6 +552,8 @@ Pour une copie rattachée à un cours, la correction reçoit **les passages pert
 - **Historique visible** : « +10 : examen 2 du cours X réussi (13/20) ».
 
 ### 15.2 Barème proposé (à valider, Q-11)
+
+> ⚠️ **Remplacé par le barème du § 37.3** (2026-10-16), qui tient compte des réponses à Q-12.
 
 | Activité | Condition de qualité | Points | Anti-abus |
 |---|---|---|---|
@@ -749,10 +760,10 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 
 | ID | Question | Bloque |
 |---|---|---|
-| Q-01 | Que signifie « parcours commencé » pour accéder à l'examen 1 ? | Étape 5 |
-| Q-03 | Pour un examen repassé, quelle note compte dans la moyenne du palier ? | Étape 5 |
-| Q-05 / Q-06 | Après un échec : remédiation obligatoire, délai, ou les deux ? Combien de tentatives ? | Étape 5 |
-| Q-12 | Compteur du bonus : points gagnés **après** la réclamation, ou solde déjà accumulé ? | Étape 10 |
+| ~~Q-01~~ | ✅ Résolue le 2026-10-16 → § 34 | — |
+| ~~Q-03~~ | ✅ Résolue le 2026-10-16 → § 35 | — |
+| ~~Q-05 / Q-06~~ | ✅ Résolues le 2026-10-16 → § 36 (restent D-03 et D-04 au § 39) | — |
+| ~~Q-12~~ | ✅ Résolue le 2026-10-16 → § 37 (barème à valider : D-06 à D-10 au § 39) | — |
 | Q-15 | Correction de C-01 : faut-il garder la connexion « email + code », ou passer à « email + mot de passe », le code ne servant qu'à activer le Premium ? | Étape 1 |
 | Q-16 | Disposes-tu d'un projet Supabase de test, ou en crée-t-on un (offre gratuite) pour éviter de toucher la production ? | Étape 0 |
 | Q-02, Q-04, Q-07 à Q-11, Q-13, Q-14 | Les valeurs par défaut proposées aux § 13 et 15 s'appliquent sauf avis contraire | — |
@@ -785,6 +796,8 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 2026-10-16 | Tests E2E (Playwright, copie locale + vraie base, comptes `claude-test-*`) | ✅ Ancien étudiant : connexion avec le code → choix d'un mot de passe → reconnexion → Premium conservé → l'ancien code ne sert plus de mot de passe. ✅ Tentative de prise de contrôle (email d'un autre compte + code vierge) **refusée**, et le mot de passe de la victime reste intact. ✅ Compte gratuit → activation d'un code → « Tu es en Premium ». ✅ Import d'un PDF dans le cours A : visible dans A, absent de B, lien signé, présent en Bibliothèque. Bugs trouvés et corrigés par ces tests : mot de passe actuel exigé par Supabase ; erreur d'hydratation React #418 (dates). |
 | 2026-10-16 | À vérifier | `CRON_SECRET` défini en Production et en Preview (sinon le worker refuse tout appel) ; « Confirm email » activé dans Supabase Auth (sinon une inscription avec l'email d'un abonné hériterait de son Premium). |
 | 2026-10-16 | Tests | `tsc` OK ; `next build` OK (37 routes) ; ESLint : aucune erreur nouvelle (les 19 erreurs existantes sont antérieures, dont `useJob.ts`). Aucun test fonctionnel : pas d'environnement de test. |
+| 2026-10-16 | Décision (Q-01, Q-03, Q-05, Q-06, Q-12) | Réponses du responsable intégrées aux § 34 à 37 : étude commencée au clic enregistré par le serveur ; historique complet des tentatives, meilleure note = référence ; six examens en deux groupes, seuil 10/20 et moyenne ≥ 15/20 ; deux compteurs (progression et bonus BD). Barème et décisions restantes : § 37.3 et § 39. **Implémentation en attente d'autorisation.** |
+| 2026-10-16 | Design | Navigation : une couleur par section (contraste AA vérifié), pastille glissante et allumage au clic, sur ordinateur, tablette et mobile (`ca3c5ee`, en production). Bandeau « Ton Premium a expiré le … » sur le tableau de bord (`e4c0bd5`, en production). |
 | 2026-10-16 | Migrations | Écrites dans `database/migrations/` (00 lecture seule, 01 sécurité, 02 bucket privé) ; **non appliquées** pour l'instant. Ordre : déployer le code en production → 00 → 01 → vérifier → 02. |
 
 
@@ -900,3 +913,233 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 6 | Abonnements (états, expiration, journal), limites contextualisées | 0 | Scénarios d'abonnement testés |
 | 7 | Capacité : index, requêtes, cache, mesures k6 | 4 | Rapport de mesures |
 | 8 | Pédagogie (sections 8 à 24) | 2, 5, réponses du § 24 | Critères des sections 13 à 23 |
+
+---
+
+# PARTIE III — RÈGLES PÉDAGOGIQUES VALIDÉES (réponses du 2026-10-16)
+
+> Réponses du responsable aux questions Q-01, Q-03, Q-05, Q-06 et Q-12. **Elles remplacent les propositions des § 13 et 15 sur les points traités.** Chaque règle est classée :
+> - ✅ **VALIDÉE** : décidée par le responsable, à appliquer telle quelle ;
+> - 🔧 **FORMALISATION** : déduite des règles validées par l'assistant, pour rendre le parcours cohérent ; **à confirmer** ;
+> - ⚙️ **PARAMÈTRE TECHNIQUE** : détail de réalisation choisi par l'assistant, sans effet sur la règle pédagogique ;
+> - ❓ **DÉCISION ATTENDUE** : le responsable doit trancher (liste complète au § 39).
+>
+> **Aucune de ces règles n'est encore développée.** L'implémentation attend l'autorisation explicite du responsable.
+
+## 34. Q-01 — Étude guidée « commencée »
+
+| # | Règle | Statut |
+|---|---|---|
+| R-01 | Une étude est **commencée** quand l'étudiant clique sur « Commencer l'étude » **et** que le serveur enregistre le démarrage. Consulter la page d'un cours ne compte pas. | ✅ |
+| R-02 | Trois états : **non commencée** (aucun démarrage), **en cours** (démarrée, pas terminée), **terminée** (conditions de complétion remplies). | ✅ |
+| R-03 | L'état est conservé **en base** : il survit à la fermeture de la page, à la déconnexion et au changement d'appareil. | ✅ |
+| R-04 | L'étude **reprend là où l'étudiant s'était arrêté**. | ✅ |
+| R-05 | Examens de maîtrise : il suffit que l'étude du cours soit **commencée** (en cours ou terminée). Il n'est pas nécessaire de la terminer. | ✅ |
+| R-06 | « Terminée » = toutes les séquences du parcours terminées (chaque thème validé sur le fond). | 🔧 |
+| R-07 | Le démarrage est **idempotent** : un double clic ou un second appareil ne crée pas deux parcours ; la date du premier démarrage ne change jamais. | ⚙️ |
+| R-08 | Stockage : on réutilise `etude_progression_cours` (déjà unique par étudiant et par cours, statut `en_cours` / `termine`), en ajoutant `started_at` (premier démarrage) et `derniere_position` (séquence et thème en cours). L'absence de ligne signifie « non commencée ». Écriture **uniquement par une action serveur**, jamais par le navigateur. | ⚙️ |
+
+## 35. Q-03 — Note retenue quand un examen est repassé
+
+| # | Règle | Statut |
+|---|---|---|
+| R-10 | **Chaque tentative** est conservée avec sa date et sa note. Aucune tentative n'est effacée ni remplacée. | ✅ |
+| R-11 | La **meilleure note** d'un examen est la **note de référence** pour la progression et les déblocages. | ✅ |
+| R-12 | La **dernière note** est affichée à part (« Dernière tentative : 12/20 le 14/11 »), pour montrer le résultat le plus récent. | ✅ |
+| R-13 | Une tentative interrompue par une **erreur technique** ne compte ni comme une tentative ni comme un échec ; le quota est rendu (mécanisme déjà en place). | 🔧 |
+| R-14 | Les notes de référence sont **recalculées par le serveur** à partir des tentatives. Aucun champ « meilleure note » envoyé par le navigateur n'est accepté. | ⚙️ |
+
+Conséquence : une note de référence ne peut que monter. **Un déblocage obtenu n'est donc jamais retiré.**
+
+## 36. Q-05 / Q-06 — Les six examens de maîtrise et l'après-échec
+
+### 36.1 Structure
+
+| # | Règle | Statut |
+|---|---|---|
+| R-20 | Au maximum **six examens distincts par cours** : groupe 1 = examens 1, 2, 3 ; groupe 2 = examens 4, 5, 6. | ✅ |
+| R-21 | Repasser un examen **n'en crée pas un nouveau** : c'est une nouvelle tentative du même examen. | ✅ |
+| R-22 | Une nouvelle tentative propose **une autre variante** (autres questions sur les mêmes notions), pour qu'on progresse en comprenant plutôt qu'en mémorisant les réponses. | 🔧 |
+
+### 36.2 Règles de déblocage complètes
+
+| Examen | Condition d'accès | Statut |
+|---|---|---|
+| **Examen 1** | Étude guidée du cours **commencée** (R-05) | ✅ |
+| **Examen 2** | Meilleure note à l'examen 1 **≥ 10/20** | ✅ |
+| **Examen 3** | Meilleure note à l'examen 2 **≥ 10/20** | 🔧 (même seuil que l'examen 1, appliqué en chaîne) |
+| **Groupe 1 validé** | Les 3 examens passés **et** moyenne des meilleures notes **(n1 + n2 + n3) ÷ 3 ≥ 15/20** | ✅ |
+| | … **et** chacun des 3 examens ≥ 10/20 | 🔧 ❓ D-01 |
+| **Examen 4** | Groupe 1 validé | ✅ |
+| **Examen 5** | Meilleure note à l'examen 4 **≥ 10/20** | 🔧 |
+| **Examen 6** | Meilleure note à l'examen 5 **≥ 10/20** | 🔧 |
+| **Groupe 2 validé = cours maîtrisé** | Les 3 examens passés, chacun ≥ 10/20, **et** moyenne des meilleures notes (n4 + n5 + n6) ÷ 3 ≥ 15/20 | 🔧 ❓ D-02 |
+
+**Pourquoi exiger aussi ≥ 10/20 sur chaque examen du groupe (D-01)** : avec 19, 19 et 8, la moyenne est de 15,33/20, mais l'examen 3 est raté. Sans cette condition, un examen manqué pourrait être « compensé ». En pratique, la chaîne l'impose déjà pour les examens 1 et 2 ; la condition ne change le résultat que pour le dernier examen du groupe.
+
+**Exemple validé** : 16, 17 et 19 → (16 + 17 + 19) ÷ 3 = 52 ÷ 3 = **17,33/20** → groupe 2 débloqué.
+
+### 36.3 Après un échec
+
+| Situation | Ce que fait le système | Statut |
+|---|---|---|
+| **Note < 10/20 sur un examen** (n'importe lequel des 6) | L'examen suivant reste verrouillé. L'étudiant reçoit une **correction pédagogique** : ce qui était juste ou faux et pourquoi, les **notions mal comprises**, et un lien vers les passages du cours et les cartes de révision correspondantes. Il est invité à réviser, puis à repasser l'examen (nouvelle variante). | ✅ examen 1 · 🔧 examens 2 à 6 |
+| La révision avant la nouvelle tentative est-elle **obligatoire** ou seulement **recommandée** ? | Ta réponse dit « recommander ». Proposition : **recommandée** et mise en avant, sans blocage. | ❓ D-03 |
+| **Moyenne du groupe 1 < 15/20** (les 3 examens passés) | Les examens 4 à 6 restent verrouillés. Le système affiche : la **moyenne** (ex. 13,67/20) ; **les points manquants** (ex. « il te manque 4 points au total sur les 3 examens ») ; les **notions à renforcer** ; et **les examens à repasser en priorité** (ceux qui ont la plus petite meilleure note, donc la plus grande marge de progrès). | ✅ |
+| | L'étudiant repasse **seulement les examens qu'il choisit**. Ceux qui sont déjà bons n'ont pas à être refaits. La moyenne est recalculée avec la meilleure note de chaque examen. | ✅ |
+| **Note < 10/20 dans le groupe 2** (ex. examen 4) | Même règle qu'au groupe 1 : l'examen 5 reste verrouillé, correction, notions à revoir, nouvelle tentative de l'examen 4. **Le groupe 1 reste validé** : un échec au groupe 2 ne fait jamais perdre un déblocage acquis. | 🔧 |
+| **Moyenne du groupe 2 < 15/20** (les examens 4, 5 et 6 passés) | Le cours n'est pas encore **maîtrisé**. Statut affiché : « Parcours de maîtrise achevé, à consolider » avec la moyenne, les points manquants et les examens à repasser en priorité (parmi 4, 5 et 6). L'étudiant peut retenter ces examens pour obtenir la maîtrise. | 🔧 ❓ D-02 |
+| **Limite de tentatives** | Proposition anti-abus : **3 tentatives par examen et par jour**. Au-delà : « Tu as fait 3 tentatives aujourd'hui sur cet examen. Reviens demain, après avoir revu les notions signalées. » | ❓ D-04 |
+
+### 36.4 Fin du parcours
+
+| # | Règle | Statut |
+|---|---|---|
+| R-30 | Après les six examens, l'étudiant consulte ses résultats, ses corrections et son historique, puis il est encouragé à passer à un autre cours. | ✅ |
+| R-31 | Un cours **maîtrisé** reçoit un repère visible (« Cours maîtrisé · moyenne 16,4/20 ») dans Progression et dans le catalogue. | 🔧 |
+| R-32 | Après la maîtrise, les examens peuvent encore être repassés **pour s'entraîner** (historique complet), sans rapporter de points de déblocage. | ❓ D-05 |
+
+### 36.5 Paramètres techniques
+
+- ⚙️ Nouvelle table `examen_tentatives` (une ligne par tentative : étudiant, cours, numéro d'examen 1 à 6, variante, note, date, statut). Les tentatives existent déjà dans `examen_sessions` : on y ajoute le cours et le numéro d'examen plutôt que de dupliquer.
+- ⚙️ Une **vue serveur** calcule pour chaque cours : la meilleure et la dernière note de chaque examen, la moyenne de chaque groupe et l'état (verrouillé, ouvert, réussi, validé). L'interface lit cette vue ; elle ne calcule rien elle-même.
+- ⚙️ La correction et les **notions mal comprises** s'appuient sur le champ `theme` / `notion` de chaque question de la banque, déjà présent.
+- ⚙️ Arrondi : la moyenne est calculée sans arrondi intermédiaire et comparée à 15 exactement (14,99 ne suffit pas) ; elle est **affichée** avec deux décimales.
+
+## 37. Q-12 — Points de progression et bonus BD
+
+### 37.1 Deux compteurs distincts
+
+| | **Points de progression** | **Compteur du bonus BD** |
+|---|---|---|
+| Ce qu'ils mesurent | Tout le travail pédagogique réel depuis l'inscription | Les points admissibles gagnés **depuis l'activation** du bonus |
+| Remise à zéro | Jamais | À chaque BD livrée (nouveau cycle) |
+| Affichage | « 342 points de progression » | « Bonus BD : 124 / 200 » |
+| Dépensés par la BD ? | **Non**, jamais | Oui, le cycle se termine à la livraison |
+
+Ces deux compteurs viennent d'un **même registre** de points (`points_ledger`) : le compteur BD est la somme des lignes admissibles gagnées après la date d'activation. Il n'y a qu'une seule source de vérité.
+
+### 37.2 Règles validées
+
+| # | Règle | Statut |
+|---|---|---|
+| R-40 | Les points récompensent le **travail pédagogique réel**, la **qualité** et la **progression**, pas les clics ni le volume. | ✅ |
+| R-41 | Activités admissibles : Études guidées, Examens, Rédaction, Révision. | ✅ |
+| R-42 | Points attribués selon des règles explicites, **vérifiées côté serveur**. | ✅ |
+| R-43 | Ouvrir une page, cliquer plusieurs fois ou répéter un exercice facile ne rapporte rien. | ✅ |
+| R-44 | Une même activité validée ne rapporte **pas plusieurs fois** de manière abusive. | ✅ |
+| R-45 | Cycle BD : conditions minimales atteintes → notification au tableau de bord → l'étudiant **active** son bonus → le compteur BD part de 0 → à **200 points**, il choisit un cours → BD pédagogique en PDF. | ✅ |
+| R-46 | Le cours choisi peut être un cours déjà étudié, un cours de sa bibliothèque ou un cours ajouté plus tard, si le fichier est **accessible** pour lui et **exploitable** (texte lisible). | ✅ |
+| R-47 | **Une activation = une seule BD.** Une nouvelle BD suppose un nouveau cycle, sans double attribution. | ✅ |
+| R-48 | La BD reste fidèle au cours, explique avec des situations concrètes et un langage accessible, préserve la précision juridique, dans un PDF de qualité. | ✅ |
+
+### 37.3 Barème proposé — ❓ D-06 (à valider avant tout développement)
+
+**Principe** : on paie la **compréhension démontrée** (une réponse jugée correcte, un seuil de note franchi, un progrès mesuré), jamais la simple présence. Chaque gain est **unique** (contrainte d'unicité étudiant + règle + objet) et **plafonné**.
+
+**Études guidées**
+
+| Activité | Condition de qualité | Points | Limite |
+|---|---|---|---|
+| Thème validé | Cas pratique « fond » jugé **correct** par le serveur, **au premier essai** | **+3** | 1 fois par thème |
+| Thème validé après correction | Correct après une ou plusieurs remédiations | **+2** | 1 fois par thème |
+| Séquence terminée | Tous ses thèmes validés | **+5** | 1 fois par séquence |
+| Parcours terminé | Toutes les séquences terminées (R-06) | **+15** | 1 fois par cours |
+| Ouvrir, lire, cliquer « Suivant » | — | **0** | — |
+
+**Examens** (calculés sur la **meilleure** note, R-11)
+
+| Activité | Condition | Points | Limite |
+|---|---|---|---|
+| Seuil de réussite franchi | Meilleure note qui passe **≥ 10/20** | **+8** | 1 fois par examen |
+| Seuil « bien » franchi | Meilleure note qui passe **≥ 14/20** | **+4** | 1 fois par examen |
+| Seuil « excellent » franchi | Meilleure note qui passe **≥ 17/20** | **+4** | 1 fois par examen |
+| Groupe 1 validé | Règles du § 36.2 | **+15** | 1 fois par cours |
+| Cours maîtrisé | Groupe 2 validé | **+25** | 1 fois par cours |
+| Nouvelle tentative sans nouveau seuil | — | **0** | — |
+
+→ **Le progrès est récompensé naturellement** : passer de 9 à 12 rapporte +8 ; de 12 à 15, +4 ; refaire 15 ne rapporte rien. Un examen rapporte au maximum 16 points, quel que soit le nombre de tentatives.
+
+→ **Niveau de difficulté** (proposition) : facile = 50 % des points, moyen = 100 %, difficile = 125 %. Les seuils sont acquis une seule fois, au niveau où ils sont franchis. ❓ D-07
+
+**Rédaction juridique**
+
+| Activité | Condition | Points | Limite |
+|---|---|---|---|
+| Copie corrigée | Longueur minimale de l'exercice atteinte (ex. 300 mots pour une dissertation) | **+3** | 2 copies par jour |
+| Méthodologie respectée | La correction valide la structure attendue (problématique, plan, annonce) | **+3** | 1 fois par copie |
+| Note ≥ 10/20 | Note indicative de la correction | **+5** | 1 fois par copie |
+| Note ≥ 14/20 | | **+3** | 1 fois par copie |
+| Amélioration après correction | Nouvelle version de la **même** copie qui gagne **au moins 2 points** | **+5** | 1 fois par copie |
+
+**Révision**
+
+| Activité | Condition | Points | Limite |
+|---|---|---|---|
+| Session de révision complète | Au moins 10 cartes **dues** (cartes déjà maîtrisées exclues), **≥ 70 %** de bonnes réponses | **+2** | 2 sessions par jour |
+| Carte difficile maîtrisée | Une carte ratée au moins 2 fois qui atteint l'intervalle « maîtrisée » | **+1** | 5 par jour |
+
+**Protections communes**
+
+| Protection | Valeur proposée |
+|---|---|
+| Plafond quotidien global | **40 points par jour**. Au-delà, l'activité est enregistrée (elle compte pour la progression pédagogique), mais elle ne rapporte plus de points ce jour-là. |
+| Réponses trop rapides | Un examen rendu en moins de **4 secondes par question en moyenne** est noté normalement, mais il **ne rapporte aucun point**. |
+| Source des faits | Uniquement des faits établis par le serveur : session notée, correction enregistrée, réponse évaluée. Jamais un compteur envoyé par le navigateur. |
+| Unicité | Index unique `(user_id, regle, objet_id)` dans `points_ledger` : la même récompense ne peut pas être inscrite deux fois, même en cas de double requête. |
+| Historique lisible | Chaque ligne a un motif : « +8 · Examen 2 réussi (12/20) · Droit des obligations ». |
+
+**Ordre de grandeur** (estimation, à confirmer sur de vrais cours) : un cours de 4 séquences et 16 thèmes, étudié sérieusement, rapporte environ 50 à 85 points en Étude, plus 60 à 135 points en Examens (avec la maîtrise). Soit **environ 110 à 220 points pour un cours travaillé à fond**. Avec le plafond de 40 points par jour, il faut **au moins 5 jours** d'activité réelle pour atteindre 200 points : la BD récompense la régularité, pas un marathon d'un soir.
+
+### 37.4 Éligibilité initiale au bonus — ❓ D-08
+
+Proposition : la notification « Ton bonus BD est disponible » apparaît quand, sur les 30 derniers jours, l'étudiant a :
+1. au moins **5 jours actifs** distincts (un jour actif = au moins un point gagné) ;
+2. au moins **60 points de progression** ;
+3. **et** soit un examen avec une meilleure note ≥ 14/20, soit un parcours d'Étude terminé.
+
+### 37.5 Compteur de 200 points
+
+| # | Règle proposée | Statut |
+|---|---|---|
+| R-50 | Le compteur démarre à **0 à l'activation**. Seuls les points gagnés **après** l'activation comptent, avec les mêmes plafonds. | ✅ (R-45) |
+| R-51 | Un seul cycle actif à la fois par étudiant (contrainte en base). | ⚙️ |
+| R-52 | À 200 points : « Choisis le cours à transformer en BD ». Le compteur s'arrête en attendant le choix. | 🔧 |
+| R-53 | Les points gagnés au-delà de 200 **ne sont pas reportés** sur le cycle suivant (ils restent dans les points de progression). | ❓ D-09 |
+| R-54 | Après la livraison d'une BD, un nouveau cycle est possible quand les conditions d'éligibilité sont de nouveau remplies, **sur une période qui commence après la livraison**, avec au minimum **14 jours** entre deux BD. | ❓ D-10 |
+
+### 37.6 Génération de la BD et erreurs techniques
+
+| Cas | Traitement proposé |
+|---|---|
+| Cours choisi **inaccessible** (pas les droits) ou **inexploitable** (PDF scanné sans texte, texte trop court) | Refusé **avant** le lancement, avec la raison et la possibilité de choisir un autre cours. Le bonus reste intact. |
+| Panne passagère (IA indisponible, délai dépassé) | Jusqu'à **3 nouveaux essais automatiques** espacés. L'étudiant voit « BD en préparation ». |
+| Échec définitif | Le bonus **n'est pas consommé**. Message : « La BD n'a pas pu être créée. Ton bonus est intact : relance-la ou choisis un autre cours. » L'administrateur voit l'échec dans le tableau de bord. |
+| Budget IA du mois atteint | La demande est **mise en file d'attente** (pas refusée) et l'étudiant est prévenu de la date probable. |
+| Succès | BD consultable en ligne + PDF téléchargeable ; le cycle est clos. |
+| Même cours déjà transformé pour un autre étudiant | La BD existante est réutilisée (pas de nouvelle génération). Le cycle de l'étudiant est tout de même clos. |
+| Double clic, deux onglets | Transitions d'état atomiques en base : une seule génération par cycle. |
+
+Production : option A du § 15.4 (scénario JSON généré par l'IA, rendu en pages HTML/SVG avec des personnages réutilisables, puis export PDF). Coût : 1 à 2 appels texte par BD.
+
+## 38. Conséquences sur les sections précédentes
+
+- **§ 13.1** : les lignes « Accès à l'examen 1 », « Palier 1 → palier 2 », « Échec » et « Nouvelle tentative » sont remplacées par le § 36. La règle Q-01 « au moins une séquence terminée » est **abandonnée** : il suffit que l'étude soit commencée (R-05).
+- **§ 15.2** : le barème est remplacé par celui du § 37.3 (encore à valider). Le multiplicateur « difficile ×1,5 » devient ×1,25.
+- **§ 15.3** : la question Q-12 est tranchée : le compteur BD part de 0 à l'activation (R-50).
+- **§ 24** : Q-01, Q-03, Q-05, Q-06 et Q-12 sont résolues ; les nouvelles décisions sont au § 39.
+
+## 39. Décisions encore attendues
+
+| ID | Question | Proposition de l'assistant |
+|---|---|---|
+| **D-01** | Pour valider le groupe 1, faut-il **aussi** ≥ 10/20 à chacun des 3 examens, en plus de la moyenne ≥ 15/20 ? | **Oui** (évite qu'un examen raté soit compensé) |
+| **D-02** | Le groupe 2 suit-il exactement les mêmes règles (chaîne à 10/20 + moyenne ≥ 15/20) pour que le cours soit « maîtrisé » ? Si la moyenne reste < 15, statut « achevé, à consolider » ? | **Oui** aux deux |
+| **D-03** | Après un échec, la révision des notions signalées est-elle **obligatoire** avant de repasser, ou seulement **recommandée** ? | **Recommandée** |
+| **D-04** | Limite de tentatives par examen | **3 par jour** |
+| **D-05** | Repasser les examens après la maîtrise, pour s'entraîner, sans points | **Autorisé** |
+| **D-06** | Barème du § 37.3 (valeurs et limites) | Tel que proposé |
+| **D-07** | Effet de la difficulté sur les points | facile 50 %, moyen 100 %, difficile 125 % |
+| **D-08** | Conditions d'éligibilité initiale au bonus | 5 jours actifs, 60 points, et un examen ≥ 14 ou un parcours terminé |
+| **D-09** | Points au-delà de 200 reportés sur le cycle suivant ? | **Non** |
+| **D-10** | Délai minimal entre deux BD | **14 jours**, avec l'éligibilité recalculée après la livraison |
