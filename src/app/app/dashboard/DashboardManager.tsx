@@ -21,6 +21,7 @@ interface Props {
   exams: ExamItem[];
   objectifs: { id: string; titre: string; progression: number; cible: number }[];
   onboardingSeen?: boolean;
+  expiredOn?: string | null;
 }
 
 function todayLabel(): string {
@@ -28,7 +29,9 @@ function todayLabel(): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export default function DashboardManager({ premium, resume, dueCount, stats, exams, objectifs, onboardingSeen = true }: Props) {
+const RENEW_URL = `https://wa.me/22657138126?text=${encodeURIComponent('Bonjour, je souhaite renouveler mon abonnement SJP Premium (2 500 FCFA pour 30 jours).')}`;
+
+export default function DashboardManager({ premium, resume, dueCount, stats, exams, objectifs, onboardingSeen = true, expiredOn = null }: Props) {
   const router = useRouter();
   const [guideOpen, setGuideOpen] = useState(!onboardingSeen);
   const [today] = useState(todayLabel);
@@ -56,6 +59,19 @@ export default function DashboardManager({ premium, resume, dueCount, stats, exa
   return (
     <div className={styles.page}>
       <OnboardingGuide open={guideOpen} onClose={closeGuide} premium={premium} />
+
+      {expiredOn && (
+        <section className={styles.expired} role="status">
+          <div>
+            <p className={styles.expiredTitle}>Ton abonnement Premium a expiré le {formatDate(expiredOn)}.</p>
+            <p className={styles.expiredText}>Tu es repassé en version gratuite. Tes documents, ta progression et ton historique sont conservés.</p>
+          </div>
+          <div className={styles.expiredActions}>
+            <a href={RENEW_URL} target="_blank" rel="noopener noreferrer" className={styles.expiredCta}>Renouveler sur WhatsApp</a>
+            <Link href="/app/compte" className={styles.expiredLink}>J’ai un nouveau code</Link>
+          </div>
+        </section>
+      )}
 
       <header className={styles.head}>
         <p className={styles.date}>{today}</p>

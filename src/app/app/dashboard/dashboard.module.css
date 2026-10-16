@@ -292,3 +292,60 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Abonnement expiré : information claire, sans alarme. */
+.expired {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border-radius: var(--radius-lg);
+  background: var(--warning-soft);
+  border: 1px solid #F1D9A8;
+}
+
+@media (min-width: 768px) {
+  .expired {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.expiredTitle {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.expiredText {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.expiredActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  flex-shrink: 0;
+}
+
+.expiredCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--s-4);
+  border-radius: var(--radius-md);
+  background: var(--sjp-blue);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.expiredLink {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--action);
+}

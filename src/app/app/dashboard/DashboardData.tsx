@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { catalogLevelAllows } from '@/lib/access';
+import { exactEmailPattern } from '@/lib/email';
 import DashboardManager, { type ResumeItem, type ExamItem } from './DashboardManager';
 
 /**
@@ -74,6 +75,20 @@ export default async function DashboardData({ user }: { user: { id: string; emai
 
   const onboardingSeen = roleErr ? true : (roleRow?.onboarding_vu ?? true);
 
+  // Abonnement arrivé à expiration dans les 30 derniers jours (et pas renouvelé) : on le dit
+  // clairement à l'étudiant, avec ses données conservées et un moyen de renouveler.
+  let expiredOn: string | null = null;
+  if (!premium && user.email) {
+    const since = new Date(Date.parse(nowIso) - 30 * 86400000).toISOString();
+    const { data: expired } = await supabaseAdmin
+      .from('access_codes').select('expires_at')
+      .ilike('email', exactEmailPattern(user.email))
+      .eq('status', 'active')
+      .lt('expires_at', nowIso).gte('expires_at', since)
+      .order('expires_at', { ascending: false }).limit(1);
+    expiredOn = expired?.[0]?.expires_at ?? null;
+  }
+
   return (
     <DashboardManager
       premium={premium}
@@ -87,6 +102,7 @@ export default async function DashboardData({ user }: { user: { id: string; emai
       exams={exams}
       objectifs={(objectifs || []).map((o) => ({ id: o.id, titre: o.titre || o.type || 'Objectif', progression: o.progression || 0, cible: o.cible || 1 }))}
       onboardingSeen={onboardingSeen}
+      expiredOn={expiredOn}
     />
   );
 }
