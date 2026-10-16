@@ -6,6 +6,7 @@ import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
 import { headers } from 'next/headers';
+import { after } from 'next/server';
 import crypto from 'crypto';
 
 export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude' | 'examen_pool';
@@ -112,6 +113,7 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   // une copie d'hier se faisait corriger sans limite, et deux clics simultanés passaient tous
   // les deux. Évaluations : quota Free (un appel Gemini par contenu/type/nombre).
   let refund: (() => Promise<void>) | null = null;
+  let refundFeature: 'redaction' | 'evaluation' | null = null;
   if (type === 'redaction') {
     const { data, error } = await supabaseAdmin.rpc('consume_free_quota', {
       p_user_id: user.id, p_feature: 'redaction', p_limit: REDACTION_DAILY_LIMIT,
@@ -125,18 +127,26 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
       return { error: `Vous avez atteint votre limite de ${REDACTION_DAILY_LIMIT} corrections de Rédaction pour aujourd'hui. Réessayez demain.` };
     }
     refund = () => refundQuota(user.id, 'redaction');
+    refundFeature = 'redaction';
   } else if (type === 'evaluation') {
     const quota = await consumeQuota(supabase, user.id, user.email, 'evaluation');
     if (!quota.allowed) return { error: quota.error, quotaReached: true };
-    if (!quota.unlimited) refund = () => refundQuota(user.id, 'evaluation');
+    if (!quota.unlimited) {
+      refund = () => refundQuota(user.id, 'evaluation');
+      refundFeature = 'evaluation';
+    }
   }
 
   const content_hash = crypto.createHash('sha256')
     .update(`${type}:${JSON.stringify(payload)}`).digest('hex');
 
+  // Écrit par le SERVEUR après le filtrage : indique au worker quel crédit rendre si le
+  // traitement échoue définitivement (jamais lu depuis le client).
+  const storedPayload = refundFeature ? { ...payload, quotaFeature: refundFeature } : payload;
+
   const { data: job, error } = await supabaseAdmin
     .from('ai_jobs')
-    .insert({ user_id: user.id, type, status: 'pending', payload, content_hash })
+    .insert({ user_id: user.id, type, status: 'pending', payload: storedPayload, content_hash })
     .select('id, status')
     .single();
 
@@ -147,13 +157,19 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     return { error: "Impossible de créer le traitement. Réessaie dans un instant." };
   }
 
-  // Déclenchement immédiat (best-effort). Si tué (rechargement) → le cron reprend dans la minute.
+  // Déclenchement immédiat du worker. after() garantit que l'appel part réellement après la
+  // réponse (un fetch non attendu pouvait être coupé avec la fonction ; le cron n'étant plus que
+  // quotidien sur l'offre Hobby, le job aurait attendu). On n'attend que l'envoi, pas le traitement.
   try {
     const h = await headers();
     const proto = h.get('x-forwarded-proto') || 'https';
     const host = h.get('host');
     if (host) {
-      fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
+      after(() => fetch(`${proto}://${host}/api/worker/ai`, {
+        method: 'POST',
+        headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
+        signal: AbortSignal.timeout(3000),
+      }).then(() => {}, () => {}));
     }
   } catch { /* non bloquant */ }
 

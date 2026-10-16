@@ -208,6 +208,21 @@ Exemple : la page Matières déclenche environ 10 appels séquentiels. La page �
 - La page Étude envoie aussi l'intégralité de `intelligence_pedagogique` et toutes les colonnes des thèmes au client.
 - **Correction** : sélectionner uniquement les colonnes affichées.
 
+### C-17 — Fonctions SQL `SECURITY DEFINER` appelables par tout le monde — **ÉLEVÉE — CONFIRMÉ (SQL)**
+
+- `claim_ai_job`, `examen_save_answer`, `consume_free_quota` et `refund_free_quota` s'exécutent avec les droits du propriétaire de la base. Supabase accorde par défaut `EXECUTE` aux rôles `anon` et `authenticated` : le `REVOKE ... FROM PUBLIC` présent dans le dépôt ne suffit pas.
+- **Scénarios** :
+  - `claim_ai_job` renvoie la ligne complète d'un job, y compris d'un autre utilisateur (`payload`, `result` : corrections de rédaction). Il permet aussi de voler la file d'attente.
+  - `refund_free_quota` permet à un étudiant de se rembourser son quota sans fin.
+  - `examen_save_answer` permet d'enregistrer des réponses après la fin du chrono, car l'échéance n'est vérifiée que dans le code de l'application.
+- **Correction** : `database/migrations/20261016_01_phase_b_securite.sql`.
+
+### C-18 — Le cron chaque minute bloque tout nouveau déploiement sur l'offre Hobby — **CRITIQUE (exploitation) — CONFIRMÉ (déploiement)**
+
+- Le déploiement d'aperçu du commit `becb209` a échoué. Le lien d'erreur de Vercel renvoie vers « Cron jobs : usage et tarifs » : l'offre Hobby n'autorise qu'un passage par jour.
+- Le dernier déploiement de production avait pourtant réussi avec ce réglage. L'offre a donc probablement changé depuis (fin d'un essai Pro ?).
+- **Correction** : cron quotidien (`fb5a327`). Le worker reste relancé à chaque création de job, par l'observation de l'avancement et par son propre chaînage.
+
 ---
 
 ## 4. Problèmes à vérifier
@@ -754,4 +769,9 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 2026-10-16 | Décision (Q-16) | Migrations : l'assistant fournit les fichiers SQL (avec retour arrière) ; **le responsable les relit et les applique lui-même** dans Supabase. Aucune action directe sur la production. |
 | 2026-10-16 | Décision | Livraison sur une **branche Git** puis prévisualisation Vercel ; passage en production après validation. |
 | 2026-10-16 | Décision | Ordre de travail : 1) corriger tous les bugs ; 2) supprimer, ajouter et modifier des sections (le responsable retravaille la pédagogie) ; 3) nouvelle landing page. |
-| — | Changements | Phase A : aucun changement. Phase B en cours sur la branche `fix/phase-b-securite-latence`. |
+| 2026-10-16 | Décision | Abonnement Premium = **30 jours** à partir de l'activation du code ; retour automatique en Free ; réactivation manuelle par l'admin (nouveau mois). |
+| 2026-10-16 | Décision | L'assistant est autorisé à pousser sur GitHub et à appliquer les migrations Supabase. |
+| 2026-10-16 | Changement | Commit `becb209` (branche `fix/phase-b-securite-latence`) : C-01 à C-10, C-13, C-15, C-16 corrigés dans le code ; nouvelle page `/app/compte` (activer un code, changer de mot de passe) ; `middleware.ts` renommé `proxy.ts` (Next 16, V-04 confirmé) ; bug Matières corrigé (la page d'un cours montrait les documents de toute la matière). |
+| 2026-10-16 | Changement | Commit `fb5a327` : cron quotidien (C-18). |
+| 2026-10-16 | Tests | `tsc` OK ; `next build` OK (37 routes) ; ESLint : aucune erreur nouvelle (les 19 erreurs existantes sont antérieures, dont `useJob.ts`). Aucun test fonctionnel : pas d'environnement de test. |
+| 2026-10-16 | Migrations | Écrites dans `database/migrations/` (00 lecture seule, 01 sécurité, 02 bucket privé) ; **non appliquées** pour l'instant. Ordre : déployer le code en production → 00 → 01 → vérifier → 02. |

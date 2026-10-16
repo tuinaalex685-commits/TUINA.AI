@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { exactEmailPattern, normalizeEmail } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
-import { premiumExpiryFromNow, isCodeCurrentlyActive } from '@/lib/plan';
+import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
 
 /**
  * AUTHENTIFICATION — email + mot de passe, et activation d'un code Premium UNE FOIS CONNECTÉ.
@@ -167,7 +167,7 @@ export async function activateAccessCode(rawCode: string) {
     .select('id')
     .maybeSingle();
   let { data: claimed, error: claimErr } = await claim({ email, expires_at: premiumExpiryFromNow() });
-  if (claimErr?.code === '42703') {
+  if (isMissingColumn(claimErr)) {
     // Migration expires_at non appliquée : activation sans date (comportement historique).
     ({ data: claimed, error: claimErr } = await claim({ email }));
   }

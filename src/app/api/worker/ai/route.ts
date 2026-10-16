@@ -1075,6 +1075,14 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     } else {
       // Épuisement → échec définitif (le frontend affiche un vrai message d'erreur).
       await patchJob(leased.id, { status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null });
+      // Le crédit pris à la création du job est rendu : l'étudiant ne paie pas notre panne.
+      // Ce bloc n'est atteint qu'une fois par job (statut terminal) ; on ne rend que le jour
+      // même, puisque le compteur est journalier.
+      const feature = leased.payload?.quotaFeature;
+      const sameDay = String(leased.created_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10);
+      if ((feature === 'redaction' || feature === 'evaluation') && sameDay && leased.user_id) {
+        await supabaseAdmin.rpc('refund_free_quota', { p_user_id: leased.user_id, p_feature: feature }).then(() => {}, () => {});
+      }
     }
     console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
     if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});

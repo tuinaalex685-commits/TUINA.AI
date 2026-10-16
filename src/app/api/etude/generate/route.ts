@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { isPremium } from '@/lib/plan';
@@ -96,6 +96,11 @@ function triggerWorker(req: NextRequest) {
   try {
     const proto = req.headers.get('x-forwarded-proto') || 'https';
     const host = req.headers.get('host');
-    if (host) fetch(`${proto}://${host}/api/worker/ai`, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
+    // after() : l'appel part réellement après la réponse (un fetch non attendu pouvait être coupé).
+    if (host) after(() => fetch(`${proto}://${host}/api/worker/ai`, {
+      method: 'POST',
+      headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
+      signal: AbortSignal.timeout(3000),
+    }).then(() => {}, () => {}));
   } catch { /* non bloquant */ }
 }

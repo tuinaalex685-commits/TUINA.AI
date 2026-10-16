@@ -3,7 +3,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { premiumExpiryFromNow } from '@/lib/plan';
+import { premiumExpiryFromNow, isMissingColumn } from '@/lib/plan';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE ---
 async function requireAdmin() {
@@ -76,7 +76,7 @@ export async function updateAccessCodeStatus(id: string, status: 'active' | 'ina
     if (status === 'active' && current?.email) patch.expires_at = premiumExpiryFromNow();
 
     let { error } = await supabaseAdmin.from('access_codes').update(patch).eq('id', id);
-    if (error?.code === '42703') {
+    if (isMissingColumn(error)) {
       // Migration expires_at non appliquée : mise à jour du statut seul.
       ({ error } = await supabaseAdmin.from('access_codes').update({ status }).eq('id', id));
     }

@@ -42,9 +42,9 @@ export async function registerDocument(input: {
   const stored = listed?.find((f) => f.name === fileName);
   if (!stored) return { error: 'Fichier introuvable : réessaie l’import.' };
   const taille = Number((stored.metadata as any)?.size || 0);
-  if (taille > MAX_PDF_BYTES) {
+  if (!taille || taille > MAX_PDF_BYTES) {
     await supabaseAdmin.storage.from('documents').remove([path]).catch(() => {});
-    return { error: 'Le fichier est trop volumineux (max 25 Mo).' };
+    return { error: taille ? 'Le fichier est trop volumineux (max 25 Mo).' : 'Fichier vide ou illisible.' };
   }
 
   // Les rattachements doivent appartenir à l'utilisateur.

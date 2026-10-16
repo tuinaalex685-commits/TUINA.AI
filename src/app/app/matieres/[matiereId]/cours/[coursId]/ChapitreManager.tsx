@@ -45,7 +45,9 @@ export default function ChapitreManager({
       .channel('realtime-cours-documents')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'documents', filter: `cours_id=eq.${cours.id}` },
+        // Filtre par matière : couvre les nouveaux documents (rattachés au cours) comme les anciens
+        // (importés avant que le cours soit transmis, donc rattachés à la matière seule).
+        { event: '*', schema: 'public', table: 'documents', filter: `matiere_id=eq.${matiere.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             router.refresh();
@@ -63,7 +65,7 @@ export default function ChapitreManager({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [router, cours.id]);
+  }, [router, matiere.id]);
 
   useEffect(() => {
     setDocuments(initialDocuments);
@@ -159,6 +161,7 @@ export default function ChapitreManager({
           
           <DocumentUploader 
             matiereId={matiere.id}
+            coursId={cours.id}
             onUploadComplete={() => {
               router.refresh();
             }} 

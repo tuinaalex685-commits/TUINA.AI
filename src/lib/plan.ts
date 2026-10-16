@@ -39,6 +39,14 @@ export function premiumExpiryFromNow(): string {
 }
 
 /**
+ * Colonne absente (migration expires_at pas encore appliquée). En lecture, PostgreSQL renvoie
+ * 42703 ; en écriture, PostgREST refuse avant d'exécuter le SQL avec PGRST204.
+ */
+export function isMissingColumn(error: { code?: string } | null | undefined): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204';
+}
+
+/**
  * Un code donne le Premium s'il est 'active' ET non expiré. L'expiration est DÉRIVÉE à la
  * lecture : à la date prévue, l'étudiant redevient Free à sa requête suivante, sans tâche
  * planifiée. L'administrateur réactive le code → nouvelle période d'un mois.
@@ -54,7 +62,7 @@ export function isCodeCurrentlyActive(c: { status: string; expires_at?: string |
 const hasActiveAccessCode = cache(async (email: string): Promise<boolean> => {
   let { data, error } = await supabaseAdmin
     .from('access_codes').select('status, expires_at').ilike('email', exactEmailPattern(email));
-  if (error?.code === '42703') {
+  if (isMissingColumn(error)) {
     // Colonne expires_at pas encore créée (migration non appliquée) : lecture sans expiration.
     ({ data, error } = await supabaseAdmin
       .from('access_codes').select('status').ilike('email', exactEmailPattern(email)) as any);

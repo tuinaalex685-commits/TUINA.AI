@@ -37,7 +37,11 @@ export default async function CoursDetailsPage({ params }: { params: { matiereId
   // autres cours de la même matière (et la mise à jour temps réel, elle, filtrait par cours).
   const [{ data: chapitres }, { data: docs }] = await Promise.all([
     supabase.from('chapitres').select('*').eq('cours_id', cours.id).order('created_at', { ascending: true }),
-    supabase.from('documents').select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('cours_id', cours.id).order('date_import', { ascending: false }),
+    supabase.from('documents').select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('matiere_id', matiere.id)
+      // Documents de CE cours, plus les anciens imports faits depuis cette page avant que le
+      // cours soit enregistré (cours_id vide). Les PDF d'un autre cours n'apparaissent plus.
+      .or(`cours_id.eq.${cours.id},cours_id.is.null`)
+      .order('date_import', { ascending: false }),
   ]);
   const documents = await withSignedUrls(docs || []);
 
