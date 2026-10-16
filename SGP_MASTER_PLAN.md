@@ -2,7 +2,9 @@
 
 > Document de référence du projet SGP / SJP (dépôt `TUINA.AI`). À mettre à jour après chaque intervention significative.
 >
-> **Version 1.0 — 2026-10-16** — Audit initial (phase A) et conception produit. **Aucune modification de code, de base de données ou de production n'a été faite.**
+> **Version 1.1 — 2026-10-16** — Audit (phase A), correctifs de sécurité et de latence (phase B, en production), début de la refonte du design, intégration de la **directive générale de développement** (sections 26 à 33).
+>
+> Organisation : sections 1 à 7 = constats techniques ; 8 à 24 = **exigences pédagogiques** (prompts 1 à 4) ; 25 = journal ; 26 à 33 = **méthode, design, accès et capacité** (directive générale). Les exigences pédagogiques restent la référence produit : la directive les complète, elle ne les remplace pas.
 >
 > Légende des statuts de constat :
 > - **CONFIRMÉ (code)** : prouvé par la lecture du code ; reste à reproduire par un test.
@@ -773,6 +775,9 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 2026-10-16 | Décision | L'assistant est autorisé à pousser sur GitHub et à appliquer les migrations Supabase. |
 | 2026-10-16 | Changement | Commit `becb209` (branche `fix/phase-b-securite-latence`) : C-01 à C-10, C-13, C-15, C-16 corrigés dans le code ; nouvelle page `/app/compte` (activer un code, changer de mot de passe) ; `middleware.ts` renommé `proxy.ts` (Next 16, V-04 confirmé) ; bug Matières corrigé (la page d'un cours montrait les documents de toute la matière). |
 | 2026-10-16 | Changement | Commit `fb5a327` : cron quotidien (C-18). |
+| 2026-10-16 | Production | `bdd877f` puis `e80f96e` en production (phase B et correctifs de sécurité : filtre du proxy, liens signés limités au propriétaire, garde admin). |
+| 2026-10-16 | Design | Refonte « le Code annoté » : fondations (`0547530`) ; connexion, inscription, accueil et guide (`ee0d936`) ; Mes documents, lecteur PDF intégré et import (`48505bf`, en production). Tests Playwright : import d'un PDF de 6 pages, lecture sur mobile (« Page 5 sur 6 »), aucun débordement. |
+| 2026-10-16 | Décision | Directive générale reçue, puis précision du responsable : **l'assistant décide seul des modifications qui restent dans la vision de SGP, les commente et les met en ligne sur Vercel ; il ne sollicite le responsable que pour ce qui est obligatoire ou important** (dépenses, données réelles, opérations irréversibles, règles métier). |
 | 2026-10-16 | Revue | Relecture indépendante (agent code-reviewer) : sécurité validée. Deux défauts trouvés et corrigés dans `8631c3c` : documents d'un cours invisibles après import, et repli `PGRST204` manquant avant la migration. Ajouts : crédit rendu si le job échoue définitivement, déclenchement du worker par `after()`, fichier de taille inconnue refusé. |
 | 2026-10-16 | État réel (lecture seule) | Production : `ai_jobs_insert_own` actif ; policy `ALL` sur documents (insertion et modification par le navigateur) ; les 5 fonctions SECURITY DEFINER exécutables par **anon** (sans compte !) → C-17 passe en **critique** ; bucket `documents` public ; 5 codes (4 actifs), tous rattachés ; Realtime limité à `etude_cours`. |
 | 2026-10-16 | Constat C-19 | Base Supabase à Francfort (`eu-central-1`), fonctions Vercel aux États-Unis (`iad1`) : environ 100 ms par requête. Correction : `regions: ["fra1"]` (commit `4e6b9d8`). |
@@ -781,3 +786,116 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 2026-10-16 | À vérifier | `CRON_SECRET` défini en Production et en Preview (sinon le worker refuse tout appel) ; « Confirm email » activé dans Supabase Auth (sinon une inscription avec l'email d'un abonné hériterait de son Premium). |
 | 2026-10-16 | Tests | `tsc` OK ; `next build` OK (37 routes) ; ESLint : aucune erreur nouvelle (les 19 erreurs existantes sont antérieures, dont `useJob.ts`). Aucun test fonctionnel : pas d'environnement de test. |
 | 2026-10-16 | Migrations | Écrites dans `database/migrations/` (00 lecture seule, 01 sécurité, 02 bucket privé) ; **non appliquées** pour l'instant. Ordre : déployer le code en production → 00 → 01 → vérifier → 02. |
+
+
+---
+
+# PARTIE II — DIRECTIVE GÉNÉRALE DE DÉVELOPPEMENT (reçue le 2026-10-16)
+
+> Cette partie décrit la **méthode** et les **nouvelles exigences produit** (design, parcours d'accueil, niveaux L1/L2, abonnements, capacité). Elle ne remplace pas les exigences pédagogiques des sections 8 à 24.
+
+## 26. Méthode de travail
+
+| Phase | Contenu | Preuve attendue |
+|---|---|---|
+| A. Compréhension | Besoin, comportement actuel, dépendances | Lecture du code et de l'état réel de la base (lecture seule) |
+| B. Ressources | Skills et outils réellement utiles (§ 27) | Tout outil cité a été réellement exécuté |
+| C. Conception | Solution, risques, migrations, critères de réussite | Validation du responsable **seulement** si la décision est métier, coûteuse ou irréversible |
+| D. Réalisation | Code cohérent avec l'architecture, sécurité par défaut | Commits commentés |
+| E. Contrôle | Revue de code, tests, Playwright (mobile, tablette, ordinateur), sécurité | Résultats réels, avec captures |
+| F. Correction | Traitement des problèmes, nouveaux tests | Nouveau passage des tests |
+| G. Compte rendu | Fait, testé, restant | Distinction entre « mesuré », « estimé » et « non vérifié » |
+
+**Toujours soumis au responsable** : dépenses, nouvelles installations ou permissions, écriture sur les données réelles et migrations destructives, opérations irréversibles, règles métier (prix, durées, niveaux, seuils d'examen). **Jamais** : inventer un outil, un résultat ou une fonctionnalité, ni annoncer une capacité sans mesure.
+
+## 27. Ressources disponibles (vérifiées le 2026-10-16)
+
+| Domaine | Ressources réellement disponibles | Usage |
+|---|---|---|
+| Front-end et design | Skills `frontend-senior`, `senior-frontend`, plugin `frontend-design`, `visual-review`, `design:design-critique`, `design:design-system`, `design:ux-copy`, `design:accessibility-review` | Conception, cohérence, textes, accessibilité |
+| Back-end et données | `backend-senior`, `senior-backend`, `database-senior`, `engineering:system-design`, `engineering:architecture` | API, schéma, migrations, capacité |
+| Sécurité | `security-senior`, `security-audit`, `security-review`, analyse automatique des commits (plugin security-guidance), `npm audit` | Revue de chaque changement sensible |
+| Revue de code | `code-review`, agent `feature-dev:code-reviewer`, `engineering:code-review` | Relecture indépendante avant la mise en ligne |
+| Tests | Playwright (navigateur piloté), `engineering:testing-strategy` | Parcours réels, captures sur 3 tailles d'écran |
+| Recherche | Firecrawl, Context7 | Recherche concurrentielle, documentation à jour |
+| Plateformes | CLI Vercel (connectée, équipe `tuina`, offre Hobby), connecteurs Vercel et Supabase, jeton Supabase (API de gestion) | Déploiements, journaux, état de la base, conseillers de sécurité |
+| Next.js 16 | `node_modules/next/dist/docs` (exigé par `AGENTS.md`) | Toute modification Next.js |
+
+**Outils manquants** :
+
+| Outil | Pour quoi | Statut | Coût et risques |
+|---|---|---|---|
+| **k6** (open source) | Tests de charge (§ 32) | **Indispensable** avant toute affirmation de capacité | Gratuit (`winget install k6`) ; ne jamais frapper la production avec des appels Gemini |
+| **@playwright/test** (dépendance de développement) | Suite de non-régression rejouable | **Indispensable** | Gratuit, non embarqué dans le site |
+| **Projet Supabase de test** (offre Free) | Migrations et tests de charge sans les vraies données | Fortement recommandé | Gratuit ; reproduire le schéma |
+| `gitleaks` | Secrets dans l'historique git | Utile | Gratuit |
+| Supabase CLI | Migrations versionnées, types générés | Utile | Gratuit ; instance locale = Docker (absent) |
+| Suivi des erreurs (Sentry, offre gratuite) | Erreurs réelles de production | Utile plus tard | Données personnelles à filtrer |
+
+## 28. Point de sécurité prioritaire
+
+**C-20 — Next.js 16.2.9 vulnérable — CRITIQUE — CONFIRMÉ (`npm audit`)** : 7 avis, dont une exécution de code à distance (optimisation d'images AVIF, `next/og`), un **contournement du proxy dans l'App Router avec Turbopack** (notre configuration ; la garde admin du layout limite le risque), des SSRF et des empoisonnements de cache. Correctif : **16.4.2** (même version majeure). Autres : `nanoid`, `postcss` (élevé), `baseline-browser-mapping`, `protobufjs` (modéré).
+
+## 29. Design et expérience utilisateur
+
+**Fait** : système « le Code annoté » (bleu et blanc, Source Serif 4 et Source Sans 3) ; navigation mobile, tablette et ordinateur ; composants de base ; connexion, inscription, accueil, guide, Mes documents et lecteur PDF.
+
+**Reste** : Études guidées, Révisions, Examens, Rédaction, Matières, Progression, Objectifs, Catalogue, Mon compte, administration, landing page.
+
+**Landing page (objectif 17/20, note actuelle 8/20)** :
+- **Critères vérifiables** :
+  - on comprend en moins de 10 secondes ce que fait SJP et pour qui ;
+  - chaque fonctionnalité citée existe ;
+  - offres gratuite et Premium expliquées avec leurs limites réelles ;
+  - une action principale par écran ;
+  - performance mobile mesurée (Lighthouse) ;
+  - accessibilité AA ;
+  - aucun témoignage ni chiffre inventé.
+
+## 30. Parcours d'accueil et niveaux d'études
+
+- **Parcours** : découverte de SJP, niveau (L1, L2, extensible), accueil personnalisé, offres, choix. Retour et « passer » à chaque étape. Profil unique par compte, questions jamais reposées.
+- **Forme retenue** : suite d'écrans **juste après l'inscription** (les réponses ne s'enregistrent qu'avec un compte). La landing page reste rapide et sans questionnaire.
+- **Données** : `profiles` (user_id unique, `niveau_id`, `source_decouverte`, `onboarding_termine_at`) et table de référence `niveaux`.
+- **Catalogue par niveau** : `catalog_courses.niveau_id`, séparé du statut d'accès, filtré **côté serveur**. Les cours sans niveau restent visibles de tous jusqu'à leur classement par l'administrateur.
+
+## 31. Abonnements, codes et limites gratuites
+
+**En place** :
+- le mois démarre quand l'étudiant connecté active le code ;
+- l'expiration est calculée côté serveur à chaque requête (aucun minuteur, reprise sans effet) ;
+- la réactivation par l'admin redonne un mois ;
+- l'activation est atomique, avec 10 tentatives par jour ;
+- les quotas gratuits sont appliqués côté serveur.
+
+**Définition d'un mois** : **30 jours exacts (30 × 24 h)** depuis l'activation, déjà en place. Cette règle est simple et sans ambiguïté sur les fins de mois ou les fuseaux horaires. L'alternative serait le mois calendaire à Ouagadougou (UTC+0), qui demande une règle spéciale pour les 29, 30 et 31.
+
+**À construire** :
+- états explicites d'un code (disponible, attribué, activé, expiré, révoqué) ;
+- message d'expiration à la reconnexion, avec renouvellement ;
+- journal des activations ;
+- limites gratuites contextualisées.
+
+## 32. Capacité : 10 000 puis 25 000 utilisateurs
+
+**Hypothèses (à confirmer)** :
+- 10 000 comptes ;
+- environ 15 % d'actifs par jour (1 500) ;
+- un pic d'examens à environ 150 sessions simultanées, soit 20 à 40 requêtes par seconde ;
+- × 2,5 pour 25 000 comptes.
+
+**Mesure** : k6 sur un environnement de test, jobs IA simulés, paliers de 10, 50, 150 et 400 utilisateurs virtuels. On relève la médiane et le 95e centile, les erreurs, le débit et les connexions à la base. Résultats consignés ici, en séparant « mesuré » et « estimé ».
+
+## 33. Stratégie ordonnée
+
+| # | Étape | Dépend de | Critère de validation |
+|---|---|---|---|
+| 0 | Migrations 01 et 02 (appliquées par le responsable dans Supabase, l'outil refusant l'écriture en production) | — | Fichier 00 relancé ; test de l'expiration |
+| 1 | Next.js 16.4.2 et `npm audit fix` (C-20) | — | Build, Playwright, plus aucune alerte critique |
+| 2 | Fin de la refonte des écrans existants | 1 | Captures sur 3 tailles, accessibilité AA, aucune régression |
+| 3 | Landing page | 2 | Critères du § 29 |
+| 4 | Outillage : `@playwright/test`, projet Supabase de test, k6 | Accord d'installation | Suite verte |
+| 5 | Profil, parcours d'accueil, niveaux et catalogue par niveau | 4 | Règles vérifiées côté serveur |
+| 6 | Abonnements (états, expiration, journal), limites contextualisées | 0 | Scénarios d'abonnement testés |
+| 7 | Capacité : index, requêtes, cache, mesures k6 | 4 | Rapport de mesures |
+| 8 | Pédagogie (sections 8 à 24) | 2, 5, réponses du § 24 | Critères des sections 13 à 23 |
