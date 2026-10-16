@@ -18,7 +18,22 @@
  * C'est à l'appelant de décider s'il accepte 'catalog' (voir actions/jobs.ts).
  */
 
+import { getUserNiveau, catalogVisibleFor } from '@/lib/profile';
+import { isPremium } from '@/lib/plan';
+
 export type DocumentAccess = 'owner' | 'catalog' | 'denied';
+
+/**
+ * Un cours du catalogue réservé à un niveau n'est ouvert, en gratuit, qu'aux étudiants de ce
+ * niveau. Le Premium n'est pas lié à un niveau. Les étudiants qui n'ont pas encore indiqué leur
+ * niveau, et les cours sans niveau, restent ouverts (rien ne disparaît par surprise).
+ */
+export async function catalogLevelAllows(db: any, userId: string, courseNiveau: string | null): Promise<boolean> {
+  const userNiveau = await getUserNiveau(userId);
+  if (catalogVisibleFor(courseNiveau, userNiveau)) return true;
+  const { data: role } = await db.from('user_roles').select('email').eq('user_id', userId).maybeSingle();
+  return role?.email ? isPremium(null, role.email) : false;
+}
 
 export async function resolveDocumentAccess(
   db: any,
@@ -38,9 +53,10 @@ export async function resolveDocumentAccess(
 
   const { data: entry } = await db
     .from('catalog_courses')
-    .select('id').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle();
+    .select('id, niveau').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle();
+  if (!entry) return 'denied';
 
-  return entry ? 'catalog' : 'denied';
+  return (await catalogLevelAllows(db, userId, entry.niveau ?? null)) ? 'catalog' : 'denied';
 }
 
 /**
@@ -48,7 +64,7 @@ export async function resolveDocumentAccess(
  * réviser ou passer en examen sans posséder le moindre document (cas du plan Free).
  * Renvoie de quoi afficher une liste : entrée catalogue + document source sous-jacent.
  */
-export async function listCatalogDocuments(db: any): Promise<{
+export async function listCatalogDocuments(db: any, userId?: string): Promise<{
   catalogId: string;
   etudeCoursId: string;
   documentId: string;
@@ -57,20 +73,25 @@ export async function listCatalogDocuments(db: any): Promise<{
 }[]> {
   const { data: entries } = await db
     .from('catalog_courses')
-    .select('id, etude_cours_id, titre_affiche, matiere, ordre')
+    .select('id, etude_cours_id, titre_affiche, matiere, ordre, niveau')
     .eq('actif', true)
     .order('ordre', { ascending: true });
   if (!entries || entries.length === 0) return [];
+
+  // Catalogue gratuit filtré par le niveau de l'étudiant (cours sans niveau : pour tous).
+  const userNiveau = userId ? await getUserNiveau(userId) : null;
+  const visible = entries.filter((e: any) => catalogVisibleFor(e.niveau, userNiveau));
+  if (visible.length === 0) return [];
 
   // etude_cours.pdf_id n'est pas une vraie clé étrangère PostgREST (cf. actions/catalog.ts) :
   // deux requêtes + fusion en mémoire, jamais de jointure imbriquée.
   const { data: cours } = await db
     .from('etude_cours')
     .select('id, pdf_id')
-    .in('id', entries.map((e: any) => e.etude_cours_id));
+    .in('id', visible.map((e: any) => e.etude_cours_id));
   const pdfByCours = new Map((cours || []).map((c: any) => [c.id, c.pdf_id]));
 
-  return entries
+  return visible
     .map((e: any) => ({
       catalogId: e.id,
       etudeCoursId: e.etude_cours_id,

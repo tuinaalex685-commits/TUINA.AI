@@ -166,7 +166,7 @@ export default function ExamenManager({
                   {/* Un cours du catalogue et un document importé se passent de la même
                       façon, mais l'étudiant doit savoir d'où vient le contenu qu'il révise. */}
                   {it.source === 'catalogue' && (
-                    <span style={{ display: 'inline-block', marginBottom: '8px', fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(45, 107, 228, 0.1)', color: '#2D6BE4', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    <span style={{ display: 'inline-block', marginBottom: '8px', fontSize: '11px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(30, 90, 150, 0.1)', color: 'var(--action)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                       Catalogue SJP
                     </span>
                   )}

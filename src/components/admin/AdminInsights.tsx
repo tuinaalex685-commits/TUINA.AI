@@ -41,7 +41,7 @@ export default function AdminInsights({ data }: { data: InsightsData }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 140, marginTop: 8 }}>
           {data.daily.map((d, i) => (
             <div key={i} title={`${d.label} : ${fmt(d.cost)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-              <div style={{ height: `${Math.max(2, (d.cost / maxDaily) * 100)}%`, background: d.cost > 0 ? 'linear-gradient(180deg,#7C5CFF,#5E35B1)' : 'rgba(0,0,0,0.06)', borderRadius: 4, minHeight: 2, transition: 'height 0.4s' }} />
+              <div style={{ height: `${Math.max(2, (d.cost / maxDaily) * 100)}%`, background: d.cost > 0 ? 'linear-gradient(180deg,var(--action),#5E35B1)' : 'rgba(0,0,0,0.06)', borderRadius: 4, minHeight: 2, transition: 'height 0.4s' }} />
             </div>
           ))}
         </div>
@@ -53,7 +53,7 @@ export default function AdminInsights({ data }: { data: InsightsData }) {
       {/* 2. Top cours + Top etudiants */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24 }}>
         <div style={cardStyle}>
-          <h3 style={h3Style}><FileText size={20} color="#6366f1" /> Cours les plus générés</h3>
+          <h3 style={h3Style}><FileText size={20} color="var(--action)" /> Cours les plus générés</h3>
           {data.topDocs.length === 0 && <p style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: 14 }}>Aucune donnée.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {data.topDocs.map((d) => (
@@ -63,7 +63,7 @@ export default function AdminInsights({ data }: { data: InsightsData }) {
                   <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500, flexShrink: 0 }}><strong style={{ color: 'var(--color-text-main)' }}>{d.count}×</strong> · {fmt(d.cost)}</span>
                 </div>
                 <div style={{ height: 7, borderRadius: 5, background: 'rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-                  <div style={{ width: `${(d.count / maxDocCount) * 100}%`, height: '100%', background: '#6366f1', borderRadius: 5 }} />
+                  <div style={{ width: `${(d.count / maxDocCount) * 100}%`, height: '100%', background: 'var(--action)', borderRadius: 5 }} />
                 </div>
               </div>
             ))}
@@ -71,7 +71,7 @@ export default function AdminInsights({ data }: { data: InsightsData }) {
         </div>
 
         <div style={cardStyle}>
-          <h3 style={h3Style}><Users size={20} color="#ec4899" /> Étudiants les plus consommateurs</h3>
+          <h3 style={h3Style}><Users size={20} color="var(--action)" /> Étudiants les plus consommateurs</h3>
           {data.topUsers.length === 0 && <p style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: 14 }}>Aucune donnée.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {data.topUsers.map((u) => (
@@ -81,7 +81,7 @@ export default function AdminInsights({ data }: { data: InsightsData }) {
                   <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500, flexShrink: 0 }}><strong style={{ color: 'var(--color-text-main)' }}>{fmt(u.cost)}</strong> · {u.count} gén.</span>
                 </div>
                 <div style={{ height: 7, borderRadius: 5, background: 'rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-                  <div style={{ width: `${(u.cost / maxUserCost) * 100}%`, height: '100%', background: '#ec4899', borderRadius: 5 }} />
+                  <div style={{ width: `${(u.cost / maxUserCost) * 100}%`, height: '100%', background: 'var(--action)', borderRadius: 5 }} />
                 </div>
               </div>
             ))}

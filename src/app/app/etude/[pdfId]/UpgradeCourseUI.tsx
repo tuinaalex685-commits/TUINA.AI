@@ -32,7 +32,7 @@ export default function UpgradeCourseUI({ pdfId }: { pdfId: string }) {
         onClick={handleUpgrade}
         disabled={loading}
         style={{ 
-          padding: '12px 24px', background: 'linear-gradient(90deg, #6366f1, #a855f7)', color: '#FFF', 
+          padding: '12px 24px', background: 'linear-gradient(90deg, var(--action), var(--action))', color: '#FFF', 
           borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', border: 'none', fontWeight: 600, fontSize: '16px'
         }}
       >

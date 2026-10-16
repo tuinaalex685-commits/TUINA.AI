@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import EtudeEngine from '@/components/etude/EtudeEngine';
+import { catalogLevelAllows } from '@/lib/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,12 +24,15 @@ export default async function EtudeCatalogueCoursePage({ params }: { params: Pro
   // jamais à l'utilisateur qui le consulte).
   const { data: entry } = await supabaseAdmin
     .from('catalog_courses')
-    .select('id, etude_cours_id, titre_affiche')
+    .select('id, etude_cours_id, titre_affiche, niveau')
     .eq('id', catalogId)
     .eq('actif', true)
     .maybeSingle();
 
   if (!entry) redirect('/app/catalogue');
+
+  // Cours réservé à un autre niveau : refusé côté serveur, pas seulement masqué dans la liste.
+  if (!(await catalogLevelAllows(supabaseAdmin, user.id, entry.niveau ?? null))) redirect('/app/catalogue');
 
   const { data: cours } = await supabaseAdmin
     .from('etude_cours')

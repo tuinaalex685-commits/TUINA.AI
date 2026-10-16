@@ -114,12 +114,12 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(8,11,24,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
           <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.5, 0.3] }} transition={{ duration: 6, repeat: Infinity }}
-            style={{ position: 'absolute', width: '55vw', height: '55vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(70px)', pointerEvents: 'none' }} />
+            style={{ position: 'absolute', width: '55vw', height: '55vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(30, 90, 150,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(70px)', pointerEvents: 'none' }} />
           <motion.div initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
             style={{ position: 'relative', textAlign: 'center', padding: '32px 40px', borderRadius: 24, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
             <div style={{ position: 'relative', width: 72, height: 72, margin: '0 auto 18px' }}>
               <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.08)', borderTopColor: '#a855f7', display: 'block' }} />
+                style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.08)', borderTopColor: 'var(--action)', display: 'block' }} />
               <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📝</span>
             </div>
             <h3 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#f8fafc' }}>Correction de votre copie…</h3>
@@ -135,7 +135,7 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
         <div style={{ color: 'var(--color-text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(239,68,68,0.10)', color: 'var(--color-error)', fontWeight: 700 }}>🔒 Verrouillé</span>
           {initialView.mode === 'adaptatif' && (
-            <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(99,102,241,0.12)', color: 'var(--color-primary)', fontWeight: 600 }}>🎯 Adaptatif</span>
+            <span style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '20px', background: 'rgba(30, 90, 150,0.12)', color: 'var(--color-primary)', fontWeight: 600 }}>🎯 Adaptatif</span>
           )}
           Répondu : <strong style={{ color: 'var(--color-text-main)' }}>{answered}/{total}</strong>
         </div>
@@ -247,7 +247,7 @@ function Choice({ selected, disabled, onClick, children, style }: { selected: bo
     <div onClick={() => !disabled && onClick()} style={{
       padding: '12px 14px', borderRadius: '8px', cursor: disabled ? 'default' : 'pointer',
       border: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-      background: selected ? 'rgba(99,102,241,0.08)' : 'var(--color-bg-main)',
+      background: selected ? 'rgba(30, 90, 150,0.08)' : 'var(--color-bg-main)',
       color: 'var(--color-text-main)', transition: 'all .15s', ...style,
     }}>{children}</div>
   );

@@ -339,7 +339,7 @@ export default function RevisionsManager({
             <Button
               onClick={startSession}
               disabled={isStarting || quotaEpuise}
-              style={{ backgroundColor: quotaEpuise ? '#9ca3af' : '#6366f1', fontSize: '18px', padding: '16px 32px' }}
+              style={{ backgroundColor: quotaEpuise ? '#9ca3af' : 'var(--action)', fontSize: '18px', padding: '16px 32px' }}
             >
               {isStarting ? 'Ouverture…' : 'Démarrer la session'}
             </Button>

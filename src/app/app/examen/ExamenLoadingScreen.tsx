@@ -66,9 +66,9 @@ export default function ExamenLoadingScreen({ progress, phase, done, premium }: 
       }}>
       {/* Orbes animés */}
       <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.25, 0.45, 0.25] }} transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        style={{ position: 'absolute', top: '-10%', left: '-10%', width: '50vw', height: '50vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+        style={{ position: 'absolute', top: '-10%', left: '-10%', width: '50vw', height: '50vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(30, 90, 150,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(60px)', pointerEvents: 'none' }} />
       <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.18, 0.35, 0.18] }} transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(30, 90, 150,0.20) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(80px)', pointerEvents: 'none' }} />
 
       <motion.div initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.6, ease: 'easeOut' }}
         style={{
@@ -87,7 +87,7 @@ export default function ExamenLoadingScreen({ progress, phase, done, premium }: 
               style={{ transformOrigin: '50% 50%', transform: 'rotate(-90deg)' }} />
             <defs>
               <linearGradient id="eg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#6366f1" /><stop offset="50%" stopColor="#a855f7" /><stop offset="100%" stopColor="#ec4899" />
+                <stop offset="0%" stopColor="#1E5A96" /><stop offset="50%" stopColor="#1E5A96" /><stop offset="100%" stopColor="#1E5A96" />
               </linearGradient>
             </defs>
           </svg>
@@ -103,7 +103,7 @@ export default function ExamenLoadingScreen({ progress, phase, done, premium }: 
           </div>
         </div>
 
-        <div style={{ padding: '6px 16px', borderRadius: 20, background: 'rgba(99,102,241,0.14)', color: '#a5b4fc', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
+        <div style={{ padding: '6px 16px', borderRadius: 20, background: 'rgba(30, 90, 150,0.14)', color: '#A9C2DA', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>
           {done ? 'Banque prête' : `Étape ${stepIndex + 1}/${PHASES.length}`}
         </div>
         <div style={{ minHeight: 60 }}>
@@ -119,7 +119,7 @@ export default function ExamenLoadingScreen({ progress, phase, done, premium }: 
         <div style={{ display: 'flex', gap: 6, width: '100%', margin: '22px 0 18px' }}>
           {PHASES.map((p, i) => (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: '100%', height: 4, borderRadius: 4, background: (done || i < stepIndex) ? '#a855f7' : i === stepIndex ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.09)', transition: 'background 0.4s' }} />
+              <div style={{ width: '100%', height: 4, borderRadius: 4, background: (done || i < stepIndex) ? 'var(--action)' : i === stepIndex ? 'rgba(30, 90, 150,0.5)' : 'rgba(255,255,255,0.09)', transition: 'background 0.4s' }} />
               <span style={{ fontSize: 9, color: (done || i <= stepIndex) ? '#c4b5fd' : '#64748b', fontWeight: i === stepIndex ? 700 : 500, textAlign: 'center', lineHeight: 1.2 }}>{p.label}</span>
             </div>
           ))}
@@ -148,7 +148,7 @@ export default function ExamenLoadingScreen({ progress, phase, done, premium }: 
           <div style={{ display: 'flex', gap: 6, marginTop: 16 }}>
             {[0, 1, 2].map((i) => (
               <motion.span key={i} animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }} transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-                style={{ width: 7, height: 7, borderRadius: '50%', background: '#a855f7', display: 'inline-block' }} />
+                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--action)', display: 'inline-block' }} />
             ))}
           </div>
         )}

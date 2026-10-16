@@ -60,7 +60,7 @@
   margin-bottom: 24px;
 }
 
-.tagSynthese { background: rgba(124, 92, 255, 0.1); color: #7C5CFF; }
+.tagSynthese { background: rgba(30, 90, 150, 0.1); color: var(--action); }
 .tagExplication { background: rgba(0, 112, 243, 0.1); color: #3291FF; }
 .tagQuestion { background: rgba(255, 165, 0, 0.1); color: #FFA500; }
 .tagCasPratique { background: rgba(0, 200, 100, 0.1); color: #00C864; }
@@ -122,7 +122,7 @@
 }
 
 .primaryBtn {
-  background: var(--color-primary, #6366f1);
+  background: var(--color-primary, var(--action));
   color: white;
   border: none;
   padding: 14px 24px;
@@ -160,9 +160,9 @@
 
 .remediationBtn {
   margin-top: 16px;
-  background: rgba(124, 92, 255, 0.1);
-  color: #7C5CFF;
-  border: 1px solid rgba(124, 92, 255, 0.3);
+  background: rgba(30, 90, 150, 0.1);
+  color: var(--action);
+  border: 1px solid rgba(30, 90, 150, 0.3);
   padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
@@ -173,5 +173,5 @@
 }
 
 .remediationBtn:hover {
-  background: rgba(124, 92, 255, 0.2);
+  background: rgba(30, 90, 150, 0.2);
 }

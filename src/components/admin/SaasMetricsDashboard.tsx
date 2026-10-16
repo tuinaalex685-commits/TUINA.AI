@@ -173,19 +173,19 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
         {/* LTV Card */}
         <div style={{ 
           background: 'linear-gradient(145deg, #ffffff 0%, #faf9fc 100%)', 
-          border: '1px solid rgba(124, 92, 255, 0.2)', 
+          border: '1px solid rgba(30, 90, 150, 0.2)', 
           borderRadius: '16px', padding: '24px', 
-          boxShadow: '0 4px 20px rgba(124, 92, 255, 0.05)',
+          boxShadow: '0 4px 20px rgba(30, 90, 150, 0.05)',
           position: 'relative', overflow: 'hidden', transition: 'transform 0.2s ease, box-shadow 0.2s ease'
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 24px rgba(124, 92, 255, 0.1)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(124, 92, 255, 0.05)'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 24px rgba(30, 90, 150, 0.1)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(30, 90, 150, 0.05)'; }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <p style={{ fontSize: '13px', color: '#5E35B1', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', margin: 0 }}>
               LTV (Valeur Vie Client)
             </p>
-            <div style={{ background: 'rgba(124, 92, 255, 0.1)', padding: '8px', borderRadius: '12px', color: '#7C5CFF' }}>
+            <div style={{ background: 'rgba(30, 90, 150, 0.1)', padding: '8px', borderRadius: '12px', color: 'var(--action)' }}>
               <Gem size={20} />
             </div>
           </div>
@@ -195,7 +195,7 @@ export default function SaasMetricsDashboard({ codes }: { codes: any[] }) {
           <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0, fontWeight: 500 }}>
             Revenu estimé sur le long terme
           </p>
-          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'radial-gradient(circle, rgba(124,92,255,0.1) 0%, rgba(124,92,255,0) 70%)', borderRadius: '50%' }} />
+          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'radial-gradient(circle, rgba(30, 90, 150,0.1) 0%, rgba(30, 90, 150,0) 70%)', borderRadius: '50%' }} />
         </div>
       </div>
 

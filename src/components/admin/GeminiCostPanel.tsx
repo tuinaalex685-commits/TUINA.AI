@@ -64,27 +64,27 @@ export default function GeminiCostPanel({ stats }: { stats: GeminiCostStats }) {
 
       {/* Rédaction : SEUL poste de coût variable (par copie, jamais mutualisé) → suivi dédié */}
       {stats.redaction && (
-        <div style={{ marginTop: 24, background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 55%)', border: '1px solid #ec489933', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px #ec48990d', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ marginTop: 24, background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 55%)', border: '1px solid rgba(30, 90, 150, 0.2)', borderRadius: 16, padding: 24, boxShadow: '0 4px 20px rgba(30, 90, 150, 0.05)', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <div style={{ background: '#ec489918', padding: 8, borderRadius: 12, color: '#ec4899' }}><PenLine size={20} /></div>
+            <div style={{ background: 'rgba(30, 90, 150, 0.09)', padding: 8, borderRadius: 12, color: 'var(--action)' }}><PenLine size={20} /></div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-text-main)' }}>Rédactions — poste de coût variable</h3>
           </div>
           <p style={{ margin: '0 0 18px', color: 'var(--color-text-secondary)', fontSize: 13.5, lineHeight: 1.5 }}>
             Chaque copie est unique : la Rédaction n'est <strong>jamais mutualisée</strong>. C'est le seul module dont le coût grimpe avec le nombre d'utilisateurs — à surveiller en priorité.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-            <div style={{ background: '#ffffff', border: '1px solid #ec489922', borderRadius: 12, padding: 18 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 12, color: '#ec4899', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Aujourd'hui</p>
+            <div style={{ background: '#ffffff', border: '1px solid rgba(30, 90, 150, 0.13)', borderRadius: 12, padding: 18 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--action)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Aujourd'hui</p>
               <h4 style={{ margin: '0 0 2px', fontSize: 28, fontWeight: 800, color: 'var(--color-text-main)', letterSpacing: -0.8 }}>{stats.redaction.countToday}</h4>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500 }}>rédaction{stats.redaction.countToday > 1 ? 's' : ''} · {fmt(stats.redaction.costToday)}</p>
             </div>
-            <div style={{ background: '#ffffff', border: '1px solid #ec489922', borderRadius: 12, padding: 18 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 12, color: '#ec4899', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Ce mois</p>
+            <div style={{ background: '#ffffff', border: '1px solid rgba(30, 90, 150, 0.13)', borderRadius: 12, padding: 18 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--action)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Ce mois</p>
               <h4 style={{ margin: '0 0 2px', fontSize: 28, fontWeight: 800, color: 'var(--color-text-main)', letterSpacing: -0.8 }}>{stats.redaction.countMonth}</h4>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 500 }}>rédaction{stats.redaction.countMonth > 1 ? 's' : ''} · {fmt(stats.redaction.costMonth)}</p>
             </div>
           </div>
-          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: 'radial-gradient(circle, #ec48991a 0%, #ec489900 70%)', borderRadius: '50%' }} />
+          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, background: 'radial-gradient(circle, rgba(30, 90, 150, 0.1) 0%, rgba(30, 90, 150, 0.0) 70%)', borderRadius: '50%' }} />
         </div>
       )}
 

@@ -73,7 +73,7 @@ export default async function ProgressionPage() {
 
         <Card style={{ textAlign: 'center', padding: 'var(--spacing-large)' }}>
           <h3 style={{ margin: '0 0 var(--spacing-standard)', color: 'var(--color-text-secondary)' }}>Rédactions</h3>
-          <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#8b5cf6' }}>{redactionCount || 0}</div>
+          <div style={{ fontSize: '48px', fontWeight: 'bold', color: 'var(--action)' }}>{redactionCount || 0}</div>
           <p style={{ margin: 'var(--spacing-small) 0 0', color: 'var(--color-text-secondary)' }}>Devoirs rédigés et analysés</p>
         </Card>
       </div>

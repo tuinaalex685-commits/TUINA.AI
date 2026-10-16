@@ -53,7 +53,7 @@
   gap: 2px;
   padding: 10px 18px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  background: linear-gradient(135deg, var(--action) 0%, var(--action) 100%);
   color: #ffffff;
   font-size: 14px;
   font-weight: 700;
@@ -124,7 +124,7 @@
 .jaugeRemplie {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(135deg, #2D6BE4 0%, #7C5CFF 100%);
+  background: linear-gradient(135deg, var(--action) 0%, var(--action) 100%);
   transition: width 300ms ease;
 }
 

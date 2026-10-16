@@ -11,9 +11,11 @@ import {
   setCatalogActive,
   reorderCatalog,
   renameCatalogEntry,
+  setCatalogNiveau,
 } from '@/app/actions/catalog';
+import { NIVEAUX } from '@/lib/profileShared';
 
-type CatalogEntry = { id: string; etude_cours_id: string; titre_affiche: string; matiere: string | null; ordre: number; actif: boolean };
+type CatalogEntry = { id: string; etude_cours_id: string; titre_affiche: string; matiere: string | null; ordre: number; actif: boolean; niveau?: string | null };
 type PublishableCourse = { id: string; pdf_id: string; created_at: string; documentNom: string };
 
 export default function CatalogueManager({ initialEntries, publishableCourses }: { initialEntries: CatalogEntry[]; publishableCourses: PublishableCourse[] }) {
@@ -25,6 +27,7 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
   const [selectedCoursId, setSelectedCoursId] = useState('');
   const [titre, setTitre] = useState('');
   const [matiere, setMatiere] = useState('');
+  const [niveau, setNiveau] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitre, setEditTitre] = useState('');
@@ -39,10 +42,10 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
     }
     setActiveId('publish');
     startTransition(async () => {
-      const res = await publishToCatalog(selectedCoursId, titre, matiere);
+      const res = await publishToCatalog(selectedCoursId, titre, matiere, niveau || null);
       if (res.error) setMessage(res.error);
       else {
-        setTitre(''); setMatiere(''); setSelectedCoursId('');
+        setTitre(''); setMatiere(''); setNiveau(''); setSelectedCoursId('');
         router.refresh();
       }
       setActiveId(null);
@@ -80,6 +83,17 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
         { id: entry.id, ordre: other.ordre },
         { id: other.id, ordre: entry.ordre },
       ]);
+      router.refresh();
+      setActiveId(null);
+    });
+  };
+
+  // Niveau d'un cours publié : appliqué immédiatement (filtre du catalogue gratuit côté serveur).
+  const handleNiveau = (id: string, value: string) => {
+    setActiveId(`${id}-niveau`);
+    startTransition(async () => {
+      const res = await setCatalogNiveau(id, value || null);
+      if (res.error) setMessage(res.error);
       router.refresh();
       setActiveId(null);
     });
@@ -124,6 +138,13 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
         </div>
         <Input label="Titre affiché aux étudiants" value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex: Droit constitutionnel" />
         <Input label="Matière (optionnel)" value={matiere} onChange={(e) => setMatiere(e.target.value)} placeholder="Ex: Droit public" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '150px' }}>
+          <label htmlFor="niveau-publication" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Niveau</label>
+          <select id="niveau-publication" value={niveau} onChange={(e) => setNiveau(e.target.value)} style={{ minHeight: '48px', padding: '0 12px', borderRadius: '10px', border: '1px solid var(--rule-strong)', background: 'var(--paper)' }}>
+            <option value="">Tous les niveaux</option>
+            {NIVEAUX.map((n) => <option key={n.code} value={n.code}>{n.court}</option>)}
+          </select>
+        </div>
         <Button type="submit" disabled={isPending && activeId === 'publish'} style={{ whiteSpace: 'nowrap' }}>
           {isPending && activeId === 'publish' ? 'Publication...' : 'Publier au catalogue'}
         </Button>
@@ -138,6 +159,7 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
               <th style={{ padding: 'var(--spacing-small) 0' }}>Ordre</th>
               <th style={{ padding: 'var(--spacing-small) 0' }}>Titre affiché</th>
               <th style={{ padding: 'var(--spacing-small) 0' }}>Matière</th>
+              <th style={{ padding: 'var(--spacing-small) 0' }}>Niveau</th>
               <th style={{ padding: 'var(--spacing-small) 0' }}>Statut</th>
               <th style={{ padding: 'var(--spacing-small) 0', textAlign: 'right' }}>Actions</th>
             </tr>
@@ -160,6 +182,18 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
                   {editingId === entry.id ? (
                     <Input label="Matière" value={editMatiere} onChange={(e) => setEditMatiere(e.target.value)} placeholder="Matière" />
                   ) : (entry.matiere || '—')}
+                </td>
+                <td style={{ padding: 'var(--spacing-standard) 0' }}>
+                  <select
+                    aria-label={`Niveau de ${entry.titre_affiche}`}
+                    value={entry.niveau || ''}
+                    onChange={(e) => handleNiveau(entry.id, e.target.value)}
+                    disabled={isPending && activeId === `${entry.id}-niveau`}
+                    style={{ minHeight: '36px', padding: '0 8px', borderRadius: '8px', border: '1px solid var(--rule-strong)', background: 'var(--paper)', fontWeight: 600 }}
+                  >
+                    <option value="">Tous</option>
+                    {NIVEAUX.map((n) => <option key={n.code} value={n.code}>{n.court}</option>)}
+                  </select>
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0' }}>
                   <Badge status={entry.actif ? 'mastered' : 'review'}>{entry.actif ? 'actif' : 'désactivé'}</Badge>
@@ -200,7 +234,7 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
             ))}
             {sortedEntries.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ padding: 'var(--spacing-large) 0', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                <td colSpan={6} style={{ padding: 'var(--spacing-large) 0', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                   Aucun cours publié au catalogue pour le moment.
                 </td>
               </tr>

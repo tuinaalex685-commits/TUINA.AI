@@ -117,7 +117,7 @@ export async function getExamDashboard() {
   // propres cours : le catalogue est une vitrine de découverte, pas une de ses
   // fonctionnalités.
   const premiumViewer = await isPremium(supabase, user.email);
-  const catalog = premiumViewer ? [] : await listCatalogDocuments(supabaseAdmin);
+  const catalog = premiumViewer ? [] : await listCatalogDocuments(supabaseAdmin, userId);
   const ownedIds = new Set((docs || []).map((d: any) => d.id));
   const catalogDocIds = catalog.map((c) => c.documentId).filter((id) => !ownedIds.has(id));
 

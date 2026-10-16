@@ -43,7 +43,7 @@ export async function getRevisionSources(): Promise<
   // contenu. Un membre Premium travaille sur ses propres documents et n'a pas à
   // voir le contenu de découverte dans ses listes.
   const ownedIds = new Set((docs || []).map((d: any) => d.id));
-  const catalog = premium ? [] : await listCatalogDocuments(supabaseAdmin);
+  const catalog = premium ? [] : await listCatalogDocuments(supabaseAdmin, user.id);
 
   const sources: RevisionSource[] = [
     ...(docs || []).map((d: any) => ({

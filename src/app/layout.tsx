@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${sourceSans.variable} ${sourceSerif.variable}`}>
       <body>
-        <NextTopLoader color="#2350D6" showSpinner={false} shadow={false} height={2} />
+        <NextTopLoader color="#1E5A96" showSpinner={false} shadow={false} height={2} />
         <Toaster
           position="top-center"
           toastOptions={{

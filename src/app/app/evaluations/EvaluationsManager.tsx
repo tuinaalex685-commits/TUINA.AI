@@ -252,7 +252,7 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {(question.options || []).map((opt: string, idx: number) => {
                 const isSelected = selectedOption === opt;
-                let bgStyle = isSelected ? 'rgba(99, 102, 241, 0.1)' : 'var(--color-bg-secondary)';
+                let bgStyle = isSelected ? 'rgba(30, 90, 150, 0.1)' : 'var(--color-bg-secondary)';
                 let borderStyle = isSelected ? '2px solid var(--color-primary)' : '2px solid transparent';
                 const correctText = question.options && question.correctAnswer !== undefined ? question.options[question.correctAnswer] : undefined;
 
@@ -311,7 +311,7 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
                   <span>? {quiz.questions?.length || 0} Questions</span>
                 </div>
               </div>
-              <Button style={{ marginTop: 'var(--spacing-standard)', width: '100%', backgroundColor: '#6366f1' }} onClick={() => startSession(quiz)}>
+              <Button style={{ marginTop: 'var(--spacing-standard)', width: '100%', backgroundColor: 'var(--action)' }} onClick={() => startSession(quiz)}>
                 ? Lancer
               </Button>
             </Card>

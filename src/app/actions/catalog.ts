@@ -3,6 +3,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { isNiveau } from '@/lib/profileShared';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE (même pattern que actions/admin.ts) ---
 async function requireAdmin() {
@@ -73,7 +74,7 @@ export async function listCatalogAdmin() {
   }
 }
 
-export async function publishToCatalog(etudeCoursId: string, titreAffiche: string, matiere?: string) {
+export async function publishToCatalog(etudeCoursId: string, titreAffiche: string, matiere?: string, niveau?: string | null) {
   try {
     const admin = await requireAdmin();
     if (!titreAffiche || titreAffiche.trim() === '') {
@@ -99,7 +100,7 @@ export async function publishToCatalog(etudeCoursId: string, titreAffiche: strin
 
     const { data, error } = await supabaseAdmin
       .from('catalog_courses')
-      .insert([{ etude_cours_id: etudeCoursId, titre_affiche: titreAffiche.trim(), matiere: matiere?.trim() || null, actif: true, added_by: admin.id }])
+      .insert([{ etude_cours_id: etudeCoursId, titre_affiche: titreAffiche.trim(), matiere: matiere?.trim() || null, niveau: isNiveau(niveau) ? niveau : null, actif: true, added_by: admin.id }])
       .select()
       .single();
 
@@ -216,3 +217,21 @@ export async function renameCatalogEntry(id: string, titreAffiche: string, matie
     return { error: err.message };
   }
 }
+
+/**
+ * Niveau d'un cours du catalogue (L1, L2…) ou null = proposé à tous les niveaux.
+ * Le niveau ne concerne que la visibilité dans le catalogue gratuit, jamais l'abonnement.
+ */
+export async function setCatalogNiveau(id: string, niveau: string | null) {
+  try {
+    await requireAdmin();
+    if (niveau !== null && !isNiveau(niveau)) return { error: 'Niveau inconnu.' };
+    const { error } = await supabaseAdmin.from('catalog_courses').update({ niveau }).eq('id', id);
+    if (error) return { error: error.message };
+    revalidateCatalog();
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
+

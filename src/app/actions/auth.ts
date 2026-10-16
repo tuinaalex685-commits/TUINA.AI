@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { exactEmailPattern, normalizeEmail } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
+import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
 
 /**
  * AUTHENTIFICATION — email + mot de passe, et activation d'un code Premium UNE FOIS CONNECTÉ.
@@ -64,7 +65,11 @@ export async function login(email: string, password: string) {
 
 // Inscription Free — flux PUBLIC signUp() de Supabase (mot de passe réel, confirmation email).
 // Un trigger crée la ligne user_roles. L'utilisateur reste Free tant qu'il n'a pas activé de code.
-export async function signUpFree(email: string, password: string) {
+export async function signUpFree(
+  email: string,
+  password: string,
+  profile?: { niveau?: string | null; source?: string | null },
+) {
   try {
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) return { error: "Email et mot de passe requis." };
@@ -83,6 +88,17 @@ export async function signUpFree(email: string, password: string) {
       return { error: "Inscription impossible pour le moment. Réessaie dans un instant." };
     }
     if (!data.user) return { error: "Impossible de créer le compte." };
+
+    // Profil de départ (niveau, canal de découverte). Seulement pour un compte RÉELLEMENT créé :
+    // quand l'email existe déjà, Supabase peut renvoyer un utilisateur factice sans identité,
+    // et il ne faut jamais écrire dans le profil d'un autre.
+    if (data.user.identities && data.user.identities.length > 0) {
+      await upsertProfile(data.user.id, {
+        niveau: isNiveau(profile?.niveau) ? profile.niveau : null,
+        source: isSource(profile?.source) ? profile.source : null,
+        onboardingDone: true,
+      });
+    }
 
     return { success: true, needsConfirmation: !data.session };
   } catch (err) {

@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { exactEmailPattern } from '@/lib/email';
 import { isCodeCurrentlyActive } from '@/lib/plan';
 import CompteManager from './CompteManager';
+import { getUserNiveau } from '@/lib/profile';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Mon compte | SJP' };
@@ -31,6 +32,7 @@ export default async function ComptePage({ searchParams }: { searchParams: Promi
       premium={live.length > 0}
       premiumUntil={expiresAt}
       askPasswordChange={motdepasse === '1'}
+      niveau={await getUserNiveau(user.id)}
     />
   );
 }

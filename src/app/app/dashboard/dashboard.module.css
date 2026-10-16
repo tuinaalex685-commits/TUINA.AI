@@ -32,7 +32,7 @@
 .heroKicker {
   margin: 0 0 var(--s-2);
   font-size: var(--text-sm);
-  color: #C9D5EE;
+  color: #C8D6E3;
 }
 
 .heroTitle {
@@ -45,7 +45,7 @@
 
 .heroText {
   margin: 0 0 var(--s-5);
-  color: #DCE4F5;
+  color: #E1E9F1;
   font-size: var(--text-md);
   max-width: 52ch;
 }

@@ -53,7 +53,7 @@ export default function EtudeList({ documents, progressByPdf }: { documents: any
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                     <span style={{ fontSize: '32px' }}>📄</span>
                     {status === 'non_commence' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Nouveau</span>}
-                    {status === 'en_cours' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', fontWeight: 600 }}>En cours</span>}
+                    {status === 'en_cours' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(30, 90, 150, 0.1)', color: 'var(--action)', fontWeight: 600 }}>En cours</span>}
                     {status === 'termine' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontWeight: 600 }}>Terminé</span>}
                   </div>
                   <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: 'var(--color-text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={doc.nom}>

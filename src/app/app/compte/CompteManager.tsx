@@ -7,15 +7,18 @@ import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { activateAccessCode, changeMyPassword } from '@/app/actions/auth';
+import { setMyNiveau } from '@/app/actions/profile';
+import { NIVEAUX } from '@/lib/profileShared';
 
 interface Props {
   email: string;
   premium: boolean;
   premiumUntil: string | null;
   askPasswordChange: boolean;
+  niveau: string | null;
 }
 
-export default function CompteManager({ email, premium, premiumUntil, askPasswordChange }: Props) {
+export default function CompteManager({ email, premium, premiumUntil, askPasswordChange, niveau }: Props) {
   const router = useRouter();
   const [code, setCode] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
@@ -23,6 +26,26 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
+  const [year, setYear] = useState<string | null>(niveau);
+  const [yearSaving, setYearSaving] = useState(false);
+
+  // Passage en année supérieure (ou correction) : seul le catalogue gratuit change ;
+  // l'historique, la progression et les documents sont conservés.
+  const changeYear = async (code: string) => {
+    if (code === year) return;
+    const previous = year;
+    setYear(code);
+    setYearSaving(true);
+    const res = await setMyNiveau(code);
+    setYearSaving(false);
+    if ('error' in res && res.error) {
+      setYear(previous);
+      toast.error(res.error);
+      return;
+    }
+    toast.success(`Année enregistrée : ${NIVEAUX.find((n) => n.code === code)?.court}`);
+    router.refresh();
+  };
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +127,32 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
             </form>
           </>
         )}
+      </Card>
+
+      <Card>
+        <h2 style={{ margin: '0 0 8px', fontSize: '18px', color: 'var(--color-text-main)' }}>Mon année</h2>
+        <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+          Le catalogue gratuit te propose les cours de ton année. Tu passes en année supérieure ? Change-la ici : ton historique et ta progression sont conservés.
+        </p>
+        <div role="group" aria-label="Mon année" style={{ display: 'inline-flex', padding: 4, borderRadius: 12, background: 'var(--paper-3)' }}>
+          {NIVEAUX.map((n) => (
+            <button
+              key={n.code}
+              type="button"
+              onClick={() => changeYear(n.code)}
+              aria-pressed={year === n.code}
+              disabled={yearSaving}
+              style={{
+                minWidth: 72, minHeight: 42, padding: '0 16px', borderRadius: 9, fontWeight: 700,
+                background: year === n.code ? 'var(--paper)' : 'transparent',
+                color: year === n.code ? 'var(--action)' : 'var(--ink-2)',
+                boxShadow: year === n.code ? '0 1px 3px rgba(20, 33, 61, 0.14)' : 'none',
+              }}
+            >
+              {n.court}
+            </button>
+          ))}
+        </div>
       </Card>
 
       <Card>

@@ -1,70 +1,105 @@
 "use client";
 
 import React, { useState, useTransition } from 'react';
-import { Card } from '@/components/ui/Card/Card';
-import { Button } from '@/components/ui/Button/Button';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { ArrowRight, BookOpenText } from 'lucide-react';
+import { setMyNiveau } from '@/app/actions/profile';
+import { NIVEAUX } from '@/lib/profileShared';
+import styles from './catalogue.module.css';
 
-type CatalogEntry = { id: string; etude_cours_id: string; titre_affiche: string; matiere: string | null; ordre: number };
+type CatalogEntry = { id: string; etude_cours_id: string; titre_affiche: string; matiere: string | null; ordre: number; niveau?: string | null };
 
-export default function CatalogueList({ entries, progressByCours }: { entries: CatalogEntry[]; progressByCours: Record<string, string> }) {
+const STATUT: Record<string, { label: string; cls: 'tagNew' | 'tagProgress' | 'tagDone' }> = {
+  non_commence: { label: 'Nouveau', cls: 'tagNew' },
+  en_cours: { label: 'En cours', cls: 'tagProgress' },
+  termine: { label: 'Terminé', cls: 'tagDone' },
+};
+
+export default function CatalogueList({ entries, progressByCours, niveau }: {
+  entries: CatalogEntry[];
+  progressByCours: Record<string, string>;
+  niveau: string | null;
+}) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [choice, setChoice] = useState<string | null>(niveau);
 
-  const handleNavigate = (catalogId: string) => {
-    setLoadingId(catalogId);
-    startTransition(() => {
-      router.push(`/app/etude/catalogue/${catalogId}`);
+  const chooseLevel = (code: string) => {
+    if (code === choice) return;
+    const previous = choice;
+    setChoice(code);
+    startTransition(async () => {
+      const res = await setMyNiveau(code);
+      if ('error' in res && res.error) {
+        toast.error(res.error);
+        setChoice(previous);
+        return;
+      }
+      router.refresh();
     });
   };
 
   return (
-    <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
-      <header style={{ marginBottom: 'var(--spacing-large)' }}>
-        <h1 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '28px' }}>Cours disponibles</h1>
-        <p style={{ margin: 0, color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-          Ces cours ont déjà été analysés par SJP — découvre l'Étude Guidée, les Révisions et l'Examen dessus, sans rien importer.
-        </p>
+    <div className={styles.page}>
+      <header className={styles.head}>
+        <div>
+          <h1 className={styles.title}>Catalogue de cours</h1>
+          <p className={styles.lead}>Des cours déjà préparés par SJP : étude guidée, révisions et examens, sans rien importer.</p>
+        </div>
+
+        <div className={styles.levelBox} role="group" aria-label="Ton année d’études">
+          <span className={styles.levelLabel}>{choice ? 'Ton année' : 'Tu es en…'}</span>
+          <div className={styles.segment}>
+            {NIVEAUX.map((n) => (
+              <button
+                key={n.code}
+                type="button"
+                className={`${styles.segBtn} ${choice === n.code ? styles.segOn : ''}`}
+                onClick={() => chooseLevel(n.code)}
+                aria-pressed={choice === n.code}
+                disabled={pending}
+              >
+                {n.court}
+              </button>
+            ))}
+          </div>
+        </div>
       </header>
 
-      {entries.length === 0 ? (
-        <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 24px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          <span style={{ fontSize: '48px', marginBottom: '16px' }}>🏛️</span>
-          <h3 style={{ color: 'var(--color-text-main)', fontSize: '20px', margin: 0 }}>Aucun cours au catalogue pour l'instant</h3>
-          <p style={{ marginTop: '8px' }}>Reviens bientôt, ou importe directement ton propre cours dans la Bibliothèque.</p>
-        </Card>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--spacing-standard)' }}>
-          {entries.map(entry => {
-            const statut = progressByCours[entry.etude_cours_id] || 'non_commence';
-            return (
-              <Card key={entry.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div style={{ marginBottom: 'var(--spacing-standard)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '32px' }}>🏛️</span>
-                    {statut === 'non_commence' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Nouveau</span>}
-                    {statut === 'en_cours' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', fontWeight: 600 }}>En cours</span>}
-                    {statut === 'termine' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontWeight: 600 }}>Terminé</span>}
-                  </div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: 'var(--color-text-main)' }}>{entry.titre_affiche}</h3>
-                  {entry.matiere && (
-                    <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{entry.matiere}</div>
-                  )}
-                </div>
+      {!choice && (
+        <p className={styles.hint}>Choisis ton année : le catalogue n’affichera que les cours qui te concernent.</p>
+      )}
 
-                <Button
-                  onClick={() => handleNavigate(entry.id)}
-                  style={{ width: '100%', padding: '10px' }}
-                  variant={statut === 'non_commence' ? 'primary' : 'secondary'}
-                  disabled={isPending && loadingId === entry.id}
-                >
-                  {(isPending && loadingId === entry.id) ? 'Chargement...' : (statut === 'non_commence' ? 'Découvrir' : 'Continuer')}
-                </Button>
-              </Card>
+      {entries.length === 0 ? (
+        <section className={styles.empty}>
+          <h2 className={styles.emptyTitle}>Pas encore de cours pour ton année</h2>
+          <p className={styles.emptyText}>De nouveaux cours arrivent régulièrement. Avec Premium, tu peux aussi travailler tout de suite sur tes propres cours.</p>
+          <Link href="/#offres" className={styles.emptyLink}>Voir l’offre Premium <ArrowRight size={16} aria-hidden /></Link>
+        </section>
+      ) : (
+        <ul className={`${styles.grid} ${pending ? styles.dim : ''}`}>
+          {entries.map((entry) => {
+            const statut = STATUT[progressByCours[entry.etude_cours_id] || 'non_commence'] ?? STATUT.non_commence;
+            return (
+              <li key={entry.id}>
+                <Link href={`/app/etude/catalogue/${entry.id}`} className={styles.card}>
+                  <div className={styles.cardTop}>
+                    <span className={styles.cardIcon}><BookOpenText size={20} aria-hidden /></span>
+                    <span className={`${styles.tag} ${styles[statut.cls]}`}>{statut.label}</span>
+                  </div>
+                  <h2 className={styles.cardTitle}>{entry.titre_affiche}</h2>
+                  {entry.matiere && <p className={styles.cardMeta}>{entry.matiere}</p>}
+                  <span className={styles.cardCta}>
+                    {statut.cls === 'tagNew' ? 'Commencer' : statut.cls === 'tagDone' ? 'Revoir' : 'Continuer'}
+                    <ArrowRight size={16} aria-hidden />
+                  </span>
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

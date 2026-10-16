@@ -11,10 +11,10 @@ export const dynamic = 'force-dynamic';
 
 // Libellés + couleurs des modules IA (features journalisées dans saas_metrics).
 const FEATURES: Record<string, { label: string; color: string }> = {
-  worker_master: { label: 'Étude Guidée', color: '#6366f1' },
+  worker_master: { label: 'Étude Guidée', color: 'var(--action)' },
   evaluate_qcm: { label: 'Évaluation', color: '#0ea5e9' },
-  flashcards: { label: 'Flashcards', color: '#a855f7' },
-  redaction: { label: 'Rédaction', color: '#ec4899' },
+  flashcards: { label: 'Flashcards', color: 'var(--action)' },
+  redaction: { label: 'Rédaction', color: 'var(--action)' },
 };
 
 export default async function AdminDashboard() {

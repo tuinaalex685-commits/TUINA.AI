@@ -732,7 +732,7 @@ export default function EtudeEngine({
           <p className={styles.content}>Vous avez parcouru et validé l'intégralité de ce document.</p>
           
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '32px' }}>
-            <button className={styles.primaryBtn} onClick={() => router.push('/app/revisions')} style={{ background: '#7C5CFF' }}>
+            <button className={styles.primaryBtn} onClick={() => router.push('/app/revisions')} style={{ background: 'var(--action)' }}>
               Aller aux Révisions (Flashcards)
             </button>
             <button className={styles.primaryBtn} onClick={() => router.push('/app/evaluations')} style={{ background: '#0070F3' }}>
