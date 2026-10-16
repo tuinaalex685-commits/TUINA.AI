@@ -9,6 +9,7 @@ import { updateEvaluationScore } from '@/app/actions/student';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useJob } from '@/lib/hooks/useJob';
+import { formatDate } from '@/lib/format';
 
 export default function EvaluationsManager({ initialQuiz, documentList }: { initialQuiz: any[], documentList: any[] }) {
   const router = useRouter();
@@ -306,7 +307,7 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
               <div>
                 <h3 style={{ margin: '0 0 var(--spacing-small)', color: 'var(--color-text-main)' }}>{quiz.titre}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                  <span>?? Généré le {new Date(quiz.created_at).toLocaleDateString()}</span>
+                  <span>?? Généré le {formatDate(quiz.created_at)}</span>
                   <span>? {quiz.questions?.length || 0} Questions</span>
                 </div>
               </div>

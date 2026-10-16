@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { createMatiere } from '@/app/actions/student';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { formatDate } from '@/lib/format';
 
 export default function MatiereManager({ initialMatieres }: { initialMatieres: any[] }) {
   const router = useRouter();
@@ -90,7 +91,7 @@ export default function MatiereManager({ initialMatieres }: { initialMatieres: a
               </div>
               <p className={styles.cardDesc}>{matiere.description || "Aucune description"}</p>
               <div className={styles.cardFooter}>
-                <span className={styles.progressText}>Créé le {new Date(matiere.created_at).toLocaleDateString()}</span>
+                <span className={styles.progressText}>Créé le {formatDate(matiere.created_at)}</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}`); }}>Ouvrir</Button>
                   <Button variant="secondary" onClick={(e) => { 

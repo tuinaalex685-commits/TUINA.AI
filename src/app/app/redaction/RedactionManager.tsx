@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useJob } from '@/lib/hooks/useJob';
 import styles from './redaction.module.css';
+import { formatDateTime } from '@/lib/format';
 
 export default function RedactionManager({ initialRedactions, coursMastery = [] }: { initialRedactions: any[]; coursMastery?: CoursMastery[] }) {
   const router = useRouter();
@@ -410,7 +411,7 @@ export default function RedactionManager({ initialRedactions, coursMastery = [] 
                     >
                       <div style={{ fontWeight: 600 }}>Version {activeRedaction.redaction_versions.length - index}</div>
                       <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                        {new Date(v.date_soumission).toLocaleString()}
+                        {formatDateTime(v.date_soumission)}
                       </div>
                     </div>
                   ))}

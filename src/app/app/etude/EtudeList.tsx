@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatDate } from '@/lib/format';
 
 export default function EtudeList({ documents, progressByPdf }: { documents: any[], progressByPdf: any }) {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function EtudeList({ documents, progressByPdf }: { documents: any
                     {doc.nom}
                   </h3>
                   <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                    Importé le {new Date(doc.created_at || doc.date_import).toLocaleDateString()}
+                    Importé le {formatDate(doc.created_at || doc.date_import)}
                   </div>
                 </div>
                 

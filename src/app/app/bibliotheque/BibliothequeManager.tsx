@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal/Modal';
 import { deleteDocument } from '@/app/actions/documents';
 import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
+import { formatDate } from '@/lib/format';
 
 export default function BibliothequeManager({ 
   initialDocuments 
@@ -83,7 +84,7 @@ export default function BibliothequeManager({
                   </h3>
                   
                   <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span>📅 Importé le : {new Date(doc.date_import).toLocaleDateString()}</span>
+                    <span>📅 Importé le : {formatDate(doc.date_import)}</span>
                     <span>📂 Taille : {(doc.taille / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                 </div>

@@ -19,6 +19,7 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
   const router = useRouter();
   const [code, setCode] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
+  const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -44,13 +45,14 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
       return;
     }
     setPwdLoading(true);
-    const res = await changeMyPassword(password);
+    const res = await changeMyPassword(current, password);
     setPwdLoading(false);
     if ('error' in res && res.error) {
       toast.error(res.error);
       return;
     }
     toast.success('Mot de passe enregistré. Utilise-le pour tes prochaines connexions.');
+    setCurrent('');
     setPassword('');
     setConfirm('');
     if (askPasswordChange) router.push('/app/dashboard');
@@ -107,6 +109,14 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
       <Card>
         <h2 style={{ margin: '0 0 16px', fontSize: '18px', color: 'var(--color-text-main)' }}>Mot de passe</h2>
         <form onSubmit={handlePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Input
+            label={askPasswordChange ? "Mot de passe actuel (ton code d'accès)" : 'Mot de passe actuel'}
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
           <Input
             label="Nouveau mot de passe (8 caractères minimum)"
             type="password"

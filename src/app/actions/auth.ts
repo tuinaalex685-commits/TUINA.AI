@@ -92,7 +92,8 @@ export async function signUpFree(email: string, password: string) {
 }
 
 /** Nouveau mot de passe pour le compte CONNECTÉ (et seulement lui). */
-export async function changeMyPassword(newPassword: string) {
+export async function changeMyPassword(currentPassword: string, newPassword: string) {
+  if (!currentPassword) return { error: "Saisis ton mot de passe actuel." };
   if (!newPassword || newPassword.length < 8) {
     return { error: "Le mot de passe doit contenir au moins 8 caractères." };
   }
@@ -105,8 +106,13 @@ export async function changeMyPassword(newPassword: string) {
     .from('access_codes').select('id').eq('code', newPassword).maybeSingle();
   if (isCode) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
 
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  // Le projet Supabase exige le mot de passe actuel pour en définir un nouveau (« Secure password
+  // change ») : une session volée ne suffit pas à changer le mot de passe.
+  const { error } = await supabase.auth.updateUser({ password: newPassword, current_password: currentPassword });
   if (error) {
+    if (/current password/i.test(error.message) || /invalid/i.test(error.message)) {
+      return { error: "Mot de passe actuel incorrect." };
+    }
     console.error('[auth] changeMyPassword:', error.message);
     return { error: "Modification impossible. Choisis un autre mot de passe ou réessaie." };
   }

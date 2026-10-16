@@ -11,6 +11,7 @@ import { deleteDocument } from '@/app/actions/documents';
 import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { formatDate } from '@/lib/format';
 
 export default function CoursManager({ matiere, initialCours, initialDocuments = [] }: { matiere: any, initialCours: any[], initialDocuments?: any[] }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,7 +91,7 @@ export default function CoursManager({ matiere, initialCours, initialDocuments =
             <Card style={{ cursor: 'pointer', transition: 'transform 0.2s ease', border: '1px solid var(--color-border)', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <h3 style={{ margin: '0 0 var(--spacing-small)', color: 'var(--color-text-main)' }}>{cours.titre}</h3>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>Créé le {new Date(cours.created_at).toLocaleDateString()}</p>
+                <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>Créé le {formatDate(cours.created_at)}</p>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: 'var(--spacing-standard)' }}>
                 <Button variant="secondary" onClick={(e) => { e.preventDefault(); router.push(`/app/matieres/${matiere.id}/cours/${cours.id}`); }} style={{ flex: 1 }}>Ouvrir</Button>
