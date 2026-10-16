@@ -80,6 +80,8 @@ export async function publishToCatalog(etudeCoursId: string, titreAffiche: strin
     if (!titreAffiche || titreAffiche.trim() === '') {
       return { error: "Le titre affiché ne peut pas être vide." };
     }
+    // Niveau invalide = refus explicite (jamais une publication « à tous » par erreur).
+    if (niveau && !isNiveau(niveau)) return { error: 'Niveau inconnu.' };
 
     // Sécurité : n'accepter que des cours réellement prêts (jamais un cours en cours de
     // génération ou en erreur — le catalogue ne doit exposer que du contenu stable).

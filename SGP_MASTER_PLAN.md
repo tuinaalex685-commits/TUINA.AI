@@ -857,7 +857,8 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 - **Parcours** : découverte de SJP, niveau (L1, L2, extensible), accueil personnalisé, offres, choix. Retour et « passer » à chaque étape. Profil unique par compte, questions jamais reposées.
 - **Forme retenue** : suite d'écrans **juste après l'inscription** (les réponses ne s'enregistrent qu'avec un compte). La landing page reste rapide et sans questionnaire.
 - **Données** : `profiles` (user_id unique, `niveau_id`, `source_decouverte`, `onboarding_termine_at`) et table de référence `niveaux`.
-- **Catalogue par niveau** : `catalog_courses.niveau_id`, séparé du statut d'accès, filtré **côté serveur**. Les cours sans niveau restent visibles de tous jusqu'à leur classement par l'administrateur.
+- **Catalogue par niveau (livré)** : `catalog_courses.niveau` (migration 03), séparé du statut d'accès, filtré côté serveur sur tous les chemins de l'application (liste, ouverture directe, révisions, examens, jobs IA). Les cours sans niveau restent visibles de tous. **Nature du filtre** : c'est un outil de **pertinence**, pas une barrière de sécurité. L'étudiant peut changer d'année librement (par exemple pour passer de L1 à L2), et tous les cours du catalogue sont gratuits. Les policies RLS de lecture du contenu d'étude ne tiennent donc pas compte du niveau, et c'est assumé.
+- **Prévu** : message de rentrée (« Tu passes en L2 ? ») ; vidéo de présentation en motion design (Remotion) dans la section des années de la landing page, à la fin du projet (emplacement `videoByLevel` déjà prévu dans `LevelChooser.tsx`).
 
 ## 31. Abonnements, codes et limites gratuites
 

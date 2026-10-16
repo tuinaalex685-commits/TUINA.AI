@@ -2,6 +2,7 @@ import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
+import { catalogLevelAllows } from '@/lib/access';
 import DashboardManager, { type ResumeItem, type ExamItem } from './DashboardManager';
 
 /**
@@ -46,11 +47,12 @@ export default async function DashboardData({ user }: { user: { id: string; emai
     if (cours?.pdf_id) {
       const [{ data: doc }, { data: catalog }] = await Promise.all([
         supabaseAdmin.from('documents').select('id, nom, user_id').eq('id', cours.pdf_id).maybeSingle(),
-        supabaseAdmin.from('catalog_courses').select('id, titre_affiche').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle(),
+        supabaseAdmin.from('catalog_courses').select('id, titre_affiche, niveau').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle(),
       ]);
       if (doc && doc.user_id === user.id) {
         resume = { title: doc.nom, href: `/app/etude/${doc.id}`, finished: lastProgress.statut === 'termine' };
-      } else if (catalog) {
+      } else if (catalog && (await catalogLevelAllows(supabaseAdmin, user.id, catalog.niveau ?? null))) {
+        // Cours d'une autre année (l'étudiant a changé d'année) : pas de lien « Reprendre » mort.
         resume = { title: catalog.titre_affiche, href: `/app/etude/catalogue/${catalog.id}`, finished: lastProgress.statut === 'termine' };
       }
     }

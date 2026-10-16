@@ -96,7 +96,7 @@ export async function signUpFree(
       await upsertProfile(data.user.id, {
         niveau: isNiveau(profile?.niveau) ? profile.niveau : null,
         source: isSource(profile?.source) ? profile.source : null,
-        onboardingDone: true,
+        onboardingDone: isNiveau(profile?.niveau),
       });
     }
 
