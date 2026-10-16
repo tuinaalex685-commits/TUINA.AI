@@ -8,6 +8,7 @@ import {
 } from '@/lib/config/examen';
 import { resolveDocumentAccess } from '@/lib/access';
 import { downloadDocumentPdf } from '@/lib/storage';
+import { verifyRefund } from '@/lib/quotaRefund';
 import crypto from 'crypto';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
@@ -1074,13 +1075,20 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       });
     } else {
       // Épuisement → échec définitif (le frontend affiche un vrai message d'erreur).
-      await patchJob(leased.id, { status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null });
-      // Le crédit pris à la création du job est rendu : l'étudiant ne paie pas notre panne.
-      // Ce bloc n'est atteint qu'une fois par job (statut terminal) ; on ne rend que le jour
-      // même, puisque le compteur est journalier.
-      const feature = leased.payload?.quotaFeature;
+      // Passage à 'failed' CONDITIONNEL : seul le worker qui fait réellement la transition
+      // obtient une ligne en retour, donc un seul remboursement même si deux workers échouent.
+      const { data: transitioned } = await supabaseAdmin.from('ai_jobs')
+        .update({ status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null, updated_at: nowIso() })
+        .eq('id', leased.id).neq('status', 'failed')
+        .select('id').maybeSingle();
+      if (!transitioned) await patchJob(leased.id, { status: 'failed', error: message, last_error: message, lease_until: null, next_attempt_at: null });
+
+      // Crédit rendu si NOTRE traitement a échoué (jamais sur un refus d'accès), uniquement pour
+      // un crédit réellement pris par le serveur (marqueur signé), et le jour même (compteur
+      // journalier).
+      const feature = leased.user_id ? verifyRefund(leased.id, leased.user_id, leased.payload) : null;
       const sameDay = String(leased.created_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10);
-      if ((feature === 'redaction' || feature === 'evaluation') && sameDay && leased.user_id) {
+      if (transitioned && feature && sameDay && !(err instanceof AccessDeniedError)) {
         await supabaseAdmin.rpc('refund_free_quota', { p_user_id: leased.user_id, p_feature: feature }).then(() => {}, () => {});
       }
     }

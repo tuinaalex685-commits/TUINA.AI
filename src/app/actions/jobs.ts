@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
+import { signRefund } from '@/lib/quotaRefund';
 import { headers } from 'next/headers';
 import { after } from 'next/server';
 import crypto from 'crypto';
@@ -142,11 +143,17 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
 
   // Écrit par le SERVEUR après le filtrage : indique au worker quel crédit rendre si le
   // traitement échoue définitivement (jamais lu depuis le client).
-  const storedPayload = refundFeature ? { ...payload, quotaFeature: refundFeature } : payload;
+  // Identifiant choisi par le serveur : la signature du crédit y est liée (non recopiable).
+  const jobId = crypto.randomUUID();
+  let storedPayload: Record<string, string | number> = payload;
+  if (refundFeature) {
+    const sig = signRefund(jobId, user.id, refundFeature);
+    if (sig) storedPayload = { ...payload, quotaFeature: refundFeature, quotaSig: sig };
+  }
 
   const { data: job, error } = await supabaseAdmin
     .from('ai_jobs')
-    .insert({ user_id: user.id, type, status: 'pending', payload: storedPayload, content_hash })
+    .insert({ id: jobId, user_id: user.id, type, status: 'pending', payload: storedPayload, content_hash })
     .select('id, status')
     .single();
 
