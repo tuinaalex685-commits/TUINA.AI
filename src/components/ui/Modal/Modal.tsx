@@ -1,6 +1,8 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect, useId } from 'react';
+import { X } from 'lucide-react';
 import styles from './Modal.module.css';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface ModalProps {
   isOpen: boolean;
@@ -9,36 +11,31 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
+/** Fenêtre de dialogue : feuille qui monte du bas sur mobile, fenêtre centrée sur ordinateur. */
 export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div 
-          className={styles.overlay} 
-          onClick={onClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <motion.div 
-            className={styles.modal} 
-            onClick={(e) => e.stopPropagation()}
-            initial={{ scale: 0.95, opacity: 0, y: 10 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          >
-            <div className={styles.header}>
-              <h3>{title}</h3>
-              <button className={styles.closeBtn} onClick={onClose}>&times;</button>
-            </div>
-            <div className={styles.content}>
-              {children}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className={styles.layer}>
+      <div className={styles.overlay} onClick={onClose} aria-hidden />
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className={styles.header}>
+          <h2 id={titleId} className={styles.title}>{title}</h2>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Fermer">
+            <X size={20} />
+          </button>
+        </div>
+        <div className={styles.content}>{children}</div>
+      </div>
+    </div>
   );
 }

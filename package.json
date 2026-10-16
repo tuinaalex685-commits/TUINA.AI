@@ -19,6 +19,7 @@
     "next": "16.2.9",
     "nextjs-toploader": "^3.9.17",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "4.10.38",
     "puppeteer": "^25.2.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",

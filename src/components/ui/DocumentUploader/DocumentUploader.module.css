@@ -1,55 +1,98 @@
-.uploaderContainer {
+.container {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-small);
-  margin-top: var(--spacing-standard);
+  gap: var(--s-2);
   width: 100%;
 }
 
-.dropZone {
-  border: 2px dashed var(--color-border);
-  border-radius: 8px;
-  padding: var(--spacing-large);
+.zone {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  min-height: 148px;
+  padding: var(--s-6) var(--s-4);
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: var(--paper-2);
+  text-align: center;
   cursor: pointer;
-  transition: all 0.2s ease;
-  background-color: var(--color-bg-secondary);
+  transition: border-color 150ms var(--ease-out), background-color 150ms var(--ease-out);
 }
 
-.dropZone:hover {
-  border-color: var(--color-primary);
-  background-color: rgba(var(--color-primary-rgb), 0.05);
+.zone:hover,
+.zone:focus-within {
+  border-color: var(--action);
+  background: var(--action-soft);
+}
+
+.dragging {
+  border-color: var(--action);
+  border-style: solid;
+  background: var(--action-soft);
+}
+
+.busy {
+  cursor: progress;
+}
+
+/* Champ réel, invisible mais accessible au clavier et aux lecteurs d'écran. */
+.input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: inherit;
 }
 
 .icon {
-  font-size: 32px;
-  margin-bottom: var(--spacing-small);
+  color: var(--action);
+  margin-bottom: var(--s-1);
 }
 
-.text {
+.main {
+  font-weight: 700;
+  font-size: var(--text-md);
+  color: var(--ink);
+}
+
+.sub {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 
-.subText {
-  font-size: 13px;
-  color: var(--color-text-secondary);
+.error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.errorAlert {
-  background-color: #fee2e2;
-  color: #b91c1c;
-  padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #fca5a5;
+.spinner {
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--s-1);
+  border-radius: 50%;
+  border: 3px solid var(--paper-3);
+  border-top-color: var(--action);
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

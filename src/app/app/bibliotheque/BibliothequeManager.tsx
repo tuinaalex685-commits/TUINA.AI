@@ -1,167 +1,166 @@
 "use client";
 
-import React, { useState, useTransition, useOptimistic } from 'react';
+import React, { useEffect, useState, useTransition, useOptimistic } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Card } from '@/components/ui/Card/Card';
+import { FileText, BookOpenText, Eye, MoreHorizontal, Download, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button/Button';
 import { Modal } from '@/components/ui/Modal/Modal';
-import { deleteDocument } from '@/app/actions/documents';
 import { DocumentUploader } from '@/components/ui/DocumentUploader/DocumentUploader';
-import { useRouter } from 'next/navigation';
+import { PdfReader } from '@/components/pdf/PdfReader';
+import { deleteDocument } from '@/app/actions/documents';
 import { formatDate } from '@/lib/format';
+import styles from './bibliotheque.module.css';
 
-export default function BibliothequeManager({ 
-  initialDocuments 
-}: { 
-  initialDocuments: any[] 
-}) {
+interface Doc {
+  id: string;
+  nom: string;
+  taille: number | null;
+  url_fichier: string | null;
+  date_import: string | null;
+}
+
+function formatSize(bytes: number | null): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`;
+}
+
+export default function BibliothequeManager({ initialDocuments }: { initialDocuments: Doc[] }) {
   const router = useRouter();
-  
-  const [isPending, startTransition] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+  const [docs, removeDoc] = useOptimistic(initialDocuments, (state, id: string) => state.filter((d) => d.id !== id));
+  const [reading, setReading] = useState<Doc | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  // Optimistic UI : On affiche instantanément la suppression sans attendre le serveur
-  const [optimisticDocuments, removeOptimisticDocument] = useOptimistic(
-    initialDocuments,
-    (state, idToRemove: string) => state.filter((doc) => doc.id !== idToRemove)
-  );
+  // Un clic ailleurs referme le menu « ⋯ ».
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => { setMenuFor(null); setConfirmDelete(null); };
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [menuFor]);
 
-  // État pour la visionneuse PDF
-  const [pdfUrlToView, setPdfUrlToView] = useState<string | null>(null);
-  
-  // État pour la modale d'importation
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const handleDelete = (doc: Doc) => {
+    setMenuFor(null);
+    setConfirmDelete(null);
+    startTransition(async () => {
+      removeDoc(doc.id);
+      const res = await deleteDocument(doc.id);
+      if (res.error) {
+        toast.error('Suppression impossible. Réessaie dans un instant.');
+        router.refresh();
+      } else {
+        toast.success(`« ${doc.nom} » supprimé`);
+      }
+    });
+  };
 
-  const handleDelete = (id: string, url: string) => {
-    if (confirm("Voulez-vous vraiment supprimer ce document ? Cela supprimera également les flashcards et quiz qui y sont liés.")) {
-      startTransition(async () => {
-        setDeletingId(id);
-        removeOptimisticDocument(id); // Suppression visuelle instantanée
-        const res = await deleteDocument(id, url);
-        if (res.error) {
-          toast.error(res.error);
-          router.refresh(); // Revert visuel en cas d'erreur
-        } else {
-          toast.success("Document supprimé !");
-        }
-        setDeletingId(null);
-      });
-    }
+  const afterImport = () => {
+    setImportOpen(false);
+    toast.success('Document importé');
+    router.refresh();
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div className={styles.page}>
+      <header className={styles.head}>
         <div>
-          <h1 style={{ margin: 0, color: 'var(--color-text-main)' }}>Votre Bibliothèque</h1>
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-small)' }}>
-            Espace centralisé. Importez, affichez et gérez tous vos PDF librement.
-          </p>
+          <h1 className={styles.title}>Mes documents</h1>
+          <p className={styles.lead}>Tes cours en PDF. Lis-les ici, ou lance l’étude guidée pour les travailler.</p>
         </div>
-        <Button onClick={() => setIsImportModalOpen(true)} style={{ padding: '10px 20px' }}>
-          ➕ Importer un PDF
-        </Button>
+        {docs.length > 0 && (
+          <Button onClick={() => setImportOpen(true)} className={styles.importBtn}>
+            <Plus size={18} aria-hidden /> Importer un PDF
+          </Button>
+        )}
       </header>
 
-      {optimisticDocuments.length === 0 ? (
-        <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--spacing-large)', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          <span style={{ fontSize: '48px', marginBottom: 'var(--spacing-small)' }}>📚</span>
-          <h3>Aucun document importé.</h3>
-          <p style={{ marginTop: 'var(--spacing-small)' }}>La Bibliothèque est autonome. Importez directement vos PDF ici.</p>
-          <Button onClick={() => setIsImportModalOpen(true)} style={{ marginTop: 'var(--spacing-standard)' }}>
-            Importer mon premier document
-          </Button>
-        </Card>
+      {docs.length === 0 ? (
+        <section className={styles.empty}>
+          <h2 className={styles.emptyTitle}>Importe ton premier cours</h2>
+          <p className={styles.emptyText}>
+            Polycopié, notes de cours, fiche de TD : dépose le PDF. SJP en tirera une étude guidée, des cartes de
+            révision et des examens.
+          </p>
+          <DocumentUploader onUploadComplete={afterImport} />
+        </section>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 'var(--spacing-standard)' }}>
-          {optimisticDocuments.map(doc => (
-            <Card key={doc.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: '16px', marginBottom: 'var(--spacing-standard)' }}>
-                <span style={{ fontSize: '40px' }}>📄</span>
-                <div style={{ overflow: 'hidden', flex: 1 }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: 'var(--color-text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={doc.nom}>
-                    {doc.nom}
-                  </h3>
-                  
-                  <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span>📅 Importé le : {formatDate(doc.date_import)}</span>
-                    <span>📂 Taille : {(doc.taille / 1024 / 1024).toFixed(2)} MB</span>
+        <ul className={styles.list}>
+          {docs.map((doc) => {
+            const meta = [doc.date_import ? `Importé le ${formatDate(doc.date_import)}` : null, formatSize(doc.taille)].filter(Boolean).join(' · ');
+            const menuOpen = menuFor === doc.id;
+            return (
+              <li key={doc.id} className={styles.row}>
+                <FileText size={22} className={styles.fileIcon} aria-hidden />
+                <div className={styles.info}>
+                  <p className={styles.name} title={doc.nom}>{doc.nom}</p>
+                  {meta && <p className={styles.meta}>{meta}</p>}
+                </div>
+
+                <div className={styles.actions}>
+                  <Link href={`/app/etude/${doc.id}`} className={styles.study}>
+                    <BookOpenText size={17} aria-hidden /> Étudier
+                  </Link>
+                  <button
+                    type="button"
+                    className={styles.read}
+                    onClick={() => doc.url_fichier && setReading(doc)}
+                    disabled={!doc.url_fichier}
+                  >
+                    <Eye size={17} aria-hidden /> Lire
+                  </button>
+                  <div className={styles.more}>
+                    <button
+                      type="button"
+                      className={styles.moreBtn}
+                      aria-label={`Plus d’actions pour ${doc.nom}`}
+                      aria-expanded={menuOpen}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); setMenuFor(menuOpen ? null : doc.id); }}
+                    >
+                      <MoreHorizontal size={20} />
+                    </button>
+                    {menuOpen && (
+                      <div className={styles.menu} role="menu" onClick={(e) => e.stopPropagation()}>
+                        {doc.url_fichier && (
+                          <a role="menuitem" className={styles.menuItem} href={doc.url_fichier} download target="_blank" rel="noopener noreferrer">
+                            <Download size={16} aria-hidden /> Télécharger
+                          </a>
+                        )}
+                        {confirmDelete === doc.id ? (
+                          <button type="button" role="menuitem" className={`${styles.menuItem} ${styles.danger}`} onClick={() => handleDelete(doc)}>
+                            <Trash2 size={16} aria-hidden /> Confirmer la suppression
+                          </button>
+                        ) : (
+                          <button type="button" role="menuitem" className={`${styles.menuItem} ${styles.danger}`} onClick={() => setConfirmDelete(doc.id)}>
+                            <Trash2 size={16} aria-hidden /> Supprimer
+                          </button>
+                        )}
+                        {confirmDelete === doc.id && (
+                          <p className={styles.menuNote}>Les cartes et évaluations liées à ce document seront aussi supprimées.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-standard)' }}>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setPdfUrlToView(doc.url_fichier)}
-                  style={{ flex: 1, padding: '8px', fontSize: '13px', backgroundColor: 'var(--color-bg-secondary)' }}
-                >
-                  👁️ Consulter
-                </Button>
-                <a href={doc.url_fichier} download target="_blank" rel="noopener noreferrer" style={{ flex: 1, textDecoration: 'none' }}>
-                  <Button variant="secondary" style={{ width: '100%', padding: '8px', fontSize: '13px' }}>
-                    ⬇️ Télécharger
-                  </Button>
-                </a>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => handleDelete(doc.id, doc.url_fichier)}
-                  disabled={isPending && deletingId === doc.id}
-                  style={{ flex: 1, padding: '8px', fontSize: '13px', color: '#e53e3e', borderColor: '#fc8181' }}
-                >
-                  {isPending && deletingId === doc.id ? 'Suppression...' : '🗑️ Supprimer'}
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {/* Visionneuse PDF Intégrée (Plein Écran) */}
-      {pdfUrlToView && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', backgroundColor: '#1f2937', alignItems: 'center' }}>
-            <span style={{ color: 'white', fontSize: '14px', opacity: 0.8 }}>
-              Si le PDF ne s'affiche pas entièrement (bug mobile), utilisez le bouton ci-contre.
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Button onClick={() => window.open(pdfUrlToView, '_blank')} style={{ backgroundColor: '#4f46e5', color: 'white', border: 'none' }}>
-                Ouvrir (Recommandé mobile)
-              </Button>
-              <Button onClick={() => setPdfUrlToView(null)} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}>
-                Fermer ✖
-              </Button>
-            </div>
-          </div>
-          <iframe 
-            src={`${pdfUrlToView}#toolbar=0`} 
-            style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#f3f4f6' }}
-            title="Lecteur PDF"
-          />
-        </div>
+      {reading?.url_fichier && (
+        <PdfReader url={reading.url_fichier} title={reading.nom} onClose={() => setReading(null)} />
       )}
 
-      {/* Modal Importation Directe et Autonome */}
-      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Importer un document">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
-          <div style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#6366f1' }}>
-              Importation directe. Vous pourrez lier ce document à une matière plus tard si vous le souhaitez.
-            </p>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 600 }}>Importez votre fichier PDF</label>
-            <DocumentUploader 
-              onUploadComplete={() => {
-                setIsImportModalOpen(false);
-                router.refresh();
-              }}
-            />
-          </div>
-        </div>
+      <Modal isOpen={importOpen} onClose={() => setImportOpen(false)} title="Importer un PDF">
+        <p className={styles.modalText}>Tu pourras rattacher ce document à une matière plus tard.</p>
+        <DocumentUploader onUploadComplete={afterImport} />
       </Modal>
-
     </div>
   );
 }
