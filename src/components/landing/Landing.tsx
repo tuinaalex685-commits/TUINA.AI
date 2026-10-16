@@ -101,7 +101,7 @@ function Hero() {
             <span>Je suis en</span>
             <Link href="/inscription?niveau=l1" className={styles.levelChip}>L1</Link>
             <Link href="/inscription?niveau=l2" className={styles.levelChip}>L2</Link>
-            <span className={styles.levelHint}>Le catalogue gratuit s’adapte à ton année.</span>
+            <span className={styles.levelHint}>Choisis ton année pour créer ton compte.</span>
           </motion.div>
         </div>
 
@@ -358,7 +358,7 @@ function ProgressBars() {
 
 function Plans({ limits, whatsappUrl }: LandingProps) {
   const free = [
-    'Les cours du catalogue de ton année, prêts à travailler',
+    'Les cours du catalogue, prêts à travailler',
     'Études guidées sur ces cours',
     `${limits.revision} sessions de révision par jour`,
     `${limits.examen} examens par jour`,
