@@ -37,21 +37,30 @@ export async function downloadDocumentPdf(doc: { url_fichier?: string | null; us
   return Buffer.from(await data.arrayBuffer());
 }
 
-/** Remplace `url_fichier` par une URL signée (une seule requête pour toute la liste). */
-export async function withSignedUrls<T extends { url_fichier?: string | null }>(docs: T[]): Promise<T[]> {
-  const paths = docs.map((d) => extractStoragePath(d.url_fichier));
+/**
+ * Remplace `url_fichier` par une URL signée (une seule requête pour toute la liste).
+ * Ne signe QUE les fichiers rangés dans le dossier du propriétaire du document : une ligne dont
+ * l'URL viserait le dossier d'un autre utilisateur (anciennes insertions faites par le navigateur)
+ * n'obtient pas de lien.
+ */
+export async function withSignedUrls<T extends { url_fichier?: string | null; user_id?: string | null }>(docs: T[]): Promise<T[]> {
+  const paths = docs.map((d) => {
+    const p = extractStoragePath(d.url_fichier);
+    return p && d.user_id && p.startsWith(`${d.user_id}/`) ? p : null;
+  });
   const wanted = paths.filter((p): p is string => !!p);
-  if (wanted.length === 0) return docs;
+  const unsigned = () => docs.map((d) => ({ ...d, url_fichier: null }));
+  if (wanted.length === 0) return unsigned();
 
   const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrls(wanted, SIGNED_URL_TTL_S);
   if (error || !data) {
     console.error('[storage] signature des URL impossible:', error?.message);
-    return docs;
+    return unsigned();
   }
   const byPath = new Map(data.map((s) => [s.path, s.signedUrl]));
   return docs.map((d, i) => {
     const p = paths[i];
     const signed = p ? byPath.get(p) : null;
-    return signed ? { ...d, url_fichier: signed } : d;
+    return { ...d, url_fichier: signed ?? null };
   });
 }

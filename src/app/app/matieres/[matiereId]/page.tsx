@@ -31,7 +31,7 @@ export default async function MatiereDetailsPage({ params }: { params: { matiere
   // Colonnes ciblées : '*' sur documents embarquait le texte intégral de chaque PDF (C-16).
   const [{ data: cours }, { data: rawDocuments }] = await Promise.all([
     supabase.from('cours').select('*').eq('matiere_id', matiere.id).order('created_at', { ascending: true }),
-    supabase.from('documents').select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('matiere_id', matiere.id).order('date_import', { ascending: false }),
+    supabase.from('documents').select('id, user_id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id').eq('matiere_id', matiere.id).order('date_import', { ascending: false }),
   ]);
   const documents = await withSignedUrls(rawDocuments || []);
 

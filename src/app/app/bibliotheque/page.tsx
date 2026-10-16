@@ -35,7 +35,7 @@ export default async function BibliothequePage() {
     .from('documents')
     // Colonnes affichées uniquement : '*' embarquait le texte intégral de chaque PDF
     // (extracted_text) et l'analyse IA, envoyés au navigateur pour rien (latence C-16).
-    .select('id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id')
+    .select('id, user_id, nom, taille, url_fichier, date_import, matiere_id, cours_id, chapitre_id')
     .eq('user_id', user.id)
     .order('date_import', { ascending: false });
 
