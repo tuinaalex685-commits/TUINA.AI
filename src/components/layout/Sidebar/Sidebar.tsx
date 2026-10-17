@@ -146,7 +146,7 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
   return (
     <MotionConfig reducedMotion="user">
       {/* Ordinateur et tablette */}
-      <aside className={`${styles.sidebar} ${className || ''}`}>
+      <aside className={`${styles.sidebar} ${className || ''}`} data-print="hide">
         <Link href="/app/dashboard" className={styles.brand} aria-label="SJP, accueil">
           <span className={styles.brandMark}>SJP</span>
           <span className={styles.brandName}>Sciences juridiques et politiques</span>
@@ -156,7 +156,7 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
       </aside>
 
       {/* Mobile : barre d'onglets */}
-      <nav className={styles.tabbar} aria-label="Navigation rapide">
+      <nav className={styles.tabbar} aria-label="Navigation rapide" data-print="hide">
         {mobileTabs(premium).map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab.path);

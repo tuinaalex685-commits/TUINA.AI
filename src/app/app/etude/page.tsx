@@ -32,24 +32,14 @@ export default async function EtudeListPage() {
     .eq('user_id', user.id)
     .order('date_import', { ascending: false });
 
-  // 2. Récupérer la progression pour ces documents
-  const { data: progressions } = await supabase
-    .from('etude_progression_cours')
-    .select('cours_id, statut, etude_cours(pdf_id)')
+  // 2. Parcours v3 de l'étudiant (statut fiable, enregistré par le serveur).
+  const { data: parcours } = await supabase
+    .from('etude_parcours')
+    .select('document_id, statut')
     .eq('user_id', user.id);
 
-  const progressMapObj: Record<string, any> = {};
-  if (progressions) {
-    progressions.forEach((p: any) => {
-      const coursData = Array.isArray(p.etude_cours) ? p.etude_cours[0] : p.etude_cours;
-      if (coursData && coursData.pdf_id) {
-        progressMapObj[coursData.pdf_id] = {
-          statut: p.statut,
-          coursId: p.cours_id
-        };
-      }
-    });
-  }
+  const progressMapObj: Record<string, { statut: string }> = {};
+  for (const p of parcours || []) progressMapObj[p.document_id as string] = { statut: p.statut as string };
 
   return (
     <EtudeList 

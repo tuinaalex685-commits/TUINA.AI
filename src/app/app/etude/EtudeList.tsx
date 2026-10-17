@@ -1,81 +1,50 @@
-"use client";
-
-import React, { useState, useTransition } from 'react';
-import { Card } from '@/components/ui/Card/Card';
-import { Button } from '@/components/ui/Button/Button';
-import { useRouter } from 'next/navigation';
+import React from 'react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/format';
+import styles from '@/components/etude3/etude3.module.css';
 
-export default function EtudeList({ documents, progressByPdf }: { documents: any[], progressByPdf: any }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
+const STATUT: Record<string, { label: string; cls: string; action: string }> = {
+  non_commence: { label: 'Pas encore commencée', cls: '', action: 'Commencer l’étude' },
+  en_cours: { label: 'En cours', cls: styles.badgeOn, action: 'Continuer' },
+  termine: { label: 'Terminée', cls: styles.badgeDone, action: 'Revoir' },
+};
 
-  const handleNavigate = (docId: string) => {
-    setLoadingDocId(docId);
-    startTransition(() => {
-      router.push(`/app/etude/${docId}`);
-    });
-  };
-
+/** Liste des cours de l'étudiant, avec l'état réel de chaque étude (enregistré par le serveur). */
+export default function EtudeList({ documents, progressByPdf }: {
+  documents: { id: string; nom: string; date_import: string | null }[];
+  progressByPdf: Record<string, { statut: string }>;
+}) {
   return (
-    <div style={{ padding: 'var(--spacing-large) 0', width: '100%' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-large)' }}>
-        <div>
-          <h1 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '28px' }}>Choisis ton cours</h1>
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-            Sélectionne un PDF issu de votre bibliothèque pour démarrer l'étude séquentielle guidée par l'IA.
-          </p>
-        </div>
+    <div className={styles.page}>
+      <header>
+        <h1 className={styles.title}>Études guidées</h1>
+        <p className={styles.subtitle}>Choisis un cours : SJP le lit en entier, te remet une synthèse, puis t’accompagne séquence par séquence.</p>
       </header>
 
       {documents.length === 0 ? (
-        <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 24px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          <span style={{ fontSize: '48px', marginBottom: '16px' }}>📖</span>
-          <h3 style={{ color: 'var(--color-text-main)', fontSize: '20px', margin: 0 }}>Aucun cours disponible</h3>
-          <p style={{ marginTop: '8px', marginBottom: '24px' }}>Vous n'avez importé aucun PDF. L'import se fait exclusivement dans la Bibliothèque.</p>
-          <Link href="/app/bibliotheque">
-            <Button style={{ padding: '12px 24px' }}>
-              Aller dans la Bibliothèque pour importer
-            </Button>
-          </Link>
-        </Card>
+        <div className={styles.panel} style={{ maxWidth: 560 }}>
+          <p className={styles.panelTitle}>Aucun cours pour l’instant</p>
+          <p className={styles.panelText}>Importe le PDF d’un cours : tu pourras ensuite en lancer l’étude guidée.</p>
+          <Link href="/app/bibliotheque" className={styles.primary}>Importer un cours</Link>
+        </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--spacing-standard)' }}>
-          {documents.map(doc => {
-            const progress = progressByPdf[doc.id];
-            const status = progress ? progress.statut : 'non_commence';
-            
+        <ul className={styles.courseList}>
+          {documents.map((doc) => {
+            const s = STATUT[progressByPdf[doc.id]?.statut ?? 'non_commence'] ?? STATUT.non_commence;
             return (
-              <Card key={doc.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div style={{ marginBottom: 'var(--spacing-standard)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '32px' }}>📄</span>
-                    {status === 'non_commence' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Nouveau</span>}
-                    {status === 'en_cours' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(30, 90, 150, 0.1)', color: 'var(--action)', fontWeight: 600 }}>En cours</span>}
-                    {status === 'termine' && <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontWeight: 600 }}>Terminé</span>}
-                  </div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: 'var(--color-text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={doc.nom}>
-                    {doc.nom}
-                  </h3>
-                  <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                    Importé le {formatDate(doc.created_at || doc.date_import)}
-                  </div>
+              <li key={doc.id} className={styles.course}>
+                <div className={styles.courseMain}>
+                  <p className={styles.courseTitle}>{doc.nom.replace(/\.pdf$/i, '')}</p>
+                  <p className={styles.courseMeta}>
+                    <span className={`${styles.badge} ${s.cls}`}>{s.label}</span>
+                    {doc.date_import && <span>Importé le {formatDate(doc.date_import)}</span>}
+                  </p>
                 </div>
-                
-                <Button 
-                  onClick={() => handleNavigate(doc.id)}
-                  style={{ width: '100%', padding: '10px' }}
-                  variant={status === 'non_commence' ? 'primary' : 'secondary'}
-                  disabled={isPending && loadingDocId === doc.id}
-                >
-                  {(isPending && loadingDocId === doc.id) ? 'Chargement...' : (status === 'non_commence' ? 'Commencer' : 'Continuer')}
-                </Button>
-              </Card>
+                <Link href={`/app/etude/${doc.id}`} className={styles.secondary}>{s.action}</Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

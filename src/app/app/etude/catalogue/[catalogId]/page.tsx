@@ -11,8 +11,9 @@ export const metadata = {
   title: 'Étude en cours | SJP',
 };
 
-export default async function EtudeCatalogueCoursePage({ params }: { params: Promise<{ catalogId: string }> }) {
+export default async function EtudeCatalogueCoursePage({ params, searchParams }: { params: Promise<{ catalogId: string }>; searchParams: Promise<{ ancienne?: string }> }) {
   const { catalogId } = await params;
+  const { ancienne } = await searchParams;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -47,6 +48,10 @@ export default async function EtudeCatalogueCoursePage({ params }: { params: Pro
   if (!cours || cours.statut_generation !== 'pret') {
     redirect('/app/catalogue');
   }
+
+  // Nouvelle étude guidée (v3) par défaut. L'ancienne version reste consultable (?ancienne=1)
+  // pour ne perdre aucune progression déjà faite (E-05).
+  if (!ancienne) redirect(`/app/etude/${cours.pdf_id}`);
 
   // etude_cours.pdf_id n'est pas une vraie clé étrangère PostgREST : requête séparée, pas de
   // jointure imbriquée (cf. commentaire identique dans actions/catalog.ts).

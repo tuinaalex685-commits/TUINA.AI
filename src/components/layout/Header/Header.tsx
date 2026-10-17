@@ -34,7 +34,7 @@ export function Header({ className, initial = '?' }: HeaderProps) {
   const title = ROUTE_TITLES.find(([route]) => pathname.startsWith(route))?.[1] ?? 'SJP';
 
   return (
-    <header className={`${styles.header} ${className || ''}`}>
+    <header className={`${styles.header} ${className || ''}`} data-print="hide">
       <span className={styles.mobileBrand} aria-hidden>SJP</span>
       <p className={styles.title}>{title}</p>
       <Link href="/app/compte" className={styles.avatar} aria-label="Mon compte">

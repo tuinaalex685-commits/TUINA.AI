@@ -11,6 +11,9 @@ import { downloadDocumentPdf } from '@/lib/storage';
 import { verifyRefund } from '@/lib/quotaRefund';
 import { isMissingColumn } from '@/lib/plan';
 import { COMPARTIMENT_BY_TYPE, LIMITS, isRapportV2, type RapportV2 } from '@/lib/redaction/compartiments';
+import { processEtudeAnalyse, processEtudeSequence, type EngineDeps } from '@/lib/etude3/engine';
+import { NonRetryableError } from '@/lib/etude3/extract';
+import { mockEtude3 } from '@/lib/etude3/mock';
 import crypto from 'crypto';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
@@ -1150,6 +1153,16 @@ async function processEtude(job: any, ctx: JobCtx): Promise<any> {
 // ---------------------------------------------------------------------------
 class AccessDeniedError extends Error {}
 
+/** Dépendances du moteur Études guidées v3 (lib/etude3/engine.ts) : verrous, bail, IA ou simulation. */
+function engineDeps(job: any, ctx: JobCtx): EngineDeps {
+  return {
+    ctx, patchJob, withLeaseHeartbeat, acquireContentLock, releaseContentLock,
+    generate: (system, prompt, schema, tracking, temperature) => isMockJob(job)
+      ? mockGenerate(job, tracking.feature, tracking.documentId, () => mockEtude3(tracking.feature))
+      : generateStructuredJSON(system, prompt, schema, undefined, tracking, temperature),
+  };
+}
+
 async function assertJobAccess(job: any): Promise<void> {
   const p = job.payload || {};
   const userId = job.user_id;
@@ -1163,7 +1176,7 @@ async function assertJobAccess(job: any): Promise<void> {
 
   if (p.documentId && p.documentId !== 'dummy') {
     const access = await resolveDocumentAccess(supabaseAdmin, userId, p.documentId);
-    const catalogAllowed = job.type === 'flashcards' || job.type === 'examen_pool' || job.type === 'redaction_sujets';
+    const catalogAllowed = job.type === 'flashcards' || job.type === 'examen_pool' || job.type === 'redaction_sujets' || job.type === 'etude3_analyse' || job.type === 'etude3_sequence';
     if (access === 'owner' || (access === 'catalog' && catalogAllowed)) return;
     throw new AccessDeniedError('Accès refusé à ce document.');
   }
@@ -1234,6 +1247,8 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     else if (leased.type === 'redaction') result = await processRedaction(leased, ctx);
     else if (leased.type === 'redaction_sujets') result = await processRedactionSujets(leased, ctx);
     else if (leased.type === 'etude') result = await processEtude(leased, ctx);
+    else if (leased.type === 'etude3_analyse') result = await processEtudeAnalyse(leased, engineDeps(leased, ctx));
+    else if (leased.type === 'etude3_sequence') result = await processEtudeSequence(leased, engineDeps(leased, ctx));
     else if (leased.type === 'examen_pool') result = await processExamenPool(leased, ctx);
     else throw new Error(`Type de job inconnu: ${leased.type}`);
 
@@ -1256,9 +1271,11 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
-    const transient = !(err instanceof AccessDeniedError) && isRetryableError(err);
+    const transient = !(err instanceof AccessDeniedError) && !(err instanceof NonRetryableError) && isRetryableError(err);
     // Un refus d'accès ne se corrige pas en réessayant : échec immédiat.
-    const maxAttempts = err instanceof AccessDeniedError ? 1 : transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
+    // Refus d'accès ou erreur définitive (PDF scanné…) : réessayer ne changerait rien, et coûterait.
+    const definitive = err instanceof AccessDeniedError || err instanceof NonRetryableError;
+    const maxAttempts = definitive ? 1 : transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
     const willRetry = attempts < maxAttempts;
 
     if (willRetry) {

@@ -215,3 +215,10 @@ button:active:not(:disabled) {
   white-space: nowrap;
   border: 0;
 }
+
+/* Impression (PDF de la synthèse, du bilan) : seule la page imprimée reste, sans navigation. */
+@media print {
+  @page { margin: 16mm 14mm; }
+  html, body { background: #FFFFFF !important; }
+  [data-print="hide"] { display: none !important; }
+}

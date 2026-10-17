@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         const { error: errCours } = await supabase
           .from('etude_progression_cours')
           .upsert(
-            { user_id: user.id, cours_id: coursId, statut: 'en_cours', updated_at: new Date().toISOString() },
+            { user_id: user.id, cours_id: coursId, statut: data?.statut === 'termine' ? 'termine' : 'en_cours', updated_at: new Date().toISOString() },
             { onConflict: 'user_id,cours_id' }
           );
         if (errCours) throw new Error(errCours.message);

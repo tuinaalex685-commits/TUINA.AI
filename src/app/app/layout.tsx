@@ -43,7 +43,7 @@ export default async function AppLayout({
         {/* Format haute visibilité, comptes Free uniquement. Monté une seule fois
             pour toute la session de navigation ; il s'efface de lui-même sur les
             pages d'examen, d'étude et de rédaction en cours. */}
-        <AdHighImpactSlot />
+        <div data-print="hide"><AdHighImpactSlot /></div>
       </div>
     </div>
   );
