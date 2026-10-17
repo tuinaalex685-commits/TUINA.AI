@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isMissingColumn } from '@/lib/plan';
+import { exactEmailPattern } from '@/lib/email';
+import { removeOwnedFiles } from '@/lib/storage';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE ---
 async function requireAdmin() {
@@ -118,13 +120,13 @@ export async function purgeUser(email: string) {
     if (!email) return { error: 'Email manquant : ce code n’est lié à aucun compte.' };
 
     const { data: role } = await supabaseAdmin
-      .from('user_roles').select('user_id, role').eq('email', email).maybeSingle();
+      .from('user_roles').select('user_id, role').ilike('email', exactEmailPattern(email)).maybeSingle();
     if (role?.role === 'admin') return { error: 'Impossible de purger un compte administrateur.' };
     const uid = role?.user_id as string | undefined;
     if (uid && uid === adminUser.id) return { error: 'Vous ne pouvez pas purger votre propre compte.' };
 
     if (uid) {
-      const { data: docs } = await supabaseAdmin.from('documents').select('id').eq('user_id', uid);
+      const { data: docs } = await supabaseAdmin.from('documents').select('id, url, url_fichier').eq('user_id', uid);
       const docIds = (docs || []).map((d: any) => d.id);
       if (docIds.length) {
         const { data: cours } = await supabaseAdmin.from('etude_cours').select('id').in('pdf_id', docIds);
@@ -136,15 +138,40 @@ export async function purgeUser(email: string) {
         await supabaseAdmin.from('flashcards').delete().in('document_id', docIds);
         await supabaseAdmin.from('evaluations').delete().in('document_id', docIds);
       }
-      // Données liées à l'utilisateur (best-effort : on tolère les tables absentes).
-      for (const tbl of ['flashcards', 'evaluations', 'redactions', 'ai_jobs', 'historique_revisions',
-        'etude_progression_sections', 'etude_progression_themes', 'etude_progression_cours', 'documents']) {
-        await supabaseAdmin.from(tbl).delete().eq('user_id', uid).then(() => {}, () => {});
+      // Données de l'étudiant. Les tables marquées « bloquante » ont une clé étrangère vers
+      // auth.users SANS cascade : tant qu'elles contiennent une ligne, le compte ne peut pas
+      // être supprimé. Avant, matieres et objectifs n'étaient pas vidées et l'échec de
+      // deleteUser était ignoré : l'admin voyait « succès » et le compte restait actif.
+      const tables: { name: string; blocking: boolean }[] = [
+        { name: 'flashcards', blocking: false }, { name: 'evaluations', blocking: false },
+        { name: 'redactions', blocking: true }, { name: 'ai_jobs', blocking: false },
+        { name: 'historique_revisions', blocking: false }, { name: 'theme_mastery', blocking: false },
+        { name: 'etude_progression_sections', blocking: false }, { name: 'etude_progression_themes', blocking: false },
+        { name: 'etude_progression_cours', blocking: false }, { name: 'objectifs', blocking: true },
+        { name: 'documents', blocking: true }, { name: 'matieres', blocking: true },
+      ];
+      for (const t of tables) {
+        const { error } = await supabaseAdmin.from(t.name).delete().eq('user_id', uid);
+        if (error && t.blocking) return { error: `Purge interrompue : suppression impossible dans « ${t.name} » (${error.message}).` };
       }
-      await supabaseAdmin.from('user_roles').delete().eq('user_id', uid);
+
+      // Fichiers du stockage : ceux référencés par ses documents, puis tout ce qui reste dans son dossier.
+      await removeOwnedFiles(uid, (docs || []).flatMap((d: any) => [d.url_fichier, d.url]));
+      const { data: leftovers } = await supabaseAdmin.storage.from('documents').list(uid, { limit: 1000 });
+      const leftoverPaths = (leftovers || []).filter((f) => f.id).map((f) => `${uid}/${f.name}`);
+      if (leftoverPaths.length) await supabaseAdmin.storage.from('documents').remove(leftoverPaths);
     }
-    await supabaseAdmin.from('access_codes').delete().eq('email', email);
-    if (uid) { try { await supabaseAdmin.auth.admin.deleteUser(uid); } catch { /* déjà supprimé */ } }
+
+    const { error: codesError } = await supabaseAdmin.from('access_codes').delete().ilike('email', exactEmailPattern(email));
+    if (codesError) return { error: `Purge interrompue : codes d’accès non supprimés (${codesError.message}).` };
+
+    if (uid) {
+      // deleteUser ne lève pas d'exception : l'erreur est dans le résultat et DOIT être lue.
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(uid);
+      if (authError && !/not.?found/i.test(authError.message)) {
+        return { error: `Les données ont été supprimées, mais pas le compte de connexion : ${authError.message}` };
+      }
+    }
 
     revalidatePath('/admin/dashboard/users');
     revalidatePath('/admin/dashboard');

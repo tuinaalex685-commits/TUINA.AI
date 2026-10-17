@@ -54,7 +54,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
   };
 
   const handleDelete = (id: string, userEmail: string | null) => {
-    if (confirm("Voulez-vous vraiment supprimer cet accès ?")) {
+    if (confirm("Supprimer ce code ?\n\nLe compte de l’étudiant est conservé : il repasse simplement en version gratuite.")) {
       setActiveActionId(`${id}-delete`);
       startTransition(async () => {
         await deleteAccessCode(id, userEmail || '');
@@ -144,7 +144,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                       disabled={isPending && activeActionId === `${code.id}-delete`}
                       style={{ padding: '6px 12px', fontSize: '12px', color: '#e53e3e', borderColor: '#fc8181' }}
                     >
-                      {isPending && activeActionId === `${code.id}-delete` ? 'Suppression...' : 'Supprimer'}
+                      {isPending && activeActionId === `${code.id}-delete` ? 'Suppression...' : 'Supprimer le code'}
                     </Button>
                     {code.email && (
                       <Button
