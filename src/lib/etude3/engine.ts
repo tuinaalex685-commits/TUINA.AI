@@ -26,12 +26,19 @@ export interface EngineDeps {
   withLeaseHeartbeat: <T>(jobId: string, fn: () => Promise<T>, lockHash?: string) => Promise<T>;
   acquireContentLock: (hash: string) => Promise<boolean>;
   releaseContentLock: (hash: string) => Promise<void>;
-  generate: (system: string, prompt: string, schema: any, tracking: { userId?: string; feature: string; documentId?: string }, temperature?: number) => Promise<any>;
+  generate: (system: string, prompt: string, schema: any, tracking: { userId?: string; feature: string; documentId?: string }, temperature?: number, thinkingBudget?: number) => Promise<any>;
 }
 
 const MAX_SEGMENTS = 30;          // ≈ 420 000 caractères (environ 150 pages denses) ; au-delà : couverture partielle déclarée
 const SEGMENT_PARALLEL = 3;       // appels simultanés par analyse (limite la pression sur Gemini)
 const CARTE_MAX_CHARS = 120000;   // taille maximale des cartes partielles transmises à la consolidation
+
+/**
+ * Budget de « réflexion » Gemini par étape (tokens facturés au tarif de sortie, et lents).
+ * Mesuré en production : une synthèse sans borne a pris 280 s. L'extraction n'en a pas besoin ;
+ * la consolidation et la rédaction gardent un budget modéré pour la qualité du plan.
+ */
+const THINK = { segment: 0, consolidation: 1024, synthese: 1024, sequence: 1024 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;
@@ -121,7 +128,7 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
       await ctx.mark('generating', 20 + Math.round((40 * fait) / lus.length), `Analyse du cours : partie ${fait + 1} sur ${lus.length}…`);
       const out = await deps.withLeaseHeartbeat(job.id, () => Promise.all(batch.map((seg) =>
         deps.generate(SEGMENT_SYSTEM, `<SEGMENT pages="${seg.pages[0]}-${seg.pages[seg.pages.length - 1]}">\n${neutralize(seg.texte)}\n</SEGMENT>`, SEGMENT_SCHEMA,
-          { userId: job.user_id, feature: 'etude3_segment', documentId }, 0.2))), lock);
+          { userId: job.user_id, feature: 'etude3_segment', documentId }, 0.2, THINK.segment))), lock);
       out.forEach((c, k) => { cartes[fait + k] = { pages: batch[k].pages, ...c }; });
       result = { ...result, cartes };
       return await yieldStep();
@@ -133,7 +140,7 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
       const carteTxt = neutralize(JSON.stringify(cartes)).slice(0, CARTE_MAX_CHARS);
       const consolidation = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
         CONSOLIDATION_SYSTEM, `Pages du cours : ${couv.pages_total}.\n<CARTE>\n${carteTxt}\n</CARTE>`, CONSOLIDATION_SCHEMA,
-        { userId: job.user_id, feature: 'etude3_consolidation', documentId }, 0.2), lock);
+        { userId: job.user_id, feature: 'etude3_consolidation', documentId }, 0.2, THINK.consolidation), lock);
       result = { ...result, consolidation };
       return await yieldStep();
     }
@@ -145,7 +152,7 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
       const contexte = neutralize(JSON.stringify({ titre: c.titre, idee_centrale: c.idee_centrale, plan: c.plan, examinateur: c.examinateur, cartes })).slice(0, CARTE_MAX_CHARS);
       const synthese = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
         SYNTHESE_SYSTEM, `<CARTE>\n${contexte}\n</CARTE>`, SYNTHESE_SCHEMA,
-        { userId: job.user_id, feature: 'etude3_synthese', documentId }, 0.4), lock);
+        { userId: job.user_id, feature: 'etude3_synthese', documentId }, 0.4, THINK.synthese), lock);
       result = { ...result, synthese };
       await deps.patchJob(job.id, { result });
     }
@@ -213,7 +220,7 @@ export async function processEtudeSequence(job: any, deps: EngineDeps): Promise<
       `<COURS>\n${cours}\n</COURS>`,
     ].join('\n\n');
     const raw = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
-      SEQUENCE_SYSTEM, prompt, SEQUENCE_SCHEMA, { userId: job.user_id, feature: 'etude3_sequence', documentId }, 0.4), lock);
+      SEQUENCE_SYSTEM, prompt, SEQUENCE_SCHEMA, { userId: job.user_id, feature: 'etude3_sequence', documentId }, 0.4, THINK.sequence), lock);
     const sequence = normalizeSequence(raw, ordre, pages.length || 9999);
 
     await deps.ctx.mark('saving', 90, 'Enregistrement…');

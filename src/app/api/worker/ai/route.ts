@@ -1157,9 +1157,9 @@ class AccessDeniedError extends Error {}
 function engineDeps(job: any, ctx: JobCtx): EngineDeps {
   return {
     ctx, patchJob, withLeaseHeartbeat, acquireContentLock, releaseContentLock,
-    generate: (system, prompt, schema, tracking, temperature) => isMockJob(job)
+    generate: (system, prompt, schema, tracking, temperature, thinkingBudget) => isMockJob(job)
       ? mockGenerate(job, tracking.feature, tracking.documentId, () => mockEtude3(tracking.feature))
-      : generateStructuredJSON(system, prompt, schema, undefined, tracking, temperature),
+      : generateStructuredJSON(system, prompt, schema, undefined, tracking, temperature, { thinkingBudget }),
   };
 }
 
@@ -1202,8 +1202,13 @@ async function assertJobAccess(job: any): Promise<void> {
  * fonction serverless se fige après sa réponse, laissant le job « en cours » jusqu'au cron.
  */
 async function chainWorker(workerUrl?: string) {
-  if (!workerUrl) return;
-  await fetch(workerUrl, {
+  // Lancé depuis la route de suivi, le worker ne connaît pas son URL : on utilise le domaine de
+  // production fourni par Vercel. Sans relais, un job découpé en étapes s'arrêterait dès que
+  // l'étudiant ferme la page.
+  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const url = workerUrl || (prod ? `https://${prod}/api/worker/ai` : undefined);
+  if (!url) return;
+  await fetch(url, {
     method: 'POST',
     headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
     signal: AbortSignal.timeout(1500),
@@ -1270,6 +1275,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     // repioché plus tard SANS bloquer la fonction ni compter comme un échec. Auto-guérison, pas de blocage.
     if (result && result.__requeueMs) {
       await patchJob(leased.id, {
+        // Une étape réussie (ou une attente) n'est PAS une tentative ratée : le compteur, qui borne
+        // les nouvelles tentatives après erreur, n'est pas consommé par un job découpé en étapes.
+        attempts: leased.attempts || 0,
         status: 'pending', lease_until: null,
         next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
       });

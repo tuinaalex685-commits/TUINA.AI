@@ -162,7 +162,12 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
 /**
  * 1. GÉNÉRATION DE JSON (Pour les Server Actions comme les Flashcards)
  */
-export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number) {
+/**
+ * `options.thinkingBudget` borne la « réflexion » de Gemini 2.5 Flash (tokens facturés au tarif de
+ * sortie et lents) : 0 pour une extraction structurée, un budget modéré pour la rédaction.
+ * Non fourni : comportement par défaut du modèle (inchangé pour les fonctionnalités existantes).
+ */
+export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number, options?: { thinkingBudget?: number }) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
@@ -198,7 +203,8 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
             responseSchema: schema,
             httpOptions: { timeout: GEMINI_TIMEOUT_MS },
             abortSignal: controller.signal,
-            ...(temperature !== undefined ? { temperature } : {})
+            ...(temperature !== undefined ? { temperature } : {}),
+            ...(options?.thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget: options.thinkingBudget } } : {})
           }
         });
       } finally {

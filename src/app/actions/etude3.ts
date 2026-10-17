@@ -167,7 +167,7 @@ export async function answerActivity(input: { documentId: string; ordre: number;
         `RÉPONSE MODÈLE (pour toi seulement) : ${activite.reponse_modele}`,
         `<REPONSE_ETUDIANT>\n${neutralize(reponse)}\n</REPONSE_ETUDIANT>`,
       ].filter(Boolean).join('\n\n');
-      const raw: any = await generateStructuredJSON(CORRECTION_SYSTEM, prompt, CORRECTION_SCHEMA, undefined, { userId: user.id, feature: 'etude3_correction', documentId }, 0.2);
+      const raw: any = await generateStructuredJSON(CORRECTION_SYSTEM, prompt, CORRECTION_SCHEMA, undefined, { userId: user.id, feature: 'etude3_correction', documentId }, 0.2, { thinkingBudget: 512 });
       verdict = raw?.verdict === 'juste' || raw?.verdict === 'partiel' ? raw.verdict : 'faux';
       message = String(raw?.message || '').slice(0, 1500) || 'Relis l’explication et réessaie.';
       manquants = (Array.isArray(raw?.manquants) ? raw.manquants : []).map(String).slice(0, 5);
