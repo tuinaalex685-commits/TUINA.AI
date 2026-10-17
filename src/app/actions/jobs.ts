@@ -9,10 +9,14 @@ import { signRefund } from '@/lib/quotaRefund';
 import { headers } from 'next/headers';
 import { after } from 'next/server';
 import crypto from 'crypto';
+import { LIMITS } from '@/lib/redaction/compartiments';
 
-export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude' | 'examen_pool';
+export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude' | 'examen_pool' | 'redaction_sujets';
 
-const JOB_TYPES: AiJobType[] = ['evaluation', 'flashcards', 'redaction', 'etude', 'examen_pool'];
+const JOB_TYPES: AiJobType[] = ['evaluation', 'flashcards', 'redaction', 'etude', 'examen_pool', 'redaction_sujets'];
+
+/** Types d'exercice pour lesquels on propose des sujets (jamais le commentaire d'arrêt : pas de décision inventée). */
+const SUJET_TYPES = ['Cas pratique', 'Dissertation'];
 
 /**
  * Champs autorisés dans le payload, par type de job. Tout le reste est ignoré.
@@ -27,6 +31,7 @@ const PAYLOAD_FIELDS: Record<AiJobType, string[]> = {
   redaction: ['redactionId'],
   etude: ['documentId'],
   examen_pool: ['documentId'],
+  redaction_sujets: ['documentId', 'type'],
 };
 
 function sanitizePayload(type: AiJobType, raw: Record<string, unknown>): Record<string, string | number> {
@@ -38,6 +43,9 @@ function sanitizePayload(type: AiJobType, raw: Record<string, unknown>): Record<
   }
   return clean;
 }
+
+/** Séries de sujets proposés par jour et par étudiant (la plupart sortent du cache, sans coût). */
+const SUJETS_DAILY_LIMIT = 10;
 
 /** Corrections de Rédaction par jour (tous plans : la Rédaction est déjà réservée au Premium). */
 const REDACTION_DAILY_LIMIT = 3;
@@ -61,8 +69,11 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   // Rédaction et Étude d'un document personnel = Premium, vérifié ici côté serveur. Avant,
   // l'Étude n'était contrôlée que dans /api/etude/generate : passer par cette action
   // contournait le Premium et la limite horaire.
-  if (type === 'redaction' && !premium) {
+  if ((type === 'redaction' || type === 'redaction_sujets') && !premium) {
     return { error: "La Rédaction est réservée aux membres Premium." };
+  }
+  if (type === 'redaction_sujets' && !SUJET_TYPES.includes(String(payload.type))) {
+    return { error: 'Type d’exercice invalide.' };
   }
   if (type === 'etude' && !premium) {
     return { error: "L'import de tes propres cours est réservé aux membres Premium.", premiumRequired: true };
@@ -73,8 +84,17 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   if (type === 'redaction') {
     if (typeof payload.redactionId !== 'string') return { error: 'Rédaction manquante.' };
     const { data: red } = await supabaseAdmin
-      .from('redactions').select('id').eq('id', payload.redactionId).eq('user_id', user.id).maybeSingle();
+      .from('redactions').select('id, statut, contenu').eq('id', payload.redactionId).eq('user_id', user.id).maybeSingle();
     if (!red) return { error: 'Rédaction introuvable ou accès refusé.' };
+    // Seul chemin légitime : submitRedaction, qui verrouille la copie en « en_cours » et
+    // contrôle sa longueur. Un appel direct de cette action ne contourne donc rien.
+    if (red.statut !== 'en_cours') return { error: 'Rends ta copie depuis l’écran de rédaction.' };
+    if (String(red.contenu || '').trim().length < LIMITS.copieMinCorrection) return { error: 'Copie trop courte pour être corrigée.' };
+    const { count: active } = await supabaseAdmin
+      .from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('type', 'redaction').eq('payload->>redactionId', payload.redactionId)
+      .in('status', ['pending', 'queued', 'processing', 'generating', 'saving']);
+    if ((active || 0) > 0) return { error: 'Ta copie est déjà en correction.' };
   }
 
   // Anti-IDOR : le worker lit le texte via le service role ; sans ce contrôle, un job aurait
@@ -86,7 +106,7 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     const access = await resolveDocumentAccess(supabaseAdmin, user.id, docId);
     // Un cours du catalogue n'est ouvert qu'aux contenus mutualisés par source_hash
     // (flashcards, banque d'examen) : coût Gemini nul dès le deuxième utilisateur.
-    const catalogAllowed = type === 'flashcards' || type === 'examen_pool';
+    const catalogAllowed = type === 'flashcards' || type === 'examen_pool' || type === 'redaction_sujets';
     const ok = access === 'owner' || (access === 'catalog' && catalogAllowed);
     if (!ok) return { error: "Document introuvable ou accès refusé." };
   } else if (coursId && type === 'flashcards') {
@@ -98,6 +118,27 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     if (!cours || !matiere) return { error: "Cours introuvable ou accès refusé." };
   } else if (type !== 'redaction') {
     return { error: 'Document manquant.' };
+  }
+
+  // Sujets de rédaction : mis en cache par contenu, mais la 1re génération coûte un appel IA.
+  // 1) Un job déjà en route pour le même cours et le même type est réutilisé (pas de doublon).
+  // 2) Plafond journalier ATOMIQUE (consume_free_quota) : des appels parallèles ne le dépassent pas.
+  if (type === 'redaction_sujets') {
+    if (!docId || docId === 'dummy') return { error: 'Cours manquant.' };
+    const { data: running } = await supabaseAdmin
+      .from('ai_jobs').select('id')
+      .eq('user_id', user.id).eq('type', 'redaction_sujets')
+      .eq('payload->>documentId', docId).eq('payload->>type', String(payload.type))
+      .in('status', ['pending', 'queued', 'processing', 'generating', 'saving'])
+      .limit(1);
+    if (running?.[0]) return { success: true, jobId: running[0].id as string };
+    const { data, error } = await supabaseAdmin.rpc('consume_free_quota', {
+      p_user_id: user.id, p_feature: 'redaction_sujets', p_limit: SUJETS_DAILY_LIMIT,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || row?.allowed !== true) {
+      return { error: `Tu as demandé ${SUJETS_DAILY_LIMIT} séries de sujets aujourd’hui. Réessaie demain, ou écris ton propre sujet.` };
+    }
   }
 
   // Étude : même garde-fou que /api/etude/generate (5 générations par heure).

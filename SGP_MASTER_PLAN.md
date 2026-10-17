@@ -2,6 +2,8 @@
 
 > Document de référence du projet SGP / SJP (dépôt `TUINA.AI`). À mettre à jour après chaque intervention significative.
 >
+> **Version 1.3 — 2026-10-17** — ajout de la refonte proposée des Études guidées (sections 40 à 46).
+>
 > **Version 1.2 — 2026-10-16** — Audit (phase A), correctifs de sécurité et de latence (phase B, en production), refonte du design, **directive générale de développement** (sections 26 à 33) et **règles pédagogiques validées** : étude commencée, notes, six examens, points et bonus BD (sections 34 à 39).
 >
 > Organisation : sections 1 à 7 = constats techniques ; 8 à 24 = **exigences pédagogiques** (prompts 1 à 4) ; 25 = journal ; 26 à 33 = **méthode, design, accès et capacité** (directive générale) ; 34 à 39 = **règles pédagogiques validées** (elles priment sur les propositions des § 13 et 15). Les exigences pédagogiques restent la référence produit : la directive les complète, elle ne les remplace pas.
@@ -48,6 +50,7 @@
 37. Q-12 — Points de progression et bonus BD
 38. Conséquences sur les sections précédentes
 39. Décisions encore attendues
+40 à 46. Refonte des Études guidées (proposition, prompt directeur pédagogique)
 
 ---
 
@@ -798,6 +801,8 @@ Voir la réponse de l'assistant associée à ce document : seules les questions 
 | 2026-10-16 | Tests | `tsc` OK ; `next build` OK (37 routes) ; ESLint : aucune erreur nouvelle (les 19 erreurs existantes sont antérieures, dont `useJob.ts`). Aucun test fonctionnel : pas d'environnement de test. |
 | 2026-10-16 | Décision (Q-01, Q-03, Q-05, Q-06, Q-12) | Réponses du responsable intégrées aux § 34 à 37 : étude commencée au clic enregistré par le serveur ; historique complet des tentatives, meilleure note = référence ; six examens en deux groupes, seuil 10/20 et moyenne ≥ 15/20 ; deux compteurs (progression et bonus BD). Barème et décisions restantes : § 37.3 et § 39. **Implémentation en attente d'autorisation.** |
 | 2026-10-16 | Design | Navigation : une couleur par section (contraste AA vérifié), pastille glissante et allumage au clic, sur ordinateur, tablette et mobile (`ca3c5ee`, en production). Bandeau « Ton Premium a expiré le … » sur le tableau de bord (`e4c0bd5`, en production). |
+| 2026-10-17 | Rédaction | Refonte livrée : 3 compartiments (cas pratiques, dissertations, commentaires d'arrêt), source « un de mes cours » ou « sujet de mon enseignant », 3 sujets proposés depuis un cours (job `redaction_sujets`, cache par contenu, 10 séries par jour), copie double avec sauvegarde automatique, méthode affichée, correction v2 (erreurs droit, raisonnement, méthode, formulation avec citation de la copie, 3 priorités, comparaison avec la version précédente, appui sur le cours, limites), retravail par versions. Pas d'arrêt inventé par l'IA. Revue de sécurité orientée test d'intrusion : 3 failles élevées corrigées (crédits rendus après suppression d'une copie en correction, appel direct de la mise en file, écriture directe de la copie en base) plus 4 moyennes. Migration 05 : anti-triche (le navigateur ne modifie que le texte de sa copie), contraintes et index. |
+| 2026-10-17 | Admin | Purge définitive corrigée : le compte restait actif (tables bloquantes non vidées, erreur de suppression ignorée). |
 | 2026-10-16 | Migrations | Écrites dans `database/migrations/` (00 lecture seule, 01 sécurité, 02 bucket privé) ; **non appliquées** pour l'instant. Ordre : déployer le code en production → 00 → 01 → vérifier → 02. |
 
 
@@ -1143,3 +1148,170 @@ Production : option A du § 15.4 (scénario JSON généré par l'IA, rendu en pa
 | **D-08** | Conditions d'éligibilité initiale au bonus | 5 jours actifs, 60 points, et un examen ≥ 14 ou un parcours terminé |
 | **D-09** | Points au-delà de 200 reportés sur le cycle suivant ? | **Non** |
 | **D-10** | Délai minimal entre deux BD | **14 jours**, avec l'éligibilité recalculée après la livraison |
+
+---
+
+# PARTIE IV — REFONTE DES ÉTUDES GUIDÉES (prompt directeur pédagogique, reçu le 2026-10-17)
+
+> **Statut : PROPOSITION. Aucune ligne de code des Études guidées n'est modifiée avant l'autorisation du responsable.**
+>
+> **Source manquante, signalée** : le prompt directeur fait référence à un « prompt maître d'analyse des cours » transmis auparavant. Ce document n'a jamais été reçu dans cette session (vérifié dans l'historique et dans le dépôt). Le responsable a indiqué ne plus l'avoir et a demandé de faire sans. Les principes ci-dessous sont donc **reconstruits** à partir du prompt directeur (§ 2 à 9) et des prompts 2 à 4 (§ 8 à 24) : ils ne prétendent pas reproduire ce document.
+
+## 40. Diagnostic : pourquoi la version actuelle vaut 8/20
+
+Analyse en lecture seule du code (agent d'exploration, 2026-10-17). Chaque point est prouvé par le code.
+
+### 40.1 Parcours actuel, du clic à la fin
+
+1. Liste des cours (`/app/etude`) → « Commencer » ouvre `/app/etude/[pdfId]`.
+2. **L'ouverture de la page lance immédiatement la génération** (`EtudeEngine.tsx:140`), sans confirmation.
+3. `POST /api/etude/generate` → job `etude` → worker `processEtude` : extraction du texte (`pdf-parse`), **un seul appel Gemini** avec le prompt `pedagogicalEngine.ts` sur les **50 000 premiers caractères** (`worker/ai/route.ts:889`).
+4. Le JSON produit 3 à 5 sections × 2 à 4 thèmes. Il est écrit dans `etude_sections` / `etude_themes`, puis la page se recharge.
+5. Par thème : explication (environ 120 mots) → QCM « forme » → cas pratique « fond » corrigé par l'IA → questions de clôture de section → fin.
+6. Fin de cours : « Bravo », liens vers Révisions et Évaluations.
+
+### 40.2 Les 11 insuffisances
+
+| # | Insuffisance | Preuve |
+|---|---|---|
+| I-1 | Seuls les **50 000 premiers caractères** sont lus, **sans avertissement**. L'écran final affirme pourtant « l'intégralité du document ». | `route.ts:889`, `EtudeEngine.tsx:732` |
+| I-2 | Taille **figée** : 3 à 5 sections, 2 à 4 thèmes, quelle que soit la longueur du cours. Explications d'environ 120 mots. | `pedagogicalEngine.ts:154,169` |
+| I-3 | **Un seul passage IA** pour tout (analyse, explications, QCM, cas, remédiations), sans relecture ni contrôle de fidélité. | `route.ts:887-893` |
+| I-4 | **Aucune synthèse réelle** : 2 à 3 phrases par section, affichées 2 fois à l'identique, sans export PDF. L'analyse riche (articles, pièges, questions d'examen) est stockée mais **jamais montrée**. | `EtudeEngine.tsx:361,718` |
+| I-5 | **Activités décoratives** : l'amorce a 2 boutons qui font la même chose, le texte à trous n'est pas noté, les étapes « Qualifier » et « Règle » ne vérifient rien. | `EtudeEngine.tsx:393-396, 454, 533-566` |
+| I-6 | **QCM corrigé par égalité de chaînes** sans vérifier que la bonne réponse figure parmi les choix. Une reformulation de l'IA rend le QCM impossible à réussir. | `EtudeEngine.tsx:296`, `route.ts:935` |
+| I-7 | **Progression non contraignante** : boutons « Passer » et « Continuer » toujours disponibles, pas de retour en arrière, réponses jamais conservées, pas de bilan. | `EtudeEngine.tsx:514,606,630` |
+| I-8 | **Progression falsifiable** : l'API accepte n'importe quel état envoyé par le navigateur. Le statut « terminé » n'est jamais enregistré (codé en dur `en_cours`). | `progress/route.ts:22, 30-72` |
+| I-9 | **Erreurs mal gérées** : sauvegarde de progression silencieuse en cas d'échec, une panne technique présentée comme une « mauvaise réponse », PDF scanné sans issue, thèmes vides possibles. | `EtudeEngine.tsx:201,240,477,525` |
+| I-10 | Catalogue : l'analyse pédagogique est **toujours vide** (mauvaise lecture de la requête). | `catalogue/[catalogId]/page.tsx:142` |
+| I-11 | La correction du cas pratique **fait confiance au navigateur** (situation, réponse attendue envoyées par le client), sans limite de longueur, sans Premium. | `evaluate/route.ts:37` |
+
+## 41. Principes pédagogiques retenus (reconstruits, à valider)
+
+Ils remplacent le prompt unique actuel par une **chaîne d'analyse**. Chaque étape a sa propre consigne et sa propre sortie structurée (JSON validé par le code).
+
+1. **Comprendre avant de résumer** : lecture de tout le texte accessible, section par section. Le système sait quelles pages ont été lues et le dit.
+2. **Représentation interne du cours** (« carte des connaissances ») : concepts, définitions, règles, conditions, exceptions, distinctions, mécanismes, exemples du cours, liens. Chaque élément porte un **niveau** (indispensable, important, subtil, complémentaire) et une **référence de page**.
+3. **Regard d'examinateur** : ce qu'un examinateur exigeant vérifierait, et les erreurs d'un étudiant qui aurait seulement appris par cœur. **Usage interne** : cela décide de ce que la synthèse doit expliquer ; cela n'en fait jamais un QCM.
+4. **Explication choisie, pas mécanique** : pour chaque notion, seulement les rubriques utiles (définition, reformulation, mécanisme, conditions, exceptions, distinction, exemple, contre-exemple, schéma, erreur fréquente).
+5. **Style** : un professeur qui tutoie. Situation concrète → intuition → terme exact → définition rigoureuse → mécanisme → limites → lien avec le reste du cours. L'analogie aide, elle ne remplace jamais la règle.
+6. **Fidélité** : chaque bloc est marqué *issu du cours*, *explication pédagogique* ou *complément*. Aucune règle, disposition ou référence inventée. Une absence ou une ambiguïté est signalée.
+7. **Adapté à la discipline** : le droit appelle des arbres de conditions et des tableaux de distinctions, l'histoire des frises, la comptabilité des exemples chiffrés.
+
+## 42. Nouveau parcours proposé
+
+```
+[Commencer l'étude] ──▶ démarrage ENREGISTRÉ (Q-01 validée)
+        │
+        ▼
+  A. Analyse du PDF (job asynchrone, progression réelle affichée)
+     1. Extraction page par page ─ couverture : « 46 pages lues sur 48 (2 pages scannées illisibles) »
+     2. Découpage en segments selon le plan détecté (environ 10 à 12 000 caractères)
+     3. Analyse de chaque segment → carte des connaissances partielle (en parallèle, borné)
+     4. Consolidation → carte globale + regard d'examinateur + rapport de couverture
+        │
+        ▼
+  B. SYNTHÈSE PÉDAGOGIQUE (avant toute séquence)
+     lire en ligne · sommaire cliquable · schémas et tableaux · télécharger en PDF · conservée dans le cours
+        │  « Commencer le parcours »
+        ▼
+  C. PARCOURS EN SÉQUENCES (suivant le plan réel du cours, pas un nombre fixe)
+     pour chaque séquence : objectif → explication guidée → visuel (si utile)
+       → mise en relation → vérification → retour (juste / partiel / à revoir) → validation
+     la séquence N+1 est préparée en arrière-plan pendant la séquence N
+        │
+        ▼
+  D. Fin : carte mentale (consultable, téléchargeable) + bilan des notions solides et à revoir
+     → Révision libre · Examens de maîtrise (règles § 36)
+```
+
+### 42.1 La synthèse
+
+- **Production** : à partir de la carte globale (étape A.4) et de courts extraits ciblés du cours. On ne renvoie jamais tout le PDF.
+- **Format** : une liste de blocs typés (titre, paragraphe, définition, tableau comparatif, schéma, exemple, piège, fiche mémo, « à approfondir »), chacun avec sa source et ses pages. Le schéma est une **donnée** (arbre de décision, processus, comparaison, frise) dessinée en SVG par l'application : il est lisible sur téléphone, cliquable et exact, contrairement à une image générée.
+- **Contenu** : les 12 rubriques du prompt directeur, seulement celles qui ont un sens pour ce cours. **Aucun QCM ni exercice.** Un exemple résolu reste possible s'il est présenté comme une explication.
+- **Affichage** : page dédiée `/app/etude/[id]/synthese`, sommaire collant, progression de lecture.
+- **PDF** : version imprimable mise en page (CSS d'impression) et bouton « Télécharger en PDF » (impression du navigateur, qui fonctionne sur Android Chrome). Aucune dépendance ni aucun coût. Une génération côté serveur reste possible plus tard (décision E-02).
+- **Conservation** : stockée une fois par contenu (empreinte du texte + version du moteur), réutilisée pour tout document identique. Jamais de données personnelles dans ce cache.
+
+### 42.2 Les séquences
+
+- **Nombre et découpage** : déterminés par le plan réel et la densité (par exemple 4 séquences pour un cours court, 9 pour un polycopié).
+- **Vérifications** : de vraies activités, chacune avec ses critères de réussite écrits à la génération :
+  - reformulation libre ;
+  - question ouverte ;
+  - choix raisonné (QCM **avec justification**) ;
+  - identifier la bonne distinction ;
+  - appliquer à un mini-cas.
+- **Correction des réponses ouvertes** : côté serveur, à partir du contenu **lu en base** (et non envoyé par le navigateur), selon une grille (attendus, erreurs typiques). Résultat : *juste*, *partiel* (ce qui manque) ou *à revoir* (la confusion expliquée, puis une autre explication ou un autre exemple). Jamais le même texte répété.
+- **Validation d'une séquence** (proposition, E-04) : toutes les vérifications réussies, ou réussies après remédiation. Après 3 essais, la notion est marquée « à revoir » et l'étudiant peut avancer : on ne le bloque pas indéfiniment.
+- **Réponses conservées** : elles alimentent les notions solides et à revoir, et les recommandations de révision.
+
+### 42.3 Navigation, retour arrière, reprise
+
+| État d'une séquence | Signification | Accès |
+|---|---|---|
+| Verrouillée | Pas encore atteinte | Refusé **par le serveur** (URL ou API comprises) |
+| Actuelle | La prochaine étape autorisée | « Continuer » y mène |
+| À valider | Commencée, vérifications incomplètes | Ouverte |
+| Validée | Objectifs atteints | Ouverte en relecture |
+
+- **Retour arrière libre** sur tout ce qui est déjà débloqué : explications, schémas, réponses et retours.
+- **Reprise exacte** : séquence, étape et réponses. L'état est enregistré en base à chaque étape, par une API qui **vérifie l'ordre** (on ne valide pas une séquence future).
+- **Historique** : chronologie des séquences validées et des notions renforcées.
+
+## 43. Modifications techniques proposées
+
+| Couche | Modification |
+|---|---|
+| **Extraction** | Texte **page par page** (pdfjs, déjà présent dans le projet) stocké avec les numéros de page, et rapport de couverture. PDF scanné : message clair, et option de lecture par Gemini du PDF lui-même (E-03, coût à valider). |
+| **Moteur IA** | Nouveau job à étapes `etude_v3` : segments → analyse par segment (parallèle borné) → consolidation → synthèse → séquence 1, puis les suivantes à la demande. Chaque étape est un prompt court, versionné, avec schéma JSON **validé par le code** (bonne réponse présente dans les choix, champs non vides). L'avancement est enregistré : une reprise après panne repart de la dernière étape réussie. |
+| **Prompts** | `src/lib/prompts/etude/` : `analyse-segment`, `consolidation`, `synthese`, `sequence`, `correction-reponse`. Ce sont les principes du § 41, **réellement envoyés** au modèle et versionnés (le cache dépend de la version). |
+| **Base** (migration à valider) | `etude_analyses` (empreinte, version du moteur, carte globale, couverture), `etude_syntheses` (empreinte, version, blocs), `etude_sequences` (cours, ordre, contenu, vérifications), `etude_parcours` (étudiant, cours, `started_at`, séquence actuelle, plus haute séquence débloquée, statut), `etude_reponses` (étudiant, vérification, réponse, verdict, date). RLS : contenus partagés en lecture selon l'accès au document ; parcours et réponses **strictement personnels**. |
+| **API** | `start` (démarrage idempotent), `sequence/[n]` (refuse au-delà de la séquence débloquée), `answer` (correction côté serveur à partir du contenu en base, quota), `advance` (vérifie les conditions). L'actuelle `progress/route.ts`, falsifiable, est retirée. |
+| **Interface** | Pages *Synthèse* et *Parcours* avec sommaire des séquences et leurs états, composants de schémas SVG (arbre, processus, comparaison, frise) animés sobrement, retours juste / partiel / à revoir, bilan, carte mentale. Mobile d'abord. |
+| **Coûts** | Analyse et synthèse : **une fois par contenu**, partagées entre étudiants (catalogue compris). Séquences : générées **à la demande**, donc rien n'est payé pour un parcours abandonné. Corrections ouvertes : un appel court, quota quotidien. Ordre de grandeur pour un polycopié de 100 pages : environ 20 à 25 appels « Flash » pour l'analyse et la synthèse, à **mesurer sur 3 cours réels avant tout déploiement**. |
+| **Existant** | Les cours déjà générés restent lisibles (ancien moteur), avec un bouton « Passer à la nouvelle version ». Rien n'est supprimé. |
+
+### 43.1 Correctifs immédiats proposés (indépendants de la refonte, à autoriser)
+
+- I-8 : enregistrer réellement « terminé », démarrer le parcours au clic, refuser les états incohérents.
+- I-10 : analyse pédagogique vide sur le catalogue.
+- I-11 : correction du cas pratique à partir du thème lu en base, limite de longueur, délimiteurs anti-injection.
+- I-6 : refuser à l'écriture un QCM dont la bonne réponse n'est pas parmi les choix.
+- I-1 : avertir l'étudiant quand le document a été tronqué.
+
+## 44. Skills et outils par étape
+
+| Étape | Skills et outils |
+|---|---|
+| Conception pédagogique des prompts et des activités | Principes du § 41, prompts 2 à 4, revue par un enseignant (§ 45) |
+| Moteur, API, base | skill **backend-senior**, Context7 (documentation Next.js et Supabase), agent de revue de code |
+| Écrans, schémas, animations | skills **frontend-senior** et **frontend-design**, **dataviz** pour les schémas, framer-motion (déjà installé) |
+| Sécurité | agent de revue orienté test d'intrusion ; `/security-review` à lancer depuis une session ouverte dans le dépôt |
+| PDF | pdfjs (déjà présent) pour l'extraction ; CSS d'impression pour l'export |
+| Tests | Playwright (parcours réels, 3 tailles d'écran, reprise après déconnexion, séquences futures refusées), k6 (charge, après accord) |
+
+**Ressource manquante** : un environnement Supabase de test, pour tester les migrations et la charge sans toucher à la production (déjà signalé, Q-16).
+
+## 45. Contrôle qualité et évaluation pédagogique
+
+- **Contrôles automatiques** (à chaque génération) : couverture des pages, blocs non vides, références de pages valides, absence de QCM dans la synthèse, bonnes réponses présentes, longueurs bornées.
+- **Grille d'évaluation** pour un professeur (sur 20) : exactitude (5), couverture (4), clarté (3), exemples et schémas (3), progression (3), utilité pour l'examen (2).
+- **Protocole** :
+  - 3 cours réels de matières différentes ;
+  - pour chacun, la version actuelle et la nouvelle, présentées sans indiquer laquelle est laquelle ;
+  - évaluées par un professeur et par 5 étudiants volontaires ;
+  - mesure : questionnaire de compréhension avant et après.
+  - L'objectif de 17/20 se constate, il ne se décrète pas.
+
+## 46. Décisions attendues pour les Études guidées
+
+| ID | Question | Proposition |
+|---|---|---|
+| E-01 | Séquences générées à la demande (moins cher) ou toutes d'un coup (attente plus longue au départ) ? | **À la demande** |
+| E-02 | PDF de la synthèse : impression du navigateur (gratuit, immédiat) ou génération côté serveur (nouvelle dépendance) ? | **Impression du navigateur** d'abord |
+| E-03 | PDF scannés : lecture par Gemini du PDF lui-même (coût plus élevé, à mesurer) ou message « PDF illisible » ? | Message clair d'abord, lecture IA en option Premium après mesure du coût |
+| E-04 | Validation d'une séquence : bloquer jusqu'à réussite, ou avancer après 3 essais avec la notion marquée « à revoir » ? | **Avancer après 3 essais** |
+| E-05 | Cours déjà générés : les régénérer automatiquement, ou à la demande de l'étudiant ? | **À la demande** (bouton) |
+| E-06 | Autoriser les **correctifs immédiats** du § 43.1 avant la refonte ? | Oui |
