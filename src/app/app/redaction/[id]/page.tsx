@@ -1,6 +1,7 @@
 import React from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { getCurrentUser } from '@/lib/viewer';
 import { REDACTION_DAILY_LIMIT } from '@/lib/redaction/compartiments';
@@ -31,6 +32,15 @@ export default async function CopyPage({ params }: { params: Promise<{ id: strin
     supabase.from('free_daily_usage').select('count').eq('user_id', user.id).eq('jour', jour).eq('feature', 'redaction').maybeSingle(),
   ]);
   if (!red) notFound();
+
+  // Correction en cours : l'écran suit ce job (et relance le worker s'il s'est arrêté).
+  let jobId: string | null = null;
+  if (red.statut === 'en_cours') {
+    const { data: job } = await supabaseAdmin.from('ai_jobs').select('id')
+      .eq('type', 'redaction').eq('user_id', user.id).eq('payload->>redactionId', id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    jobId = (job?.id as string) ?? null;
+  }
 
   let courseName: string | null = null;
   if (red.document_id) {
@@ -65,6 +75,7 @@ export default async function CopyPage({ params }: { params: Promise<{ id: strin
       }}
       versions={items}
       remaining={Math.max(0, REDACTION_DAILY_LIMIT - (usage?.count || 0))}
+      jobId={jobId}
     />
   );
 }

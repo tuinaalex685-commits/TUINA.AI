@@ -59,28 +59,45 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
   const { ctx } = deps;
   let result: any = job.result || {};
 
-  // 1. Extraction (gratuite) : texte page par page + empreinte. PDF scanné → arrêt immédiat, sans IA.
-  await ctx.mark('processing', 10, 'Lecture du PDF, page par page…');
-  const { data: doc } = await supabaseAdmin.from('documents').select('id, user_id, url_fichier').eq('id', documentId).maybeSingle();
-  if (!doc) throw new NonRetryableError('Document introuvable.');
-  const buffer = await downloadDocumentPdf(doc);
-  const { pages, couverture, hash } = await extractPages(buffer);
+  // 1. Texte page par page. Aux étapes suivantes, il est relu en base (pas de nouveau téléchargement).
+  let pages: string[];
+  let hash: string;
+  let couverture: Couverture;
+  if (result.hash) {
+    const saved = await loadAnalyse(result.hash);
+    if (saved?.statut === 'pret') { await linkParcours(documentId, result.hash); return { hash: result.hash, reused: true }; }
+    if (!saved?.pages_texte) { await deps.patchJob(job.id, { result: {} }); return { __requeueMs: 100 }; } // état incohérent : on repart proprement
+    pages = saved.pages_texte; hash = result.hash; couverture = saved.couverture;
+  } else {
+    // Extraction gratuite (aucune IA). PDF scanné → arrêt immédiat et définitif (E-03).
+    await ctx.mark('processing', 10, 'Lecture du PDF, page par page…');
+    const { data: doc } = await supabaseAdmin.from('documents').select('id, user_id, url_fichier').eq('id', documentId).maybeSingle();
+    if (!doc) throw new NonRetryableError('Document introuvable.');
+    const extracted = await extractPages(await downloadDocumentPdf(doc));
+    pages = extracted.pages; hash = extracted.hash; couverture = extracted.couverture;
 
-  // 2. Déjà analysé (par n'importe quel étudiant, même texte, même version du moteur) ? Rien à payer.
-  const existing = await loadAnalyse(hash);
-  if (existing?.statut === 'pret') {
-    await linkParcours(documentId, hash);
-    return { hash, reused: true };
+    // 2. Déjà analysé (par n'importe quel étudiant, même texte, même version du moteur) ? Rien à payer.
+    const existing = await loadAnalyse(hash);
+    if (existing?.statut === 'pret') { await linkParcours(documentId, hash); return { hash, reused: true }; }
   }
 
-  // 3. Single-flight : un seul calcul par contenu. Les autres demandes repassent plus tard.
+  // 3. Single-flight : un seul calcul par contenu. Le verrou est GARDÉ entre les étapes
+  //    (result.lockHeld) pour qu'aucune autre demande ne recommence le même travail.
   const lock = lockKeyAnalyse(hash);
-  const leader = await deps.acquireContentLock(lock);
-  if (!leader) {
-    await ctx.mark('processing', 15, 'Un autre étudiant fait analyser ce même cours : on attend son résultat…');
-    return { __requeueMs: 6000 };
+  if (!result.lockHeld) {
+    if (!(await deps.acquireContentLock(lock))) {
+      await ctx.mark('processing', 15, 'Un autre étudiant fait analyser ce même cours : on attend son résultat…');
+      return { __requeueMs: 6000 };
+    }
+    result = { ...result, hash, lockHeld: true };
+    await deps.patchJob(job.id, { result });
   }
 
+  // Une étape = au plus un lot d'appels IA, puis on enregistre et on rend la main (le worker
+  // repart aussitôt). Chaque invocation reste courte : compatible avec une limite de durée
+  // serverless basse, et une coupure ne fait perdre que l'étape en cours.
+  const yieldStep = async () => { await deps.patchJob(job.id, { result }); return { __requeueMs: 50 }; };
+  let finished = false;
   try {
     const segments = segmenter(pages);
     const lus = segments.slice(0, MAX_SEGMENTS);
@@ -88,32 +105,37 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
     const pagesLues = new Set(lus.flatMap((s) => s.pages));
     const couv: Couverture = { ...couverture, pages_lues: pagesLues.size, tronque };
 
-    await supabaseAdmin.from('etude_analyses').upsert(
-      { source_hash: hash, engine_version: ENGINE_VERSION, statut: 'en_cours', couverture: couv, pages_texte: pages, updated_at: new Date().toISOString() },
-      { onConflict: 'source_hash,engine_version' },
-    );
+    if (!result.rowSaved) {
+      await supabaseAdmin.from('etude_analyses').upsert(
+        { source_hash: hash, engine_version: ENGINE_VERSION, statut: 'en_cours', couverture: couv, pages_texte: pages, updated_at: new Date().toISOString() },
+        { onConflict: 'source_hash,engine_version' },
+      );
+      result = { ...result, rowSaved: true };
+    }
 
     // 4. Analyse segment par segment (mémoire de travail : cartes partielles conservées).
     const cartes: any[] = Array.isArray(result.cartes) ? result.cartes : [];
-    for (let i = cartes.filter(Boolean).length; i < lus.length; i += SEGMENT_PARALLEL) {
-      const batch = lus.slice(i, i + SEGMENT_PARALLEL);
-      await ctx.mark('generating', 20 + Math.round((40 * i) / lus.length), `Analyse du cours : partie ${i + 1} sur ${lus.length}…`);
+    const fait = cartes.filter(Boolean).length;
+    if (fait < lus.length) {
+      const batch = lus.slice(fait, fait + SEGMENT_PARALLEL);
+      await ctx.mark('generating', 20 + Math.round((40 * fait) / lus.length), `Analyse du cours : partie ${fait + 1} sur ${lus.length}…`);
       const out = await deps.withLeaseHeartbeat(job.id, () => Promise.all(batch.map((seg) =>
         deps.generate(SEGMENT_SYSTEM, `<SEGMENT pages="${seg.pages[0]}-${seg.pages[seg.pages.length - 1]}">\n${neutralize(seg.texte)}\n</SEGMENT>`, SEGMENT_SCHEMA,
           { userId: job.user_id, feature: 'etude3_segment', documentId }, 0.2))), lock);
-      out.forEach((c, k) => { cartes[i + k] = { pages: batch[k].pages, ...c }; });
-      result = { ...result, hash, cartes };
-      await deps.patchJob(job.id, { result });
+      out.forEach((c, k) => { cartes[fait + k] = { pages: batch[k].pages, ...c }; });
+      result = { ...result, cartes };
+      return await yieldStep();
     }
 
     // 5. Consolidation : compréhension globale, regard d'examinateur, plan du parcours, carte mentale.
     if (!result.consolidation) {
       await ctx.mark('generating', 65, 'Construction de la vue d’ensemble du cours…');
       const carteTxt = neutralize(JSON.stringify(cartes)).slice(0, CARTE_MAX_CHARS);
-      result.consolidation = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
+      const consolidation = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
         CONSOLIDATION_SYSTEM, `Pages du cours : ${couv.pages_total}.\n<CARTE>\n${carteTxt}\n</CARTE>`, CONSOLIDATION_SCHEMA,
         { userId: job.user_id, feature: 'etude3_consolidation', documentId }, 0.2), lock);
-      await deps.patchJob(job.id, { result });
+      result = { ...result, consolidation };
+      return await yieldStep();
     }
 
     // 6. Synthèse pédagogique (avant le parcours).
@@ -121,9 +143,10 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
       await ctx.mark('generating', 80, 'Rédaction de ta synthèse pédagogique…');
       const c = result.consolidation;
       const contexte = neutralize(JSON.stringify({ titre: c.titre, idee_centrale: c.idee_centrale, plan: c.plan, examinateur: c.examinateur, cartes })).slice(0, CARTE_MAX_CHARS);
-      result.synthese = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
+      const synthese = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
         SYNTHESE_SYSTEM, `<CARTE>\n${contexte}\n</CARTE>`, SYNTHESE_SCHEMA,
         { userId: job.user_id, feature: 'etude3_synthese', documentId }, 0.4), lock);
+      result = { ...result, synthese };
       await deps.patchJob(job.id, { result });
     }
 
@@ -141,9 +164,13 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
     }).eq('source_hash', hash).eq('engine_version', ENGINE_VERSION);
     if (error) throw new Error(`Enregistrement de l’analyse : ${error.message}`);
     await linkParcours(documentId, hash);
+    finished = true;
     return { hash, sequences: plan.length, pages: couv.pages_lues };
+  } catch (err) {
+    finished = true; // échec : on libère le verrou pour qu'une nouvelle tentative puisse reprendre
+    throw err;
   } finally {
-    await deps.releaseContentLock(lock);
+    if (finished) await deps.releaseContentLock(lock);
   }
 }
 

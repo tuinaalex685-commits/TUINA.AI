@@ -58,33 +58,13 @@ function trackSaaSUsage(
 export const GEMINI_DAILY_BUDGET_USD = Number(process.env.GEMINI_DAILY_BUDGET_USD || '5');
 export const GEMINI_MONTHLY_BUDGET_USD = Number(process.env.GEMINI_MONTHLY_BUDGET_USD || '50');
 
+// Plafond journalier et crédit réglés depuis le tableau de bord admin (lib/aiBudget.ts).
 async function checkGeminiBudget(): Promise<void> {
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-  const [dayRes, monthRes] = await Promise.all([
-    supabaseAdmin.from('saas_metrics').select('cost_usd').gte('created_at', startOfDay),
-    supabaseAdmin.from('saas_metrics').select('cost_usd').gte('created_at', startOfMonth),
-  ]);
-
-  // Si la lecture échoue (table absente, réseau...), on n'aveugle jamais le système : on laisse passer
-  // plutôt que de bloquer toute la plateforme sur une erreur d'observabilité.
-  if (dayRes.error || monthRes.error) {
-    console.error('[GEMINI_BUDGET] Impossible de vérifier le budget, appel autorisé par défaut:', dayRes.error?.message || monthRes.error?.message);
-    return;
-  }
-
-  const daySpend = (dayRes.data || []).reduce((sum, r: any) => sum + (Number(r.cost_usd) || 0), 0);
-  const monthSpend = (monthRes.data || []).reduce((sum, r: any) => sum + (Number(r.cost_usd) || 0), 0);
-
-  if (daySpend >= GEMINI_DAILY_BUDGET_USD) {
-    console.error(`[GEMINI_BUDGET] Budget JOURNALIER dépassé : $${daySpend.toFixed(4)} / $${GEMINI_DAILY_BUDGET_USD}`);
-    throw new AIError(`Budget Gemini journalier atteint ($${GEMINI_DAILY_BUDGET_USD}). Génération suspendue jusqu'à demain.`, 'BUDGET_EXCEEDED');
-  }
-  if (monthSpend >= GEMINI_MONTHLY_BUDGET_USD) {
-    console.error(`[GEMINI_BUDGET] Budget MENSUEL dépassé : $${monthSpend.toFixed(4)} / $${GEMINI_MONTHLY_BUDGET_USD}`);
-    throw new AIError(`Budget Gemini mensuel atteint ($${GEMINI_MONTHLY_BUDGET_USD}). Génération suspendue jusqu'au mois prochain.`, 'BUDGET_EXCEEDED');
+  const { assertGeminiBudget } = await import('./aiBudget');
+  const res = await assertGeminiBudget();
+  if (!res.ok) {
+    console.error(`[GEMINI_BUDGET] ${res.message}`);
+    throw new AIError(res.message, 'BUDGET_EXCEEDED');
   }
 }
 

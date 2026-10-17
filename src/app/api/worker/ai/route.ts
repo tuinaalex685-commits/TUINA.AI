@@ -32,7 +32,7 @@ export const dynamic = 'force-dynamic';
 // Le frontend n'affiche QUE ces états réels (progress 0..100). Jamais de 95% figé.
 // ---------------------------------------------------------------------------
 const IN_FLIGHT = ['processing', 'generating', 'saving'];
-const LEASE_MS = 5 * 60 * 1000;         // bail : un job in-flight plus vieux = worker mort → repris.
+const LEASE_MS = 2 * 60 * 1000;         // bail : un job in-flight plus vieux = worker mort → repris (renouvelé toutes les 30 s pendant le travail).
 const MAX_TRANSIENT_ATTEMPTS = 8;       // erreurs transitoires (503/429/réseau) : on persévère (auto-guérison).
 const MAX_PERMANENT_ATTEMPTS = 2;       // erreurs permanentes (PDF illisible, JSON invalide) : abandon rapide.
 
@@ -81,7 +81,7 @@ async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHa
         .eq('hash', lockHash).then(() => {}, () => {});
     }
   };
-  const iv = setInterval(beat, 60_000);
+  const iv = setInterval(beat, 30_000);
   try { return await fn(); } finally { clearInterval(iv); }
 }
 
@@ -1196,6 +1196,20 @@ async function assertJobAccess(job: any): Promise<void> {
 // ---------------------------------------------------------------------------
 // BOUCLE WORKER : lease atomique → dispatch → done/retry → chaînage
 // ---------------------------------------------------------------------------
+/**
+ * Relance le worker pour le job suivant (ou l'étape suivante d'un job découpé). La requête est
+ * ATTENDUE jusqu'à son envoi (1,5 s max) : un fetch non attendu pouvait être perdu quand la
+ * fonction serverless se fige après sa réponse, laissant le job « en cours » jusqu'au cron.
+ */
+async function chainWorker(workerUrl?: string) {
+  if (!workerUrl) return;
+  await fetch(workerUrl, {
+    method: 'POST',
+    headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
+    signal: AbortSignal.timeout(1500),
+  }).then(() => {}, () => {});
+}
+
 export async function runAiWorker(workerUrl?: string): Promise<any> {
   const now = nowIso();
 
@@ -1259,7 +1273,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
         status: 'pending', lease_until: null,
         next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
       });
-      if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
+      await chainWorker(workerUrl);
       return { requeued: leased.id, type: leased.type };
     }
 
@@ -1267,7 +1281,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       status: 'completed', progress: 100, phase: 'Terminé',
       result, error: null, last_error: null, lease_until: null, next_attempt_at: null
     });
-    if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
+    await chainWorker(workerUrl);
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
@@ -1323,7 +1337,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       }
     }
     console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
-    if (workerUrl) fetch(workerUrl, { method: 'POST', headers: { 'x-worker-secret': process.env.CRON_SECRET || '' } }).catch(() => {});
+    await chainWorker(workerUrl);
     return { error: message, jobId: leased.id, retryable: willRetry };
   }
 }

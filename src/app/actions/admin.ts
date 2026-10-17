@@ -180,3 +180,35 @@ export async function purgeUser(email: string) {
     return { error: err.message };
   }
 }
+
+/**
+ * Crédit Gemini (saisi par l'admin après une recharge sur Google AI Studio) et plafond journalier.
+ * Sert au suivi de consommation et aux coupe-circuits (lib/aiBudget.ts).
+ */
+export async function saveGeminiSettings(input: { credit_usd: number; recharge_at: string; daily_usd: number; alert_pct: number }) {
+  try {
+    const admin = await requireAdmin();
+    const credit = Number(input?.credit_usd);
+    const daily = Number(input?.daily_usd);
+    const alert = Number(input?.alert_pct);
+    const recharge = new Date(String(input?.recharge_at || ''));
+    if (!Number.isFinite(credit) || credit <= 0 || credit > 100000) return { error: 'Montant de crédit invalide.' };
+    if (!Number.isFinite(daily) || daily < 0 || daily > 10000) return { error: 'Plafond journalier invalide (0 = aucun plafond).' };
+    if (!Number.isFinite(alert) || alert < 10 || alert > 99) return { error: 'Seuil d’alerte invalide (entre 10 et 99 %).' };
+    if (Number.isNaN(recharge.getTime()) || recharge.getTime() > Date.now() + 60_000) return { error: 'Date de recharge invalide.' };
+
+    const { error } = await supabaseAdmin.from('admin_settings').upsert({
+      key: 'gemini',
+      value: { credit_usd: Math.round(credit * 100) / 100, recharge_at: recharge.toISOString(), daily_usd: Math.round(daily * 100) / 100, alert_pct: Math.round(alert) },
+      updated_at: new Date().toISOString(),
+      updated_by: admin.id,
+    }, { onConflict: 'key' });
+    if (error) return { error: 'Enregistrement impossible (la migration 07 est-elle appliquée ?).' };
+    const { invalidateGeminiSettings } = await import('@/lib/aiBudget');
+    invalidateGeminiSettings();
+    revalidatePath('/admin/dashboard');
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Erreur.' };
+  }
+}

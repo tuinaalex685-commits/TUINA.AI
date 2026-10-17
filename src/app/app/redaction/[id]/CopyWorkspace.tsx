@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useJob } from '@/lib/hooks/useJob';
 import toast from 'react-hot-toast';
 import { ChevronDown, ChevronRight, RotateCcw, Send } from 'lucide-react';
 import { reworkRedaction, submitRedaction, updateRedactionContent } from '@/app/actions/redaction';
@@ -37,7 +38,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const AUTOSAVE_MS = 1500;
 const POLL_MS = 5000;
 
-export default function CopyWorkspace({ copy, versions, remaining }: { copy: Copy; versions: VersionItem[]; remaining: number }) {
+export default function CopyWorkspace({ copy, versions, remaining, jobId = null }: { copy: Copy; versions: VersionItem[]; remaining: number; jobId?: string | null }) {
   const router = useRouter();
   const comp = COMPARTIMENT_BY_TYPE.get(copy.type);
   const editable = copy.statut === 'brouillon' || copy.statut === 'erreur';
@@ -82,12 +83,18 @@ export default function CopyWorkspace({ copy, versions, remaining }: { copy: Cop
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // Correction en cours : la page se met à jour d'elle-même (même après rechargement ou changement d'appareil).
+  // Correction en cours : on suit le job (ce suivi relance aussi le worker s'il s'est arrêté),
+  // et la page se met à jour d'elle-même, même après rechargement ou changement d'appareil.
+  const [watchJob, setWatchJob] = useState<string | null>(copy.statut === 'en_cours' ? jobId : null);
+  const { phase } = useJob(watchJob, {
+    onDone: () => { setWatchJob(null); router.refresh(); },
+    onError: () => { setWatchJob(null); router.refresh(); },
+  });
   useEffect(() => {
-    if (copy.statut !== 'en_cours') return;
+    if (copy.statut !== 'en_cours' || watchJob) return;
     const id = setInterval(() => router.refresh(), POLL_MS);
     return () => clearInterval(id);
-  }, [copy.statut, router]);
+  }, [copy.statut, router, watchJob]);
 
   const submit = async () => {
     if (text.trim().length < LIMITS.copieMinCorrection) {
@@ -102,6 +109,7 @@ export default function CopyWorkspace({ copy, versions, remaining }: { copy: Cop
     setSubmitting(false);
     if ('error' in res && res.error) { toast.error(res.error); return; }
     toast.success('Copie rendue. La correction arrive.');
+    if ('jobId' in res && res.jobId) setWatchJob(res.jobId);
     router.refresh();
   };
 
@@ -132,7 +140,7 @@ export default function CopyWorkspace({ copy, versions, remaining }: { copy: Cop
       {copy.statut === 'en_cours' && (
         <p className={styles.banner} role="status">
           <span className={styles.spinner} aria-hidden />
-          Ta copie est en correction. Tu peux fermer cette page : la correction t’attendra ici.
+          {phase ? `${phase} ` : 'Ta copie est en correction. '}Tu peux fermer cette page : la correction t’attendra ici.
         </p>
       )}
       {copy.statut === 'erreur' && (

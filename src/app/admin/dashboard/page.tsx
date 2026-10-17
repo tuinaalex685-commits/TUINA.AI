@@ -2,7 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCodeCurrentlyActive } from '@/lib/plan';
-import { GEMINI_MONTHLY_BUDGET_USD } from '@/lib/gemini';
+import { creditStatus } from '@/lib/aiBudget';
+import { GeminiCreditPanel } from '@/components/admin/GeminiCreditPanel';
 import { NIVEAUX, SOURCES } from '@/lib/profileShared';
 import { formatDate } from '@/lib/format';
 import { DailyBars, HBars, Kpi } from '@/components/admin/charts';
@@ -20,6 +21,12 @@ const MODULES: Record<string, string> = {
   redaction: 'Rédaction',
   etude_evaluate: 'Corrections de cas pratique',
   examen_pool: 'Banques d’examen',
+  etude3_segment: 'Études guidées : lecture du cours',
+  etude3_consolidation: 'Études guidées : vue d’ensemble',
+  etude3_synthese: 'Études guidées : synthèse',
+  etude3_sequence: 'Études guidées : séquences',
+  etude3_correction: 'Études guidées : corrections',
+  redaction_sujets: 'Rédaction : sujets proposés',
 };
 
 const usd = (v: number) => `${v.toFixed(2).replace('.', ',')} $`;
@@ -44,6 +51,7 @@ export default async function AdminDashboard() {
     { data: metrics },
     { data: profiles },
     { data: catalog },
+    credit,
   ] = await Promise.all([
     supabaseAdmin.from('access_codes').select('status, email, expires_at'),
     supabaseAdmin.from('user_roles').select('user_id', { count: 'exact', head: true }),
@@ -51,6 +59,7 @@ export default async function AdminDashboard() {
     supabaseAdmin.from('saas_metrics').select('feature, cost_usd, created_at, document_id, user_id').gte('created_at', start30),
     supabaseAdmin.from('profiles').select('niveau, source_decouverte'),
     supabaseAdmin.from('catalog_courses').select('niveau, actif'),
+    creditStatus(),
   ]);
 
   // --- Abonnements ---------------------------------------------------------
@@ -86,7 +95,6 @@ export default async function AdminDashboard() {
     const d = new Date(nowMs - (29 - i) * 86400000);
     return { label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`, value: dayCost[d.toISOString().slice(0, 10)] || 0 };
   });
-  const budgetPct = GEMINI_MONTHLY_BUDGET_USD > 0 ? Math.min(100, (monthCost / GEMINI_MONTHLY_BUDGET_USD) * 100) : 0;
 
   const topDocIds = Object.entries(docCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const topUserIds = Object.entries(userCost).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -125,10 +133,10 @@ export default async function AdminDashboard() {
         />
         <Kpi label="Étudiants actifs (IA, 30 j)" value={int(active.size)} sub="ayant utilisé au moins une fonction IA" />
         <Kpi
-          label="Coût IA du mois"
-          value={usd(monthCost)}
-          sub={`${Math.round(budgetPct)} % du budget (${usd(GEMINI_MONTHLY_BUDGET_USD)})`}
-          tone={budgetPct >= 80 ? 'warn' : undefined}
+          label="Crédit Gemini restant"
+          value={credit.restant !== null ? usd(credit.restant) : '—'}
+          sub={credit.restant !== null ? `${Math.round(credit.pct ?? 0)} % consommé · estimation` : 'Saisis ton crédit ci-dessous'}
+          tone={credit.pct !== null && credit.pct >= credit.settings.alert_pct ? 'warn' : undefined}
         />
       </section>
 
@@ -155,21 +163,26 @@ export default async function AdminDashboard() {
           </p>
         </section>
 
+        <GeminiCreditPanel
+          v={{
+            credit: credit.settings.credit_usd, rechargeAt: credit.settings.recharge_at, dailyUsd: credit.settings.daily_usd,
+            alertPct: credit.settings.alert_pct, consomme: credit.consomme, restant: credit.restant, pct: credit.pct,
+            parJour7: credit.parJour7, joursRestants: credit.joursRestants, aujourdHui: credit.aujourdHui,
+          }}
+        />
+      </div>
+
+      <div className={styles.grid2}>
         <section className={styles.panel}>
           <div className={styles.panelHead}>
-            <h2>Budget IA du mois</h2>
-            <span className="tabular">{usd(monthCost)} / {usd(GEMINI_MONTHLY_BUDGET_USD)}</span>
+            <h2>Coût IA du mois par module</h2>
+            <span className="tabular">{usd(monthCost)}</span>
           </div>
-          <div className={`${styles.budget} ${budgetPct >= 80 ? styles.budgetHigh : ''}`} role="progressbar" aria-valuenow={Math.round(budgetPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Budget IA consommé">
-            <span style={{ width: `${budgetPct}%` }} />
-          </div>
-          <div style={{ marginTop: 'var(--s-5)' }}>
-            <HBars
-              rows={Object.entries(moduleCost).map(([k, v]) => ({ label: MODULES[k] || k, value: v })).sort((a, b) => b.value - a.value)}
-              format={usd}
-              empty="Aucune dépense IA ce mois-ci."
-            />
-          </div>
+          <HBars
+            rows={Object.entries(moduleCost).map(([k, v]) => ({ label: MODULES[k] || k, value: v })).sort((a, b) => b.value - a.value)}
+            format={usd}
+            empty="Aucune dépense IA ce mois-ci."
+          />
         </section>
       </div>
 

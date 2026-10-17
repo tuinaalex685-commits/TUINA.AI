@@ -416,3 +416,19 @@
 .budgetHigh span {
   background: var(--warning);
 }
+
+/* ---------- Crédit Gemini ------------------------------------------------- */
+.creditBig { margin: 0 0 var(--s-3); font-family: var(--font-serif); font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 600; color: var(--ink); }
+.creditBig .muted { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; }
+.creditFacts { margin: var(--s-4) 0 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--ink-2); }
+.creditFacts strong { color: var(--ink); }
+.alertText { margin: var(--s-3) 0 0; padding: var(--s-3) var(--s-4); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--ink); font-size: var(--text-sm); }
+.creditForm { display: grid; gap: var(--s-3); margin-top: var(--s-4); }
+@media (min-width: 640px) { .creditForm { grid-template-columns: 1fr 1fr; } }
+.creditForm label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.creditForm input { min-height: 44px; padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--rule-strong); font: inherit; font-size: 16px; background: var(--paper); color: var(--ink); }
+.creditForm input:focus { outline: 2px solid var(--action); outline-offset: 1px; }
+.creditForm .muted { grid-column: 1 / -1; }
+.creditActions { grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: var(--s-4); }
+.creditSave { min-height: 44px; padding: 0 var(--s-5); border-radius: var(--radius-md); background: var(--sjp-blue); color: #FFFFFF; font-weight: 700; font-size: var(--text-sm); }
+.creditSave:disabled { opacity: 0.6; }
