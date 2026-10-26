@@ -7,6 +7,21 @@ export const maxDuration = 300;
 
 const IN_FLIGHT = new Set(['processing', 'generating', 'saving']);
 
+// Une relance du worker par job toutes les 15 s au plus (par instance) : quand la file IA est
+// pleine, des centaines d'étudiants qui attendent ne déclenchent pas des centaines de workers
+// par seconde, qui n'auraient de toute façon aucune place.
+const RELANCE_MS = 15_000;
+const derniereRelance = new Map<string, number>();
+function relanceAutorisee(jobId: string, now: number): boolean {
+  const last = derniereRelance.get(jobId);
+  if (last && now - last < RELANCE_MS) return false;
+  derniereRelance.set(jobId, now);
+  if (derniereRelance.size > 5000) {
+    for (const [k, t] of derniereRelance) if (now - t > RELANCE_MS) derniereRelance.delete(k);
+  }
+  return true;
+}
+
 // Observation d'un job par l'utilisateur (polling). RLS : ne renvoie que les jobs de l'appelant.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const now = Date.now();
   const due = (job.status === 'pending' || job.status === 'queued') && (!job.next_attempt_at || Date.parse(job.next_attempt_at) <= now);
   const abandoned = IN_FLIGHT.has(job.status) && !!job.lease_until && Date.parse(job.lease_until) < now;
-  if (due || abandoned) {
+  if ((due || abandoned) && relanceAutorisee(id, now)) {
     after(async () => {
       const m = await import('@/app/api/worker/ai/route');
       await m.runAiWorker().catch(() => {});

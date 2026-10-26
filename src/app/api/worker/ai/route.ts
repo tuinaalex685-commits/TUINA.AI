@@ -1249,6 +1249,13 @@ async function msUntilNextDue(): Promise<number | null> {
   return Math.max(0, Date.parse(at) - Date.now());
 }
 
+async function fileIaPleine(): Promise<boolean> {
+  if (MAX_INFLIGHT <= 0 || claimV2Missing) return false;
+  const { count } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+    .in('status', IN_FLIGHT).gte('lease_until', nowIso());
+  return (count || 0) >= MAX_INFLIGHT;
+}
+
 export async function runAiWorker(): Promise<any> {
   let now = nowIso();
 
@@ -1261,7 +1268,9 @@ export async function runAiWorker(): Promise<any> {
   if (!claim.error) {
     leased = Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null);
     if (!leased) {
-      // File pleine : les workers en cours relaieront en terminant. Sinon, job dû très bientôt ?
+      // File pleine : les workers en cours relaieront en terminant ; dormir ne servirait à rien.
+      if (await fileIaPleine()) return { message: 'File IA pleine' };
+      // Sinon, un job devient-il dû très bientôt ?
       const wait = await msUntilNextDue().catch(() => null);
       if (wait === null || wait > WAIT_SOON_MS) return { message: 'Aucun job en attente' };
       await new Promise((r) => setTimeout(r, wait + 100));
@@ -1270,6 +1279,11 @@ export async function runAiWorker(): Promise<any> {
       leased = !claim.error ? (Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null)) : null;
       if (!leased) return { message: 'Aucun job en attente' };
     }
+  } else if (!claimV2Missing && MAX_INFLIGHT > 0) {
+    // Erreur passagère de la réclamation plafonnée (base lente) : on NE se rabat PAS sur la
+    // réclamation sans plafond, qui lancerait tout le monde chez Gemini au pire moment.
+    console.warn('[AI Worker] réclamation impossible, nouvel essai au prochain relais:', claim.error.message);
+    return { message: 'Réclamation impossible pour le moment' };
   } else {
     // Fallback : pioche aléatoire parmi les 25 plus anciens (répartit la contention) + lease conditionnel.
     const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>

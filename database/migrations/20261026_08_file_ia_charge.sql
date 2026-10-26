@@ -37,7 +37,7 @@ begin
    where id = (
      select id from public.ai_jobs
       where ( status in ('pending','queued') and (next_attempt_at is null or next_attempt_at <= now_ts) )
-         or ( status in ('processing','generating','saving') and lease_until < now_ts )
+         or ( status in ('processing','generating','saving') and (lease_until < now_ts or lease_until is null) )
       order by coalesce(next_attempt_at, created_at) asc
       for update skip locked
       limit 1 )

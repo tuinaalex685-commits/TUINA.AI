@@ -58,7 +58,8 @@ export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/jobs/${jobId}`, { cache: 'no-store' });
+        // Délai maximal : sur un réseau mobile instable, une requête suspendue figeait le suivi.
+        const res = await fetch(`/api/jobs/${jobId}`, { cache: 'no-store', signal: AbortSignal.timeout(15_000) });
         if (!res.ok) throw new Error('poll failed');
         const job = await res.json();
         if (stopped) return;
