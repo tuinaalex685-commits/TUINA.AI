@@ -1,7 +1,7 @@
 // Serveur uniquement (next/headers, service role) : ne jamais importer depuis un composant client.
 import crypto from 'crypto';
-import { headers } from 'next/headers';
 import { after } from 'next/server';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 /**
@@ -42,15 +42,8 @@ export async function enqueueDedup(params: {
 /** Réveille le worker après la réponse (le cron reste le filet de sécurité). */
 export async function triggerWorker() {
   try {
-    const h = await headers();
-    const proto = h.get('x-forwarded-proto') || 'https';
-    const host = h.get('host');
-    if (!host) return;
-    after(() => fetch(`${proto}://${host}/api/worker/ai`, {
-      method: 'POST',
-      headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-      signal: AbortSignal.timeout(3000),
-    }).then(() => {}, () => {}));
+    // Adresse configurée, jamais l'en-tête Host du client (l'appel porte CRON_SECRET).
+    after(() => pingWorker());
   } catch { /* hors requête : ignoré */ }
 }
 

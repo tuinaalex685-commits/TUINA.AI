@@ -9,6 +9,7 @@ import {
 import { resolveDocumentAccess } from '@/lib/access';
 import { downloadDocumentPdf } from '@/lib/storage';
 import { verifyRefund } from '@/lib/quotaRefund';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import { isMissingColumn } from '@/lib/plan';
 import { COMPARTIMENT_BY_TYPE, LIMITS, isRapportV2, type RapportV2 } from '@/lib/redaction/compartiments';
 import { processEtudeAnalyse, processEtudeSequence, type EngineDeps } from '@/lib/etude3/engine';
@@ -98,7 +99,10 @@ async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHa
 // `mock: true` venu d'un client remplissait sinon les caches partagés avec des données factices.
 // Activation explicite pour les tests de charge/locaux : AI_MOCK_ENABLED=1 hors production.
 const MOCK_ALLOWED = process.env.AI_MOCK_ENABLED === '1' && process.env.VERCEL_ENV !== 'production';
-const isMockJob = (job: any) => MOCK_ALLOWED && job?.payload?.mock === true;
+// AI_MOCK_ALL=1 (environnement de test de charge uniquement) : TOUS les jobs sont simulés, pour
+// tester les vrais parcours (boutons de l'interface) sans aucun appel Gemini. Jamais en production.
+const MOCK_ALL = MOCK_ALLOWED && process.env.AI_MOCK_ALL === '1';
+const isMockJob = (job: any) => MOCK_ALLOWED && (MOCK_ALL || job?.payload?.mock === true);
 
 // Journalise une "génération" simulée à coût 0 → les tests comptent les générations (dédup) sans dépenser.
 async function trackMockGeneration(feature: string, userId: string | undefined, documentId: string | undefined) {
@@ -112,7 +116,8 @@ async function trackMockGeneration(feature: string, userId: string | undefined, 
 // par le heartbeat comme un vrai appel long → exerce réellement lease + verrou.
 async function mockGenerate(job: any, feature: string, documentId: string | undefined, builder: () => any): Promise<any> {
   const p = job.payload || {};
-  const delay = Math.max(0, Number(p.mockDelayMs ?? 800));
+  // AI_MOCK_DELAY_MS : durée simulée d'un appel (réaliste : 8 000 à 30 000 ms pour Gemini 2.5 Flash).
+  const delay = Math.max(0, Number(p.mockDelayMs ?? process.env.AI_MOCK_DELAY_MS ?? 800));
   await withLeaseHeartbeat(job.id, async () => { if (delay) await sleep(delay); });
   const failTimes = Number(p.mockFailTimes || 0);
   if (failTimes > 0 && (job.attempts || 0) <= failTimes) {
@@ -1201,31 +1206,70 @@ async function assertJobAccess(job: any): Promise<void> {
  * ATTENDUE jusqu'à son envoi (1,5 s max) : un fetch non attendu pouvait être perdu quand la
  * fonction serverless se fige après sa réponse, laissant le job « en cours » jusqu'au cron.
  */
-async function chainWorker(workerUrl?: string) {
-  // Lancé depuis la route de suivi, le worker ne connaît pas son URL : on utilise le domaine de
-  // production fourni par Vercel. Sans relais, un job découpé en étapes s'arrêterait dès que
-  // l'étudiant ferme la page.
-  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  const url = workerUrl || (prod ? `https://${prod}/api/worker/ai` : undefined);
-  if (!url) return;
-  await fetch(url, {
-    method: 'POST',
-    headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-    signal: AbortSignal.timeout(1500),
-  }).then(() => {}, () => {});
+async function chainWorker() {
+  // Adresse configurée (domaine de production, ou URL du déploiement en préversion) : jamais
+  // l'en-tête Host, qui vient du client alors que l'appel porte CRON_SECRET.
+  await pingWorker('/api/worker/ai', 1500);
 }
 
-export async function runAiWorker(workerUrl?: string): Promise<any> {
-  const now = nowIso();
+/**
+ * Plafond de jobs IA traités en même temps (tous types). Au-delà, le surplus attend dans la file
+ * au lieu de partir en rafale chez Gemini (429 en série, tentatives épuisées). À régler selon le
+ * quota du compte Google (requêtes et tokens par minute) : GEMINI_MAX_INFLIGHT, 0 = sans plafond.
+ */
+const MAX_INFLIGHT = Math.max(0, Number(process.env.GEMINI_MAX_INFLIGHT ?? '12') || 0);
+/** Attente maximale d'un job dû très bientôt (étape suivante, attente d'un autre étudiant, reprise). */
+const WAIT_SOON_MS = 20_000;
 
-  // 1. RÉCLAMATION ATOMIQUE d'un job via la fonction Postgres claim_ai_job (FOR UPDATE SKIP LOCKED) :
+let claimV2Missing = false;
+async function claimJob(now: string) {
+  if (!claimV2Missing) {
+    const r = await supabaseAdmin.rpc('claim_ai_job_v2', { now_ts: now, lease_ts: leaseIso(), p_max_inflight: MAX_INFLIGHT });
+    // Seule l'ABSENCE de la fonction (migration 08 non appliquée) fait basculer sur l'ancienne
+    // réclamation, sans plafond ; une erreur passagère est renvoyée telle quelle.
+    if (!r.error || !['PGRST202', '42883'].includes(String(r.error.code))) return r;
+    claimV2Missing = true;
+    console.warn('[AI Worker] claim_ai_job_v2 absente, repli sur claim_ai_job:', r.error.message);
+  }
+  return supabaseAdmin.rpc('claim_ai_job', { now_ts: now, lease_ts: leaseIso() });
+}
+
+/**
+ * Rien à prendre maintenant : un job en attente devient-il dû dans les prochaines secondes ?
+ * Sans cette attente, le relais s'éteignait quand le job suivant n'était dû que 4 à 20 s plus
+ * tard, et ce job ne repartait qu'au retour de l'étudiant sur sa page (ou au cron quotidien).
+ */
+async function msUntilNextDue(): Promise<number | null> {
+  const { data } = await supabaseAdmin
+    .from('ai_jobs').select('next_attempt_at')
+    .in('status', ['pending', 'queued']).not('next_attempt_at', 'is', null)
+    .order('next_attempt_at', { ascending: true }).limit(1);
+  const at = data?.[0]?.next_attempt_at;
+  if (!at) return null;
+  return Math.max(0, Date.parse(at) - Date.now());
+}
+
+export async function runAiWorker(): Promise<any> {
+  let now = nowIso();
+
+  // 1. RÉCLAMATION ATOMIQUE d'un job via la fonction Postgres (FOR UPDATE SKIP LOCKED) :
   //    2 workers ne réclament JAMAIS le même job → ZÉRO double-lease (donc zéro double appel Gemini).
-  //    Fallback (si la fonction n'est pas encore déployée) : ancien "candidat aléatoire + lease conditionnel".
+  //    claim_ai_job_v2 ajoute le plafond de jobs en cours et l'ordre équitable (migration 08).
+  //    Fallback (si aucune fonction n'est déployée) : ancien "candidat aléatoire + lease conditionnel".
   let leased: any = null;
-  const claim = await supabaseAdmin.rpc('claim_ai_job', { now_ts: now, lease_ts: leaseIso() });
+  let claim = await claimJob(now);
   if (!claim.error) {
     leased = Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null);
-    if (!leased) return { message: 'Aucun job en attente' };
+    if (!leased) {
+      // File pleine : les workers en cours relaieront en terminant. Sinon, job dû très bientôt ?
+      const wait = await msUntilNextDue().catch(() => null);
+      if (wait === null || wait > WAIT_SOON_MS) return { message: 'Aucun job en attente' };
+      await new Promise((r) => setTimeout(r, wait + 100));
+      now = nowIso();
+      claim = await claimJob(now);
+      leased = !claim.error ? (Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null)) : null;
+      if (!leased) return { message: 'Aucun job en attente' };
+    }
   } else {
     // Fallback : pioche aléatoire parmi les 25 plus anciens (répartit la contention) + lease conditionnel.
     const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>
@@ -1281,7 +1325,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
         status: 'pending', lease_until: null,
         next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
       });
-      await chainWorker(workerUrl);
+      await chainWorker();
       return { requeued: leased.id, type: leased.type };
     }
 
@@ -1289,7 +1333,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       status: 'completed', progress: 100, phase: 'Terminé',
       result, error: null, last_error: null, lease_until: null, next_attempt_at: null
     });
-    await chainWorker(workerUrl);
+    await chainWorker();
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
@@ -1303,7 +1347,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     if (willRetry) {
       // Backoff : transitoire = court et croissant (auto-guérison, l'UI reste en 'pending' donc jamais
       // d'écran d'erreur ni de blocage) ; permanent = bref (l'erreur ne s'auto-guérira pas).
-      const delayMs = transient ? Math.min(90000, 15000 * attempts) : 20000 * attempts;
+      // Aléa ±30 % : des centaines de jobs refusés ensemble (429) ne reviennent pas tous à la même seconde.
+      const base = transient ? Math.min(90000, 15000 * attempts) : 20000 * attempts;
+      const delayMs = Math.round(base * (0.7 + Math.random() * 0.6));
       await patchJob(leased.id, {
         status: 'pending', phase: transient ? 'Reprise imminente…' : 'Nouvelle tentative…',
         last_error: message, lease_until: null,
@@ -1345,15 +1391,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       }
     }
     console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
-    await chainWorker(workerUrl);
+    await chainWorker();
     return { error: message, jobId: leased.id, retryable: willRetry };
   }
-}
-
-function workerUrlFrom(req: NextRequest) {
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('host') || 'localhost:3000';
-  return `${protocol}://${host}/api/worker/ai`;
 }
 
 // SÉCURITÉ : le worker ne doit pas être déclenchable par n'importe qui (anti abus/DoS). On exige le secret
@@ -1372,13 +1412,13 @@ const UNAUTHORIZED = NextResponse.json({ error: 'unauthorized' }, { status: 401 
 // Déclenchement immédiat (best-effort, appelé côté serveur après enqueue avec le secret).
 export async function POST(req: NextRequest) {
   if (!workerAuthorized(req)) return UNAUTHORIZED;
-  const result = await runAiWorker(workerUrlFrom(req));
+  const result = await runAiWorker();
   return NextResponse.json(result ?? { message: 'ok' });
 }
 
 // Déclenché par Vercel Cron (toutes les minutes) : traitement serveur GARANTI, jamais lié à un client.
 export async function GET(req: NextRequest) {
   if (!workerAuthorized(req)) return UNAUTHORIZED;
-  const result = await runAiWorker(workerUrlFrom(req));
+  const result = await runAiWorker();
   return NextResponse.json(result ?? { message: 'ok' });
 }

@@ -6,8 +6,8 @@ import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
 import { signRefund } from '@/lib/quotaRefund';
-import { headers } from 'next/headers';
 import { after } from 'next/server';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import crypto from 'crypto';
 import { LIMITS } from '@/lib/redaction/compartiments';
 
@@ -209,16 +209,7 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   // réponse (un fetch non attendu pouvait être coupé avec la fonction ; le cron n'étant plus que
   // quotidien sur l'offre Hobby, le job aurait attendu). On n'attend que l'envoi, pas le traitement.
   try {
-    const h = await headers();
-    const proto = h.get('x-forwarded-proto') || 'https';
-    const host = h.get('host');
-    if (host) {
-      after(() => fetch(`${proto}://${host}/api/worker/ai`, {
-        method: 'POST',
-        headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-        signal: AbortSignal.timeout(3000),
-      }).then(() => {}, () => {}));
-    }
+    after(() => pingWorker());
   } catch { /* non bloquant */ }
 
   return { success: true, jobId: job.id };

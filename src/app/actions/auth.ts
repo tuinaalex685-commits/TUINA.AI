@@ -1,7 +1,7 @@
 "use server";
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAuthClient } from '@/lib/supabase/server';
 import { exactEmailPattern, normalizeEmail } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
@@ -23,16 +23,29 @@ import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
  */
 
 const GENERIC_LOGIN_ERROR = "Email ou mot de passe incorrect.";
+const BUSY_ERROR = "Beaucoup d'étudiants se connectent en ce moment. Réessaie dans une minute.";
+
+/** Refus pour cause d'affluence (limite Supabase), à ne pas confondre avec un mauvais mot de passe. */
+function isRateLimited(error: { status?: number; message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.status === 429 || error.code === 'over_request_rate_limit' || error.code === 'over_email_send_rate_limit'
+    || /rate limit|too many requests/i.test(error.message || '');
+}
 
 export async function login(email: string, password: string) {
   try {
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) return { error: GENERIC_LOGIN_ERROR };
 
-    const supabase = await createClient();
+    // Client de connexion : transmet l'IP de l'étudiant (limite Supabase par IP, pas par serveur).
+    const supabase = await createAuthClient();
     const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
 
     if (error || !data.user) {
+      if (isRateLimited(error)) {
+        console.warn('[auth] login refusé par la limite Supabase:', error?.message);
+        return { error: BUSY_ERROR };
+      }
       if (error?.message?.toLowerCase().includes('email not confirmed')) {
         return { error: "Confirme d'abord ton adresse email : un lien t'a été envoyé à l'inscription." };
       }
@@ -75,10 +88,14 @@ export async function signUpFree(
     if (!cleanEmail || !password) return { error: "Email et mot de passe requis." };
     if (password.length < 8) return { error: "Le mot de passe doit contenir au moins 8 caractères." };
 
-    const supabase = await createClient();
+    const supabase = await createAuthClient();
     const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
 
     if (error) {
+      if (isRateLimited(error)) {
+        console.warn('[auth] inscription refusée par la limite Supabase:', error.code || error.message);
+        return { error: "Beaucoup d'inscriptions en ce moment. Réessaie dans quelques minutes : rien n'a été perdu." };
+      }
       const msg = error.message.toLowerCase();
       if (msg.includes('already registered') || msg.includes('already exists')) {
         return { error: "Un compte existe déjà avec cet email. Connecte-toi plutôt." };

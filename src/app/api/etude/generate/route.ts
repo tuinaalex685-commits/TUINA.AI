@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { isPremium } from '@/lib/plan';
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
       .in('status', ACTIVE)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (existing && !force) {
-      triggerWorker(req);
+      triggerWorker();
       return NextResponse.json({ success: true, status: existing.status, jobId: existing.id, coursId: cours?.id ?? null });
     }
 
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
       .select('id').single();
     if (error || !job) return NextResponse.json({ error: error?.message || "Création du job impossible" }, { status: 500 });
 
-    triggerWorker(req);
+    triggerWorker();
     return NextResponse.json({ success: true, status: 'pending', jobId: job.id, coursId: cours?.id ?? null });
 
   } catch (error: any) {
@@ -92,15 +93,7 @@ export async function POST(req: NextRequest) {
 }
 
 // Réveil immédiat du worker unifié (best-effort). Le cron /api/worker/ai garantit le traitement sinon.
-function triggerWorker(req: NextRequest) {
-  try {
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    const host = req.headers.get('host');
-    // after() : l'appel part réellement après la réponse (un fetch non attendu pouvait être coupé).
-    if (host) after(() => fetch(`${proto}://${host}/api/worker/ai`, {
-      method: 'POST',
-      headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-      signal: AbortSignal.timeout(3000),
-    }).then(() => {}, () => {}));
-  } catch { /* non bloquant */ }
+function triggerWorker() {
+  // after() : l'appel part réellement après la réponse. Adresse configurée, jamais l'en-tête Host.
+  try { after(() => pingWorker()); } catch { /* non bloquant */ }
 }

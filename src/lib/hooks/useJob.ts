@@ -36,7 +36,25 @@ export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
 
     let stopped = false;
     let timer: any;
+    const startedAt = Date.now();
     setStatus('pending');
+
+    // Rythme adaptatif : réactif au début (les traitements courts finissent vite), plus espacé
+    // ensuite (une analyse longue n'a pas besoin d'une lecture toutes les 2,5 s), et en pause
+    // quand l'onglet est caché. À 1 000 étudiants, c'est la principale source d'appels serveur.
+    const nextDelay = () => {
+      const age = Date.now() - startedAt;
+      return age < 30_000 ? intervalMs : age < 120_000 ? Math.max(intervalMs, 5000) : Math.max(intervalMs, 10_000);
+    };
+    const schedule = () => {
+      if (stopped) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') { timer = null; return; }
+      timer = setTimeout(poll, nextDelay());
+    };
+    const onVisible = () => {
+      if (!stopped && document.visibilityState === 'visible' && timer === null) { timer = setTimeout(poll, 200); }
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     const poll = async () => {
       try {
@@ -50,11 +68,11 @@ export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
         if (isDone(job.status)) { stopped = true; setProgress(100); cbRef.current.onDone?.(job.result); return; }
         if (isFailed(job.status)) { stopped = true; cbRef.current.onError?.(job.error || 'Échec de la génération'); return; }
       } catch { /* réseau : on retente au prochain tick (jamais d'échec définitif côté client) */ }
-      if (!stopped) timer = setTimeout(poll, intervalMs);
+      schedule();
     };
 
     timer = setTimeout(poll, 600);
-    return () => { stopped = true; clearTimeout(timer); };
+    return () => { stopped = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [jobId, intervalMs]);
 
   return { status, progress, phase, isRunning: status ? RUNNING.has(status) : false };

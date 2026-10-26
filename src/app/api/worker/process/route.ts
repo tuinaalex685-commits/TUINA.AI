@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { appBaseUrl } from '@/lib/jobs/workerUrl';
 export const maxDuration = 300; // Vercel Pro (5 minutes max)
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 // @ts-ignore
@@ -461,9 +462,9 @@ function workerAuthorized(req: NextRequest): boolean {
 
 export async function POST(req: NextRequest) {
   if (!workerAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const host = req.headers.get('host') || 'localhost:3000';
-  const workerUrl = `${protocol}://${host}/api/worker/process`;
+  // Adresse configurée, jamais l'en-tête Host (le relais porte CRON_SECRET).
+  const base = appBaseUrl();
+  const workerUrl = base ? `${base}/api/worker/process` : undefined;
   const result = await runWorker(workerUrl);
   return NextResponse.json(result ?? { message: "Worker terminé" });
 }
@@ -472,9 +473,9 @@ export async function POST(req: NextRequest) {
 // client (donc jamais tué par un rechargement de page). C'est le filet de sécurité qui vide la file.
 export async function GET(req: NextRequest) {
   if (!workerAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('host') || 'localhost:3000';
-  const workerUrl = `${protocol}://${host}/api/worker/process`;
+  // Adresse configurée, jamais l'en-tête Host (le relais porte CRON_SECRET).
+  const base = appBaseUrl();
+  const workerUrl = base ? `${base}/api/worker/process` : undefined;
   const result = await runWorker(workerUrl);
   return NextResponse.json(result ?? { message: "Worker terminé" });
 }
