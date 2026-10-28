@@ -2,7 +2,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { exactEmailPattern, normalizeEmail } from '@/lib/email';
+import { exactEmailPattern, normalizeEmail, hasWildcardChars } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
 import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
@@ -74,6 +74,7 @@ export async function signUpFree(
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) return { error: "Email et mot de passe requis." };
     if (password.length < 8) return { error: "Le mot de passe doit contenir au moins 8 caractères." };
+    if (hasWildcardChars(cleanEmail)) return { error: "Cette adresse email contient des caractères non acceptés (* ou %)." };
 
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });

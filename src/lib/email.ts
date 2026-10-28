@@ -10,6 +10,16 @@ export function normalizeEmail(email: string | null | undefined): string {
   return (email || '').trim().toLowerCase();
 }
 
+/**
+ * `*` aussi : PostgREST le traduit en `%` dans les filtres like/ilike. Non échappé, une adresse
+ * « *@gmail.com » (valide selon la norme) correspondait à TOUS les comptes Gmail : Premium
+ * d'un autre étudiant, ou purge admin de leurs codes. Échappé, il devient un `%` littéral.
+ */
 export function exactEmailPattern(email: string | null | undefined): string {
-  return normalizeEmail(email).replace(/[\\%_]/g, (c) => `\\${c}`);
+  return normalizeEmail(email).replace(/[\\%_*]/g, (c) => `\\${c}`);
+}
+
+/** Caractères d'adresse acceptés par la norme mais interdits ici (jokers de recherche, aucun usage réel). */
+export function hasWildcardChars(email: string | null | undefined): boolean {
+  return /[*%]/.test(email || '');
 }
