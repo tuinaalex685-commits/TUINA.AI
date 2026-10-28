@@ -55,5 +55,5 @@ _smoke*.log
 _loadtest*.log
 
 # Tests de charge : données de test générées (mots de passe de test, identifiants de build)
-tests/charge/comptes.json
-tests/charge/actions.json
+tests/load/comptes.json
+tests/load/actions.json

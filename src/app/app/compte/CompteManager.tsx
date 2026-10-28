@@ -119,6 +119,9 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
               <Button type="submit" disabled={codeLoading || !code.trim()}>

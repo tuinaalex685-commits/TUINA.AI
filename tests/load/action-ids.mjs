@@ -1,8 +1,8 @@
 // Relève les identifiants des actions serveur (Next.js les change à chaque build) → actions.json.
 //
-//   node tests/charge/action-ids.mjs                (lit le JavaScript du déploiement BASE_URL, connecté avec
+//   node tests/load/action-ids.mjs                (lit le JavaScript du déploiement BASE_URL, connecté avec
 //                                                    le premier compte de comptes.json)
-//   node tests/charge/action-ids.mjs --local        (lit .next/server/server-reference-manifest.json d'une build locale)
+//   node tests/load/action-ids.mjs --local        (lit .next/server/server-reference-manifest.json d'une build locale)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const VOULUES = ['signUpFree', 'login', 'activateAccessCode', 'startEtude', 'markSyntheseVue', 'prepareSequence',

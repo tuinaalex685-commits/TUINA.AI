@@ -5,6 +5,7 @@ import { createClient, createAuthClient } from '@/lib/supabase/server';
 import { exactEmailPattern, normalizeEmail } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
+import { normalizeAccessCode, isPlausibleAccessCode } from '@/lib/accessCode';
 import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
 
 /**
@@ -160,8 +161,8 @@ const CODE_ATTEMPTS_PER_DAY = 10;
  * Le code doit être actif et soit vierge, soit déjà rattaché à l'email de ce compte.
  */
 export async function activateAccessCode(rawCode: string) {
-  const code = (rawCode || '').trim();
-  if (!code || code.length > 100) return { error: "Saisis ton code d'accès." };
+  if (!isPlausibleAccessCode(rawCode)) return { error: "Saisis ton code d'accès." };
+  const code = normalizeAccessCode(rawCode);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -181,18 +182,34 @@ export async function activateAccessCode(rawCode: string) {
     return { error: "Trop de tentatives aujourd'hui. Réessaie demain ou contacte l'administrateur." };
   }
 
-  const { data: accessCode } = await supabaseAdmin
-    .from('access_codes').select('*').eq('code', code).maybeSingle();
-
   const invalid = { error: "Ce code n'est pas valide. Vérifie-le ou contacte l'administrateur." };
+  const expired = { error: "Ton abonnement Premium a expiré. Contacte l'administrateur pour le renouveler." };
+
+  // Activation ATOMIQUE en base (migration 09) : verrous, renouvellement après expiration,
+  // casse et espaces ignorés, archive de l'ancien code. Une seule transaction.
+  const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc('activate_access_code', { p_email: email, p_code: code });
+  if (!rpcErr) {
+    const status = (rpc as { status?: string } | null)?.status;
+    if (status === 'ok') { revalidatePath('/app', 'layout'); return { success: true }; }
+    if (status === 'already_active') { revalidatePath('/app', 'layout'); return { success: true, alreadyActive: true }; }
+    if (status === 'expired') return expired;
+    return invalid;
+  }
+  if (!['PGRST202', '42883'].includes(String(rpcErr.code))) {
+    console.error('[auth] activation du code (rpc):', rpcErr.message);
+    return { error: "Activation impossible pour le moment. Réessaie dans un instant." };
+  }
+
+  // Repli tant que la migration 09 n'est pas appliquée : ancien chemin, casse ignorée.
+  const { data: candidates } = await supabaseAdmin
+    .from('access_codes').select('*').ilike('code', code.replace(/[\\%_]/g, (c) => '\\' + c)).limit(2);
+  const accessCode = candidates?.length === 1 ? candidates[0] : null;
   if (!accessCode || accessCode.status !== 'active') return invalid;
 
   if (accessCode.email) {
     // Déjà rattaché : valable uniquement pour son titulaire.
     if (normalizeEmail(accessCode.email) !== email) return invalid;
-    if (!isCodeCurrentlyActive(accessCode)) {
-      return { error: "Ton abonnement Premium a expiré. Contacte l'administrateur pour le renouveler." };
-    }
+    if (!isCodeCurrentlyActive(accessCode)) return expired;
     return { success: true, alreadyActive: true };
   }
 
@@ -212,6 +229,10 @@ export async function activateAccessCode(rawCode: string) {
   }
 
   if (claimErr) {
+    if (claimErr.code === '23505') {
+      // Un code (expiré ou désactivé) est déjà lié à ce compte : seule la migration 09 sait le remplacer.
+      return { error: "Un ancien code est déjà lié à ton compte. Contacte l'administrateur pour le renouveler." };
+    }
     console.error('[auth] activation du code:', claimErr.message);
     return { error: "Activation impossible pour le moment. Réessaie dans un instant." };
   }

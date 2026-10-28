@@ -2,6 +2,7 @@ import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { exactEmailPattern } from '@/lib/email';
+import { isCodeCurrentlyActive } from '@/lib/accessCode';
 
 /**
  * STATUT FREE / PREMIUM — source de vérité unique de toute l'application.
@@ -46,26 +47,29 @@ export function isMissingColumn(error: { code?: string } | null | undefined): bo
   return error?.code === '42703' || error?.code === 'PGRST204';
 }
 
-/**
- * Un code donne le Premium s'il est 'active' ET non expiré. L'expiration est DÉRIVÉE à la
- * lecture : à la date prévue, l'étudiant redevient Free à sa requête suivante, sans tâche
- * planifiée. L'administrateur réactive le code → nouvelle période d'un mois.
- */
-export function isCodeCurrentlyActive(c: { status: string; expires_at?: string | null }): boolean {
-  if (c.status !== 'active') return false;
-  if (!c.expires_at) return true; // code non encore daté (avant migration) : comportement historique
-  return new Date(c.expires_at).getTime() > Date.now();
+// Règle d'activité d'un code : module pur, testé (src/lib/accessCode.ts).
+export { isCodeCurrentlyActive };
+
+async function readCodes(email: string) {
+  let res = await supabaseAdmin
+    .from('access_codes').select('status, expires_at').ilike('email', exactEmailPattern(email));
+  if (isMissingColumn(res.error)) {
+    // Colonne expires_at pas encore créée (migration non appliquée) : lecture sans expiration.
+    res = await supabaseAdmin
+      .from('access_codes').select('status').ilike('email', exactEmailPattern(email)) as any;
+  }
+  return res;
 }
 
 // Mutualisé par rendu serveur (React cache) : layout, menu, encarts et page posent la même
 // question pour le même email ; une seule lecture suffit. Sans effet hors rendu (actions, API).
 const hasActiveAccessCode = cache(async (email: string): Promise<boolean> => {
-  let { data, error } = await supabaseAdmin
-    .from('access_codes').select('status, expires_at').ilike('email', exactEmailPattern(email));
-  if (isMissingColumn(error)) {
-    // Colonne expires_at pas encore créée (migration non appliquée) : lecture sans expiration.
-    ({ data, error } = await supabaseAdmin
-      .from('access_codes').select('status').ilike('email', exactEmailPattern(email)) as any);
+  let { data, error } = await readCodes(email);
+  if (error) {
+    // Erreur PASSAGÈRE (base chargée, réseau) : une seconde lecture avant de conclure. Sans elle,
+    // un étudiant Premium voyait la version gratuite par intermittence aux heures chargées.
+    await new Promise((r) => setTimeout(r, 150));
+    ({ data, error } = await readCodes(email));
   }
   if (error) {
     // Fail closed : en cas de panne, on ne distribue pas du Premium gratuitement.

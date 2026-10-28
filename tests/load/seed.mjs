@@ -1,7 +1,7 @@
 // Prépare la base de TEST pour k6 : comptes, codes, PDF de cours. Écrit comptes.json.
 //
-//   node tests/charge/seed.mjs            (variables : TEST_SUPABASE_URL, TEST_SUPABASE_SERVICE_KEY, COMPTES=1100)
-//   node tests/charge/seed.mjs --nettoyer (supprime tout ce que ce script a créé)
+//   node tests/load/seed.mjs            (variables : TEST_SUPABASE_URL, TEST_SUPABASE_SERVICE_KEY, COMPTES=1100)
+//   node tests/load/seed.mjs --nettoyer (supprime tout ce que ce script a créé)
 //
 // Refuse de tourner sur le projet de production. Tous les comptes créés sont en @sjp-test.invalid.
 import { createClient } from '@supabase/supabase-js';

@@ -63,7 +63,8 @@ export default function LoginPage() {
           required
         />
         <p className={styles.hint}>
-          Inscrit avant avec un code d’accès ? Saisis ce code comme mot de passe, puis choisis-en un personnel.
+          Tu viens de recevoir un code d’accès ? Crée d’abord ton compte gratuit, puis active ton code dans « Mon compte ».
+          Compte créé avant le 16 octobre avec un code : ton mot de passe est ce code.
         </p>
 
         {message && <p className={styles.error} role="alert">{message}</p>}
