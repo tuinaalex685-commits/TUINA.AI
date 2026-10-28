@@ -32,7 +32,10 @@ create index if not exists idx_access_code_history_email on public.access_code_h
 -- Recherche du code saisi sans tenir compte de la casse ni des espaces.
 create index if not exists idx_access_codes_code_norm on public.access_codes (upper(regexp_replace(code, '\s', '', 'g')));
 
-create or replace function public.activate_access_code(p_email text, p_code text)
+-- p_days : durée de l'abonnement, fournie par l'application (PREMIUM_DURATION_DAYS, src/lib/plan.ts),
+-- unique source de la règle commerciale ; bornée ici pour qu'une erreur d'appel ne crée jamais un
+-- abonnement absurde.
+create or replace function public.activate_access_code(p_email text, p_code text, p_days int default 30)
 returns jsonb
 language plpgsql
 security definer
@@ -44,8 +47,11 @@ declare
   v_new   public.access_codes%rowtype;
   v_old   public.access_codes%rowtype;
   v_n     int;
-  v_exp   timestamptz := now() + interval '30 days';
+  v_exp   timestamptz := now() + make_interval(days => p_days);
 begin
+  if p_days is null or p_days < 1 or p_days > 366 then
+    raise exception 'durée d''abonnement invalide : %', p_days;
+  end if;
   if v_email = '' or length(v_norm) < 4 then
     return jsonb_build_object('status', 'invalid');
   end if;
@@ -99,8 +105,8 @@ exception
 end;
 $$;
 
-revoke all on function public.activate_access_code(text, text) from public, anon, authenticated;
-grant execute on function public.activate_access_code(text, text) to service_role;
+revoke all on function public.activate_access_code(text, text, int) from public, anon, authenticated;
+grant execute on function public.activate_access_code(text, text, int) to service_role;
 
 -- Recherche EXACTE d'un code sous sa forme normalisée (casse et espaces ignorés), sans motif :
 -- utilisée par l'admin (doublons) et par le contrôle « mot de passe différent du code ».

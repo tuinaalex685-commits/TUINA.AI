@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient, createAuthClient } from '@/lib/supabase/server';
 import { exactEmailPattern, normalizeEmail, hasWildcardChars } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
-import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
+import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn, PREMIUM_DURATION_DAYS } from '@/lib/plan';
 import { normalizeAccessCode, isPlausibleAccessCode, accessCodeVariants } from '@/lib/accessCode';
 import { findAccessCodeIds } from '@/lib/accessCodeDb';
 import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
@@ -190,7 +190,7 @@ export async function activateAccessCode(rawCode: string) {
 
   // Activation ATOMIQUE en base (migration 09) : verrous, renouvellement après expiration,
   // casse et espaces ignorés, archive de l'ancien code. Une seule transaction.
-  const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc('activate_access_code', { p_email: email, p_code: code });
+  const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc('activate_access_code', { p_email: email, p_code: code, p_days: PREMIUM_DURATION_DAYS });
   if (!rpcErr) {
     const status = (rpc as { status?: string } | null)?.status;
     if (status === 'ok') { revalidatePath('/app', 'layout'); return { success: true }; }

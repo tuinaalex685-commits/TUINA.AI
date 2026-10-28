@@ -49,7 +49,16 @@ revoke all on function public.claim_ai_job_v2(timestamptz, timestamptz, int) fro
 grant execute on function public.claim_ai_job_v2(timestamptz, timestamptz, int) to service_role;
 
 create index if not exists idx_ai_jobs_dedup on public.ai_jobs (type, content_hash, created_at desc);
-create index if not exists idx_user_roles_email_trgm on public.user_roles using gin (email gin_trgm_ops);
+-- pg_trgm : présent en production dans le schéma « public » ; un projet récent l'installe dans
+-- « extensions ». On l'installe s'il manque (sans le déplacer s'il existe), puis on qualifie la
+-- classe d'opérateurs par le schéma RÉEL de l'extension.
+create extension if not exists pg_trgm with schema extensions;
+do $$
+declare s text;
+begin
+  select n.nspname into s from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'pg_trgm';
+  execute format('create index if not exists idx_user_roles_email_trgm on public.user_roles using gin (email %I.gin_trgm_ops)', s);
+end $$;
 
 -- Vérification (lecture seule) : doit renvoyer la fonction et les deux index.
 select 'claim_ai_job_v2' as objet, exists(select 1 from pg_proc where proname = 'claim_ai_job_v2') as ok

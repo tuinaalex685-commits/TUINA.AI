@@ -48,7 +48,7 @@ export function inscription() {
   page('/inscription', 'inscription');
   pause(3, 8); // l'étudiant remplit le formulaire
   const email = `charge+${exec.vu.idInTest}-${exec.vu.iterationInScenario}-${Date.now()}@sjp-test.invalid`;
-  const { valeur } = action('signUpFree', '/inscription', [email, 'MotDePasse-Test-2026', { niveau: 'L1', source: 'whatsapp' }]);
+  const { valeur } = action('signUpFree', '/inscription', [email, 'MotDePasse-Test-2026', { niveau: 'l1', source: 'groupe_etudiant' }]);
   check(valeur, { 'compte créé': (v) => !!v && v.success === true });
   pause(5, 15);
 }
