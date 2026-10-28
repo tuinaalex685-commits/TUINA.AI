@@ -17,7 +17,7 @@ create or replace function public.claim_ai_job_v2(now_ts timestamptz, lease_ts t
 returns setof public.ai_jobs
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path to 'public', 'pg_temp'
 as $$
 begin
   -- Sérialise la seule décision « reste-t-il une place ? » (quelques ms) : deux workers ne

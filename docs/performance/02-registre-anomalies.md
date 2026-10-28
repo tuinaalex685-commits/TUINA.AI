@@ -14,6 +14,7 @@ Chaque ligne : constat → preuve → correction → état. « Mesuré » = cons
 | A5 | 10 comptes réels sans ligne `user_roles` (créés juin–août) | Mesuré | Faible à moyenne | Rattrapage dans la migration 09 | À appliquer |
 | A6 | 3 comptes réels **bannis** dans Supabase Auth → connexion impossible avec le message générique | Mesuré ; aucun code actuel ne bannit | À qualifier | Aucune action automatique : à vérifier par l'administrateur | **Décision** |
 | A7 | Limites d'inscription/connexion par IP partagées (appels depuis Vercel) | Doc Supabase ; code | Haute à l'échelle | IP de l'étudiant transmise (`sb-forwarded-for`) + message « affluence » distinct | Corrigé (branche) ; **réglages** : clé `sb_secret_`, IP Forwarding |
+| A9 | Revue de sécurité : après un renouvellement, un ancien compte dont le mot de passe est encore l'ancien code n'est plus invité à le changer (le code est détaché) ; un mot de passe égal à un code en casse différente était accepté | Revue du commit fca70b2 | Faible | Contrôle « mot de passe ≠ code » sans casse ; invitation : reste à étendre à `access_code_history` | Partiellement corrigé |
 | A8 | Activation simultanée du même code | Code : mise à jour conditionnelle, puis fonction verrouillée | — | Tests d'intégration (50 comptes / 1 code ; 1 compte / 2 codes ; renouvellement ; code d'autrui) | Tests écrits, à exécuter sur la base de test |
 
 ## Sécurité (contrôles côté serveur)

@@ -36,7 +36,7 @@ create or replace function public.activate_access_code(p_email text, p_code text
 returns jsonb
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path to 'public', 'pg_temp'
 as $$
 declare
   v_email text := lower(trim(p_email));

@@ -136,9 +136,11 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
   if (!user) return { error: 'Non authentifié' };
 
   // Le nouveau mot de passe ne doit pas être un code d'accès (visible par l'administrateur).
+  // Comparaison sans casse ni espaces, comme l'activation : « abcd1234 » vaut le code « ABCD1234 ».
+  const asCode = normalizeAccessCode(newPassword).replace(/[\\%_]/g, (c) => '\\' + c);
   const { data: isCode } = await supabaseAdmin
-    .from('access_codes').select('id').eq('code', newPassword).maybeSingle();
-  if (isCode) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
+    .from('access_codes').select('id').ilike('code', asCode).limit(1);
+  if (isCode?.length) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
 
   // Le projet Supabase exige le mot de passe actuel pour en définir un nouveau (« Secure password
   // change ») : une session volée ne suffit pas à changer le mot de passe.
