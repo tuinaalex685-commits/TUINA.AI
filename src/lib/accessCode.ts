@@ -25,10 +25,18 @@ export function accessCodeVariants(raw: unknown): string[] {
   return [...new Set([t, n, n.toLowerCase(), t.charAt(0).toLowerCase() + t.slice(1)])].filter(Boolean);
 }
 
-/** Saisie plausible (avant toute requête) : évite d'interroger la base pour du bruit. */
+/**
+ * Alphabet autorisé d'un code (après retrait des espaces) : lettres, accentuées comprises (un code
+ * de production contient « É »), chiffres, tiret, tiret bas. Tout le reste — guillemets, virgules,
+ * parenthèses, jokers — est refusé AVANT toute requête : ces caractères sont la syntaxe même des
+ * filtres PostgREST (une saisie « x","CODE2","CODE3 » testerait plusieurs codes en une tentative).
+ */
+const CODE_ALPHABET = /^[\p{L}\p{N}_-]+$/u;
+
+/** Saisie plausible (avant toute requête) : longueur et alphabet. */
 export function isPlausibleAccessCode(raw: unknown): boolean {
   const c = normalizeAccessCode(raw);
-  return c.length >= 4 && c.length <= 100;
+  return c.length >= 4 && c.length <= 100 && CODE_ALPHABET.test(c);
 }
 
 /**

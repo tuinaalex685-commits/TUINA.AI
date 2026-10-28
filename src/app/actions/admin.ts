@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isMissingColumn } from '@/lib/plan';
 import { exactEmailPattern } from '@/lib/email';
-import { normalizeAccessCode } from '@/lib/accessCode';
+import { normalizeAccessCode, isPlausibleAccessCode } from '@/lib/accessCode';
 import { findAccessCodeIds } from '@/lib/accessCodeDb';
 import { removeOwnedFiles } from '@/lib/storage';
 
@@ -45,7 +45,7 @@ export async function createAccessCode(customCode: string) {
     // Forme normalisée (majuscules, sans espaces) : c'est sous cette forme que l'étudiant le
     // saisit sur mobile, et deux codes ne différant que par la casse seraient ambigus.
     const code = normalizeAccessCode(customCode);
-    if (code.length < 4) return { error: "Le code d'accès doit contenir au moins 4 caractères." };
+    if (!isPlausibleAccessCode(code)) return { error: "Le code d'accès doit contenir 4 à 100 caractères : lettres, chiffres, tiret ou tiret bas." };
     if ((await findAccessCodeIds(code)).length) return { error: "Ce code d'accès existe déjà (majuscules et minuscules confondues)." };
 
     // On insère le code sans email (il sera lié lors de la première utilisation)

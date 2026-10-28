@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { exactEmailPattern, hasWildcardChars } from '../../src/lib/email.ts';
-import { accessCodeVariants } from '../../src/lib/accessCode.ts';
+import { accessCodeVariants, isPlausibleAccessCode } from '../../src/lib/accessCode.ts';
 
 test('email : *, %, _ et \\ sont échappés (aucun joker possible)', () => {
   assert.equal(exactEmailPattern('*@gmail.com'), '\\*@gmail.com');
@@ -17,6 +17,13 @@ test('inscription : adresses avec * ou % refusées', () => {
   assert.equal(hasWildcardChars('*@gmail.com'), true);
   assert.equal(hasWildcardChars('a%b@x.com'), true);
   assert.equal(hasWildcardChars('jean_dupont@gmail.com'), false);
+});
+
+test('codes : syntaxe de filtre refusée avant toute requête (guillemets, virgules, parenthèses, jokers)', () => {
+  for (const piege of ['x","CODE2","CODE3', 'A*', 'AB%', 'a,b,c,d', '(ABCD)', 'AB\\CD', "AB'CD"]) {
+    assert.equal(isPlausibleAccessCode(piege), false, piege);
+  }
+  assert.equal(isPlausibleAccessCode('SJP-ÉTÉ_2026'), true); // accents permis (code de production avec « É »)
 });
 
 test('codes : variantes littérales seulement (le joker reste un caractère)', () => {
