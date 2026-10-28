@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isMissingColumn } from '@/lib/plan';
 import { exactEmailPattern } from '@/lib/email';
 import { normalizeAccessCode } from '@/lib/accessCode';
+import { findAccessCodeIds } from '@/lib/accessCodeDb';
 import { removeOwnedFiles } from '@/lib/storage';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE ---
@@ -45,9 +46,7 @@ export async function createAccessCode(customCode: string) {
     // saisit sur mobile, et deux codes ne différant que par la casse seraient ambigus.
     const code = normalizeAccessCode(customCode);
     if (code.length < 4) return { error: "Le code d'accès doit contenir au moins 4 caractères." };
-    const { data: proche } = await supabaseAdmin
-      .from('access_codes').select('id').ilike('code', code.replace(/[\\%_]/g, (c) => '\\' + c)).limit(1);
-    if (proche?.length) return { error: "Ce code d'accès existe déjà (majuscules et minuscules confondues)." };
+    if ((await findAccessCodeIds(code)).length) return { error: "Ce code d'accès existe déjà (majuscules et minuscules confondues)." };
 
     // On insère le code sans email (il sera lié lors de la première utilisation)
     const { data, error } = await supabaseAdmin

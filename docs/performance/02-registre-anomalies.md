@@ -25,6 +25,8 @@ Chaque ligne : constat → preuve → correction → état. « Mesuré » = cons
 | S2 | Pages Matière et Cours sans contrôle Premium (URL signées délivrées après expiration) | Même règle que la liste des matières | Corrigé (branche) |
 | S3 | `/api/etude/status` lisait n'importe quel cours en service role | Vérification de l'accès au document, réponse identique si inexistant | Corrigé (branche) |
 | S4 | Secret du worker envoyé à une adresse dérivée de l'en-tête Host | Adresse configurée unique | Corrigé (branche, commit 54dacd0) |
+| S7 | **Joker `*` dans les recherches d'email (PRÉSENT EN PRODUCTION)** : PostgREST traduit `*` en `%` ; une adresse « *@gmail.com » aurait hérité du Premium de n'importe quel compte Gmail, et la purge admin d'un tel compte aurait supprimé les codes de tous les comptes Gmail. 0 compte concerné à ce jour (mesuré) | `*` échappé, adresses avec `*`/`%` refusées à l'inscription, tests | Corrigé (branche) ; **correctif minimal prêt pour la production, en attente d'accord** |
+| S8 | Joker `*` dans la recherche de codes (revue automatique du commit 976990c) : le repli d'activation aurait permis de s'approprier un code par motif (« A* ») ; le contrôle du mot de passe servait d'oracle | Plus aucune recherche par motif sur les codes : fonction exacte `find_access_code` (migration 09) ou comparaison littérale `in(...)` | Corrigé (branche, jamais en production) |
 | S5 | QCM et jobs flashcards ouverts aux comptes Free (flashcards sans quota) | À trancher : règle métier ou oubli ? | **Décision** |
 | S6 | Envoi Storage possible par un compte Free avant le refus de `registerDocument` | Politique Storage à restreindre au Premium | À faire |
 

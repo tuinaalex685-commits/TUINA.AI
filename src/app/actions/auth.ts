@@ -2,10 +2,11 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient, createAuthClient } from '@/lib/supabase/server';
-import { exactEmailPattern, normalizeEmail } from '@/lib/email';
+import { exactEmailPattern, normalizeEmail, hasWildcardChars } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { premiumExpiryFromNow, isCodeCurrentlyActive, isMissingColumn } from '@/lib/plan';
-import { normalizeAccessCode, isPlausibleAccessCode } from '@/lib/accessCode';
+import { normalizeAccessCode, isPlausibleAccessCode, accessCodeVariants } from '@/lib/accessCode';
+import { findAccessCodeIds } from '@/lib/accessCodeDb';
 import { upsertProfile, isNiveau, isSource } from '@/lib/profile';
 
 /**
@@ -88,6 +89,7 @@ export async function signUpFree(
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) return { error: "Email et mot de passe requis." };
     if (password.length < 8) return { error: "Le mot de passe doit contenir au moins 8 caractères." };
+    if (hasWildcardChars(cleanEmail)) return { error: "Cette adresse email contient des caractères non acceptés (* ou %)." };
 
     const supabase = await createAuthClient();
     const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
@@ -137,10 +139,9 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
 
   // Le nouveau mot de passe ne doit pas être un code d'accès (visible par l'administrateur).
   // Comparaison sans casse ni espaces, comme l'activation : « abcd1234 » vaut le code « ABCD1234 ».
-  const asCode = normalizeAccessCode(newPassword).replace(/[\\%_]/g, (c) => '\\' + c);
-  const { data: isCode } = await supabaseAdmin
-    .from('access_codes').select('id').ilike('code', asCode).limit(1);
-  if (isCode?.length) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
+  // Recherche EXACTE, jamais par motif (dans PostgREST, « * » est un joker qui révélerait des codes).
+  const isCode = await findAccessCodeIds(newPassword).catch(() => [] as string[]);
+  if (isCode.length) return { error: "Choisis un mot de passe personnel, différent de ton code d'accès." };
 
   // Le projet Supabase exige le mot de passe actuel pour en définir un nouveau (« Secure password
   // change ») : une session volée ne suffit pas à changer le mot de passe.
@@ -204,7 +205,7 @@ export async function activateAccessCode(rawCode: string) {
 
   // Repli tant que la migration 09 n'est pas appliquée : ancien chemin, casse ignorée.
   const { data: candidates } = await supabaseAdmin
-    .from('access_codes').select('*').ilike('code', code.replace(/[\\%_]/g, (c) => '\\' + c)).limit(2);
+    .from('access_codes').select('*').in('code', accessCodeVariants(rawCode)).limit(2); // littéral : « * » n'est jamais un joker
   const accessCode = candidates?.length === 1 ? candidates[0] : null;
   if (!accessCode || accessCode.status !== 'active') return invalid;
 

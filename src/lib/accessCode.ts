@@ -14,6 +14,17 @@ export function normalizeAccessCode(raw: unknown): string {
   return String(raw ?? '').replace(/\s+/g, '').toUpperCase();
 }
 
+/**
+ * Variantes LITTÉRALES d'une saisie, pour une recherche exacte `in(...)` quand la fonction SQL
+ * de recherche normalisée n'est pas encore installée. JAMAIS de recherche par motif (ilike) :
+ * dans les filtres PostgREST, `*` est un joker — « A* » aurait désigné un code sans le connaître.
+ */
+export function accessCodeVariants(raw: unknown): string[] {
+  const t = String(raw ?? '').trim();
+  const n = normalizeAccessCode(raw);
+  return [...new Set([t, n, n.toLowerCase(), t.charAt(0).toLowerCase() + t.slice(1)])].filter(Boolean);
+}
+
 /** Saisie plausible (avant toute requête) : évite d'interroger la base pour du bruit. */
 export function isPlausibleAccessCode(raw: unknown): boolean {
   const c = normalizeAccessCode(raw);

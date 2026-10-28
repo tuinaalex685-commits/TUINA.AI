@@ -102,6 +102,22 @@ $$;
 revoke all on function public.activate_access_code(text, text) from public, anon, authenticated;
 grant execute on function public.activate_access_code(text, text) to service_role;
 
+-- Recherche EXACTE d'un code sous sa forme normalisée (casse et espaces ignorés), sans motif :
+-- utilisée par l'admin (doublons) et par le contrôle « mot de passe différent du code ».
+create or replace function public.find_access_code(p_code text)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+  select id from public.access_codes
+   where upper(regexp_replace(code, '\s', '', 'g')) = upper(regexp_replace(coalesce(p_code, ''), '\s', '', 'g'))
+   limit 2;
+$$;
+revoke all on function public.find_access_code(text) from public, anon, authenticated;
+grant execute on function public.find_access_code(text) to service_role;
+
 -- Rattrapage : chaque compte a sa ligne de rôle (email en minuscules, rôle étudiant).
 insert into public.user_roles (user_id, email, role)
 select u.id, lower(trim(u.email)), 'student'
