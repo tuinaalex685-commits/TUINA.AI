@@ -7,7 +7,8 @@ import { getCurrentUser } from '@/lib/viewer';
 import { lastJob } from '@/lib/jobs/enqueue';
 import { accesEtude, getAnalyse, getParcours, notionsARevoir } from '@/lib/etude3/store';
 import { ENGINE_VERSION } from '@/lib/etude3/types';
-import { StartStudy, cleanError } from '@/components/etude3/StudyClient';
+import { StartStudy } from '@/components/etude3/StudyClient';
+import { cleanError } from '@/lib/etude3/messages';
 import styles from '@/components/etude3/etude3.module.css';
 
 export const dynamic = 'force-dynamic';

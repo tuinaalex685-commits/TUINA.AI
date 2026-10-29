@@ -7,10 +7,9 @@ import { Printer } from 'lucide-react';
 import { useJob } from '@/lib/hooks/useJob';
 import { markSyntheseVue, prepareSequence, startEtude } from '@/app/actions/etude3';
 import styles from './etude3.module.css';
+import { cleanError } from '@/lib/etude3/messages';
 
-/** Message d'erreur lisible (le préfixe technique PDF_SCANNE est retiré). */
-export const cleanError = (msg: string | null | undefined) =>
-  String(msg || 'Le traitement n’a pas abouti.').replace(/^PDF_SCANNE:\s*/, '');
+
 
 /** « Commencer l'étude » : démarrage enregistré par le serveur, puis suivi de l'analyse. */
 export function StartStudy({ documentId, label = 'Commencer l’étude', initialJobId = null }: { documentId: string; label?: string; initialJobId?: string | null }) {
