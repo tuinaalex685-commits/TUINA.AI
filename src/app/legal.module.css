@@ -1,0 +1,10 @@
+/* Pages légales : texte long, lisible, sur fond papier. */
+.page { max-width: 72ch; margin: 0 auto; padding: 48px 20px 80px; color: var(--ink); line-height: 1.65; font-size: 17px; }
+.page h2 { margin: 36px 0 8px; font-family: var(--font-serif); font-size: 1.35rem; color: var(--sjp-blue); }
+.page ul { padding-left: 1.2em; }
+.page li { margin: 6px 0; }
+.page a { color: var(--action); font-weight: 600; }
+.retour { margin: 0 0 24px; font-family: var(--font-serif); font-size: 1.4rem; font-weight: 700; }
+.retour a { color: var(--sjp-blue); text-decoration: none; }
+.titre { margin: 0; font-family: var(--font-serif); font-size: clamp(1.8rem, 4vw, 2.4rem); color: var(--sjp-blue); line-height: 1.15; }
+.maj { margin: 8px 0 0; font-size: 14px; color: var(--ink-3); }
