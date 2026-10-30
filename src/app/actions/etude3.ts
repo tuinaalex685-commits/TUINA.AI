@@ -71,6 +71,11 @@ export async function startEtude(documentId: string) {
   if (enCours && ['pending', 'queued', 'processing', 'generating', 'saving'].includes(enCours.status)) {
     return { success: true, status: 'analysing' as const, jobId: enCours.id as string };
   }
+  // Catalogue : AUCUNE génération déclenchée par un étudiant. Le cours est préparé d'avance par
+  // l'administrateur (publication ou bouton « Préparer ») ; s'il ne l'est pas encore, on attend.
+  if (acces.via === 'catalog') {
+    return { error: 'Ce cours est en cours de préparation par SJP. Reviens dans quelques minutes : tout sera prêt.' };
+  }
   // Garde-fou de coût avant une NOUVELLE analyse : nombre lancé par heure et par étudiant.
   // Garde-fou anti-robot (pas une limite d'usage) : nouvelles analyses lancées dans l'heure, échecs
   // compris (ils ont coûté ; une relance reprend sans repayer ce qui est fait). Les cours déjà
@@ -94,13 +99,15 @@ export async function markSyntheseVue(documentId: string) {
   const p = await getParcours(user.id, documentId);
   if (!p) return { error: 'Commence d’abord l’étude.' };
   // L'accès est revérifié à chaque étape (Premium expiré, cours retiré du catalogue, autre niveau).
-  if (!(await accesEtude(user.id, user.email, documentId)).ok) return { error: 'Accès refusé.' };
+  const acces = await accesEtude(user.id, user.email, documentId);
+  if (!acces.ok) return { error: 'Accès refusé.' };
   const { error } = await supabaseAdmin.from('etude_parcours')
     .update({ synthese_vue_at: p.synthese_vue_at ?? new Date().toISOString(), sequence_courante: Math.max(1, p.sequence_courante), updated_at: new Date().toISOString() })
     .eq('user_id', user.id).eq('document_id', documentId);
   if (error) return { error: 'Enregistrement impossible pour le moment. Réessaie.' };
   // La leçon 1 se prépare pendant que l'étudiant ouvre la page (une seule fois pour tout le cours).
-  if (p.source_hash && !(await getSequence(p.source_hash, 1))) await ensureSequenceJob(user.id, documentId, p.source_hash, 1).catch(() => {});
+  // (Catalogue : jamais — ses leçons sont préparées d'avance.)
+  if (acces.via === 'owner' && p.source_hash && !(await getSequence(p.source_hash, 1))) await ensureSequenceJob(user.id, documentId, p.source_hash, 1).catch(() => {});
   return { success: true };
 }
 
@@ -116,6 +123,12 @@ export async function prepareSequence(documentId: string, ordre: number) {
   if (!acces.ok) return { error: 'Accès refusé.' };
 
   if (await getSequence(p.source_hash, ordre)) return { success: true, ready: true };
+  // Catalogue : on rejoint la préparation commune en cours, sans jamais en lancer une.
+  if (acces.via === 'catalog') {
+    const enCours = await lastJob('etude3_sequence', `${ENGINE_VERSION}:${p.source_hash}:${ordre}`);
+    if (enCours && ['pending', 'queued', 'processing', 'generating', 'saving'].includes(enCours.status)) return { success: true, ready: false, jobId: enCours.id as string };
+    return { error: 'Cette leçon est en cours de préparation par SJP. Reviens dans quelques minutes.' };
+  }
   const res = await ensureSequenceJob(user.id, documentId, p.source_hash, ordre);
   // La leçon suivante se prépare en arrière-plan pendant que l'étudiant suit celle-ci.
   const analyse = await getAnalyse(p.source_hash);
@@ -175,6 +188,20 @@ export async function answerActivity(input: { documentId: string; ordre: number;
     message = verdict === 'juste'
       ? (activite.pourquoi_faux[idx] || activite.explication || 'C’est bien ça.')
       : (activite.pourquoi_faux[idx] || 'Ce n’est pas la bonne proposition.');
+  } else if (acces.via === 'catalog') {
+    // Catalogue : aucune IA. L'étudiant compare sa réponse aux éléments attendus et à la réponse
+    // modèle ; l'activité est terminée (pas de « À revoir » : il n'y a pas eu de jugement).
+    const retourComparaison: RetourActivite = {
+      verdict: 'partiel', numero,
+      message: 'Compare ta réponse avec ce qu’une bonne réponse doit contenir. Si un élément te manque, relis l’étape correspondante de la leçon.',
+      manquants: activite.attendus, bonne_reponse: activite.reponse_modele, aRevoir: false, termine: true, comparaison: true,
+    };
+    const { error: e } = await supabaseAdmin.from('etude_tentatives').insert({
+      user_id: user.id, document_id: documentId, sequence_ordre: ordre, activite_id: activiteId,
+      numero, reponse: reponse.slice(0, MAX_REPONSE), verdict: 'partiel', retour: retourComparaison, request_id: requestId,
+    });
+    if (e) return { error: e.code === '23505' ? 'Ta réponse a déjà été enregistrée (double envoi). Recharge la page.' : 'Ta réponse n’a pas pu être enregistrée. Réessaie.' };
+    return { success: true, retour: retourComparaison };
   } else {
     // Réponse ouverte : correction IA courte, sous quota (Free : quota journalier ; Premium : illimité).
     const supabase = await createClient();
@@ -262,7 +289,9 @@ export async function completeSequence(documentId: string, ordre: number) {
   await supabaseAdmin.from('etude_parcours').update(patch).eq('user_id', user.id).eq('document_id', documentId);
 
   // On prépare la séquence d'après pendant que l'étudiant lit la suivante (E-01, sans attente).
-  if (ordre + 2 <= analyse.plan.length) await ensureSequenceJob(user.id, documentId, p.source_hash, ordre + 2).catch(() => {});
+  // Catalogue : jamais (leçons préparées d'avance).
+  const accesFin = await accesEtude(user.id, user.email, documentId);
+  if (accesFin.ok && accesFin.via === 'owner' && ordre + 2 <= analyse.plan.length) await ensureSequenceJob(user.id, documentId, p.source_hash, ordre + 2).catch(() => {});
   revalidatePath(`/app/etude/${documentId}`);
   return { success: true, next: derniere ? null : ordre + 1 };
 }

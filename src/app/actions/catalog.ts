@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache';
 import { isNiveau } from '@/lib/profileShared';
 import { enqueueDedup } from '@/lib/jobs/enqueue';
 import { ENGINE_VERSION } from '@/lib/etude3/types';
+import { documentsAvecEtudeV4 } from '@/lib/etude3/examen';
+import { getAnalyse, getSequence } from '@/lib/etude3/store';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE (même pattern que actions/admin.ts) ---
 async function requireAdmin() {
@@ -46,9 +48,20 @@ export async function listPublishableCourses() {
 
     if (excludedIds.length > 0) query = query.not('id', 'in', `(${excludedIds.join(',')})`);
 
-    const { data: courses, error } = await query;
+    const { data: anciens, error } = await query;
     if (error) return { error: error.message };
-    if (!courses || courses.length === 0) return { success: true, courses: [] };
+
+    // Cours étudiés par un Premium avec la nouvelle Étude guidée (analyse commune prête), pas encore publiés.
+    const { data: publies } = excludedIds.length ? await supabaseAdmin.from('etude_cours').select('pdf_id').in('id', excludedIds) : { data: [] as { pdf_id: string }[] };
+    const pdfPublies = new Set((publies || []).map((c: any) => c.pdf_id));
+    const { data: parcours } = await supabaseAdmin.from('etude_parcours').select('document_id')
+      .eq('engine_version', ENGINE_VERSION).not('source_hash', 'is', null).limit(2000);
+    const candidats = Array.from(new Set((parcours || []).map((p: any) => p.document_id as string))).filter((id) => !pdfPublies.has(id));
+    const v4 = await documentsAvecEtudeV4(candidats);
+    const dejaListes = new Set((anciens || []).map((c: any) => c.pdf_id));
+    const nouveaux = Array.from(v4.keys()).filter((id) => !dejaListes.has(id)).map((id) => ({ id: `doc:${id}`, pdf_id: id, created_at: '' }));
+    const courses = [...nouveaux, ...(anciens || [])];
+    if (courses.length === 0) return { success: true, courses: [] };
 
     const pdfIds = courses.map((c: any) => c.pdf_id);
     const { data: docs } = await supabaseAdmin.from('documents').select('id, nom').in('id', pdfIds);
@@ -87,19 +100,32 @@ export async function publishToCatalog(etudeCoursId: string, titreAffiche: strin
 
     // Sécurité : n'accepter que des cours réellement prêts (jamais un cours en cours de
     // génération ou en erreur — le catalogue ne doit exposer que du contenu stable).
+    if (etudeCoursId.startsWith('doc:')) {
+      const pdfId = etudeCoursId.slice(4);
+      if (!(await documentsAvecEtudeV4([pdfId])).has(pdfId)) return { error: "L'Étude guidée de ce cours n'est pas encore prête." };
+      const { data: ancre } = await supabaseAdmin.from('etude_cours').select('id').eq('pdf_id', pdfId).maybeSingle();
+      if (ancre) etudeCoursId = ancre.id;
+      else {
+        const { data: cree, error: e } = await supabaseAdmin.from('etude_cours').insert({ pdf_id: pdfId, statut_generation: 'pret' }).select('id').single();
+        if (e || !cree) return { error: 'Publication impossible pour le moment.' };
+        etudeCoursId = cree.id;
+      }
+    }
     const { data: cours } = await supabaseAdmin
-      .from('etude_cours').select('id, statut_generation').eq('id', etudeCoursId).maybeSingle();
+      .from('etude_cours').select('id, pdf_id, statut_generation').eq('id', etudeCoursId).maybeSingle();
     if (!cours) return { error: "Cours introuvable." };
     if (cours.statut_generation !== 'pret') {
       return { error: "Ce cours n'est pas encore prêt (génération en cours ou en erreur)." };
     }
-    // Un cours "prêt" mais sans section (résidu V1 / cache zombie, cf. commentaire de
-    // /app/etude/[pdfId]/page.tsx) ne doit jamais atterrir au catalogue : les visiteurs catalogue
-    // ne sont pas propriétaires du document et ne peuvent pas déclencher sa régénération.
-    const { count: sectionCount } = await supabaseAdmin
-      .from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', etudeCoursId);
-    if (!sectionCount || sectionCount === 0) {
-      return { error: "Ce cours n'a aucune section générée (probablement un ancien format) — impossible à publier." };
+    // Ancienne Étude guidée : un cours « prêt » sans section (résidu V1) ne doit jamais atterrir au
+    // catalogue. Nouvelle Étude guidée : c'est l'analyse commune prête qui fait foi.
+    const estV4 = (await documentsAvecEtudeV4([cours.pdf_id as string])).size > 0;
+    if (!estV4) {
+      const { count: sectionCount } = await supabaseAdmin
+        .from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', etudeCoursId);
+      if (!sectionCount || sectionCount === 0) {
+        return { error: "Ce cours n'a aucune section générée (probablement un ancien format) — impossible à publier." };
+      }
     }
 
     const { data, error } = await supabaseAdmin
@@ -249,7 +275,18 @@ export async function setCatalogNiveau(id: string, niveau: string | null) {
 async function preparerEtudeGuidee(adminId: string, etudeCoursId: string) {
   const { data: cours } = await supabaseAdmin.from('etude_cours').select('pdf_id').eq('id', etudeCoursId).maybeSingle();
   if (!cours?.pdf_id) return;
-  await enqueueDedup({ userId: adminId, type: 'etude3_analyse', payload: { documentId: cours.pdf_id }, dedupKey: `${ENGINE_VERSION}:${cours.pdf_id}` });
+  const hash = (await documentsAvecEtudeV4([cours.pdf_id])).get(cours.pdf_id);
+  if (!hash) {
+    // Pas encore d'analyse de la nouvelle Étude guidée : le worker l'enchaînera sur toutes les leçons.
+    await enqueueDedup({ userId: adminId, type: 'etude3_analyse', payload: { documentId: cours.pdf_id }, dedupKey: `${ENGINE_VERSION}:${cours.pdf_id}` });
+    return;
+  }
+  // Analyse déjà faite (par l'étudiant Premium) : seules les leçons qu'il n'a pas ouvertes sont générées.
+  const analyse = await getAnalyse(hash);
+  for (const p of analyse?.plan || []) {
+    if (await getSequence(hash, p.ordre)) continue;
+    await enqueueDedup({ userId: adminId, type: 'etude3_sequence', payload: { documentId: cours.pdf_id, hash, ordre: p.ordre }, dedupKey: `${ENGINE_VERSION}:${hash}:${p.ordre}` }).catch(() => {});
+  }
 }
 
 /** Administration : prépare l'Étude guidée de tous les cours actifs du catalogue (après une nouvelle version du moteur). */

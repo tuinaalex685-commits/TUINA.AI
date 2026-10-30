@@ -233,6 +233,8 @@ export interface RetourActivite {
   prerequis?: string;
   /** QCM terminé (réussi ou après le dernier essai) : la bonne proposition, pour la surligner. */
   bonne_index?: number;
+  /** Catalogue : auto-comparaison avec la réponse attendue (pas de jugement par l'IA). */
+  comparaison?: boolean;
   bonne_reponse?: string;
   numero: number;
   aRevoir: boolean;

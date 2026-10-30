@@ -194,3 +194,10 @@
   background: var(--action-soft);
   color: var(--ink);
 }
+
+/* Connexion Google (comptes gratuits). */
+.google { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; border-radius: 10px; border: 1px solid var(--rule-strong); background: var(--paper); color: var(--ink); font-weight: 700; font-size: var(--text-sm); cursor: pointer; transition: background-color 150ms; }
+.google:hover { background: var(--paper-2); }
+
+.ou { display: flex; align-items: center; gap: 12px; margin: 20px 0 12px; color: var(--ink-3); font-size: var(--text-sm); }
+.ou::before, .ou::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
