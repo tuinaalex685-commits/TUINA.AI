@@ -9,7 +9,28 @@ import { markSyntheseVue, prepareSequence, startEtude } from '@/app/actions/etud
 import styles from './etude3.module.css';
 import { cleanError } from '@/lib/etude3/messages';
 
+/** Secondes écoulées depuis l'activation (minuteur d'attente). */
+function useChrono(actif: boolean) {
+  const [debut, setDebut] = useState<number | null>(null);
+  const [maintenant, setMaintenant] = useState(0);
+  useEffect(() => {
+    if (!actif) return;
+    const t0 = Date.now();
+    const id = setInterval(() => { setDebut((d) => d ?? t0); setMaintenant(Date.now()); }, 1000);
+    return () => { clearInterval(id); setDebut(null); };
+  }, [actif]);
+  return debut ? Math.max(0, Math.round((maintenant - debut) / 1000)) : 0;
+}
 
+const mmss = (s: number) => `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
+
+/** Estimation honnête du temps restant à partir de l'avancement réel du serveur. */
+function restant(ecoule: number, progres: number): string {
+  if (progres < 15 || ecoule < 8) return 'Estimation en cours…';
+  const s = Math.round((ecoule * (100 - progres)) / Math.max(progres - 8, 1));
+  if (s < 20) return 'Presque prêt…';
+  return s < 90 ? `Encore environ ${Math.max(10, Math.round(s / 10) * 10)} secondes` : `Encore environ ${Math.round(s / 60)} minute${Math.round(s / 60) > 1 ? 's' : ''}`;
+}
 
 /** « Commencer l'étude » : démarrage enregistré par le serveur, puis suivi de l'analyse. */
 export function StartStudy({ documentId, label = 'Commencer l’étude', initialJobId = null }: { documentId: string; label?: string; initialJobId?: string | null }) {
@@ -34,13 +55,15 @@ export function StartStudy({ documentId, label = 'Commencer l’étude', initial
     if ('jobId' in res && res.jobId) setJobId(res.jobId);
   };
 
+  const ecoule = useChrono(!!jobId);
   if (jobId) {
     return (
       <div className={styles.panel} role="status" aria-live="polite">
         <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || 'Analyse du cours…'}</p>
         <div className={styles.progress} style={{ marginTop: 'var(--s-4)' }}>
           <div className={styles.progressTrack}><div className={styles.progressFill} style={{ width: `${Math.max(5, Math.min(100, progress || 5))}%`, transition: 'width 600ms var(--ease-out)' }} /></div>
-          <p className={styles.progressLabel}>Tu peux quitter cette page : l’analyse continue et t’attendra ici.</p>
+          <p className={styles.timer}><strong>{restant(ecoule, progress || 0)}</strong><span>Temps écoulé : {mmss(ecoule)}</span></p>
+          <p className={styles.progressLabel}>Tu peux quitter cette page : l’analyse continue et t’attendra ici. Elle n’a lieu qu’une fois par cours, pour tous les étudiants.</p>
         </div>
       </div>
     );
@@ -103,6 +126,7 @@ export function SequencePreparing({ documentId, ordre }: { documentId: string; o
     onError: (msg) => { setJobId(null); setError(cleanError(msg)); },
   });
 
+  const ecoule = useChrono(!error);
   if (error) {
     return (
       <div className={styles.alert} role="alert">
@@ -114,6 +138,11 @@ export function SequencePreparing({ documentId, ordre }: { documentId: string; o
   return (
     <div className={styles.panel} role="status" aria-live="polite">
       <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || `Préparation de la leçon ${ordre}…`}</p>
+      <div className={styles.progress} style={{ marginTop: 'var(--s-4)' }}>
+        {/* Une leçon se prépare en 30 à 60 s : la barre avance vers 95 % sur cette durée, sans jamais prétendre finir. */}
+        <div className={styles.progressTrack}><div className={styles.progressFill} style={{ width: `${Math.min(95, 5 + (ecoule / 60) * 90)}%`, transition: 'width 900ms linear' }} /></div>
+        <p className={styles.timer}><strong>{ecoule < 45 ? `Prête dans environ ${Math.max(10, Math.round((55 - ecoule) / 5) * 5)} secondes` : 'Presque prête…'}</strong><span>Temps écoulé : {mmss(ecoule)}</span></p>
+      </div>
       <p className={styles.panelText} style={{ margin: 'var(--s-3) 0 0' }}>Elle est construite à partir des pages de ton cours qui la concernent. Cela prend en général moins d’une minute, une seule fois pour tous les étudiants de ce cours.</p>
     </div>
   );

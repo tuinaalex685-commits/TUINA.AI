@@ -899,9 +899,9 @@ class AccessDeniedError extends Error {}
 function engineDeps(job: any, ctx: JobCtx): EngineDeps {
   return {
     ctx, patchJob, withLeaseHeartbeat, acquireContentLock, releaseContentLock,
-    generate: (system, prompt, schema, tracking, temperature, thinkingBudget) => isMockJob(job)
+    generate: (system, prompt, schema, tracking, temperature, thinkingBudget, maxOutputTokens) => isMockJob(job)
       ? mockGenerate(job, tracking.feature, tracking.documentId, () => mockEtude3(tracking.feature))
-      : generateStructuredJSON(system, prompt, schema, undefined, tracking, temperature, { thinkingBudget }),
+      : generateStructuredJSON(system, prompt, schema, undefined, tracking, temperature, { thinkingBudget, maxOutputTokens }),
   };
 }
 

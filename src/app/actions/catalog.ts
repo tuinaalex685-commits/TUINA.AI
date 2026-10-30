@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { isNiveau } from '@/lib/profileShared';
+import { enqueueDedup } from '@/lib/jobs/enqueue';
+import { ENGINE_VERSION } from '@/lib/etude3/types';
 
 // --- FONCTION DE SÉCURITÉ RÉUTILISABLE (même pattern que actions/admin.ts) ---
 async function requireAdmin() {
@@ -120,6 +122,7 @@ export async function publishToCatalog(etudeCoursId: string, titreAffiche: strin
     // Best-effort et volontairement non bloquant : si l'enqueue échoue, la publication
     // reste valide (la banque sera générée à la première demande, comme avant).
     await prepareExamBank(cours.id).catch(() => {});
+    await preparerEtudeGuidee(admin.id, cours.id).catch(() => {});
 
     revalidateCatalog();
     return { success: true, entry: data };
@@ -237,3 +240,27 @@ export async function setCatalogNiveau(id: string, niveau: string | null) {
   }
 }
 
+
+/**
+ * Prépare l'Étude guidée d'un cours du catalogue (analyse du cours, puis le worker enchaîne sur
+ * TOUTES ses leçons). Payé une seule fois, au nom de l'administrateur : ensuite, les étudiants du
+ * catalogue n'attendent rien et ne déclenchent aucune génération.
+ */
+async function preparerEtudeGuidee(adminId: string, etudeCoursId: string) {
+  const { data: cours } = await supabaseAdmin.from('etude_cours').select('pdf_id').eq('id', etudeCoursId).maybeSingle();
+  if (!cours?.pdf_id) return;
+  await enqueueDedup({ userId: adminId, type: 'etude3_analyse', payload: { documentId: cours.pdf_id }, dedupKey: `${ENGINE_VERSION}:${cours.pdf_id}` });
+}
+
+/** Administration : prépare l'Étude guidée de tous les cours actifs du catalogue (après une nouvelle version du moteur). */
+export async function preparerEtudesCatalogue() {
+  try {
+    const admin = await requireAdmin();
+    const { data: entries } = await supabaseAdmin.from('catalog_courses').select('etude_cours_id').eq('actif', true);
+    let n = 0;
+    for (const e of entries || []) { await preparerEtudeGuidee(admin.id, e.etude_cours_id).catch(() => {}); n++; }
+    return { success: true, count: n };
+  } catch (err: any) {
+    return { error: err?.message || 'Préparation impossible.' };
+  }
+}

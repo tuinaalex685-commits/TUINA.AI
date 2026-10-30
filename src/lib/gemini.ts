@@ -169,7 +169,7 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
  * sortie et lents) : 0 pour une extraction structurée, un budget modéré pour la rédaction.
  * Non fourni : comportement par défaut du modèle (inchangé pour les fonctionnalités existantes).
  */
-export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number, options?: { thinkingBudget?: number }) {
+export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number, options?: { thinkingBudget?: number; maxOutputTokens?: number }) {
   // Verrou des tests de charge : en mode simulé, AUCUN appel ne part chez Google, quel que soit
   // le chemin (file IA, action serveur, ancienne route). Jamais actif en production Vercel.
   if (process.env.AI_MOCK_ALL === '1' && process.env.AI_MOCK_ENABLED === '1' && process.env.VERCEL_ENV !== 'production') {
@@ -214,7 +214,8 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
             httpOptions: { timeout: GEMINI_TIMEOUT_MS },
             abortSignal: controller.signal,
             ...(temperature !== undefined ? { temperature } : {}),
-            ...(options?.thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget: options.thinkingBudget } } : {})
+            ...(options?.thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget: options.thinkingBudget } } : {}),
+            ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {})
           }
         });
       } finally {

@@ -1093,3 +1093,7 @@ ul.legend { padding: 0; list-style: none; }
   .dessinSvg { min-width: 0; }
   .branch, .questionCard, .compareCard, .dessin { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* Minuteur d'attente : estimation en avant, temps écoulé en retrait. */
+.timer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--s-4); margin: var(--s-3) 0 0; font-size: var(--text-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.timer strong { color: var(--sjp-blue); }

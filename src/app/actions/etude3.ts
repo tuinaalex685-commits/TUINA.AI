@@ -18,7 +18,7 @@ import { ENGINE_VERSION, MAX_TENTATIVES, type Activite, type RetourActivite, typ
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_REPONSE = 4000;
-const ANALYSES_PAR_HEURE = 6;
+const ANALYSES_PAR_HEURE = 10;
 
 async function currentUser() {
   const supabase = await createClient();
@@ -72,10 +72,11 @@ export async function startEtude(documentId: string) {
     return { success: true, status: 'analysing' as const, jobId: enCours.id as string };
   }
   // Garde-fou de coût avant une NOUVELLE analyse : nombre lancé par heure et par étudiant.
-  // Garde-fou anti-robot (pas une limite d'usage) : nouvelles analyses lancées dans l'heure,
-  // échecs non comptés. Les cours déjà analysés ou en cours d'analyse ne comptent jamais.
+  // Garde-fou anti-robot (pas une limite d'usage) : nouvelles analyses lancées dans l'heure, échecs
+  // compris (ils ont coûté ; une relance reprend sans repayer ce qui est fait). Les cours déjà
+  // analysés ou en cours d'analyse ne passent jamais par ici.
   const { count: heure } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id).eq('type', 'etude3_analyse').neq('status', 'failed').gte('created_at', new Date(Date.now() - 3600_000).toISOString());
+    .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', new Date(Date.now() - 3600_000).toISOString());
   if ((heure || 0) >= ANALYSES_PAR_HEURE) {
     return { error: `Tu as lancé l’analyse de ${ANALYSES_PAR_HEURE} nouveaux cours en une heure. Patiente quelques minutes avant d’en lancer un autre.` };
   }

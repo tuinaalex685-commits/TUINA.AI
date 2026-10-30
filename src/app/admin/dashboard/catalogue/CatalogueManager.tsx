@@ -12,6 +12,7 @@ import {
   reorderCatalog,
   renameCatalogEntry,
   setCatalogNiveau,
+  preparerEtudesCatalogue,
 } from '@/app/actions/catalog';
 import { NIVEAUX } from '@/lib/profileShared';
 
@@ -115,10 +116,28 @@ export default function CatalogueManager({ initialEntries, publishableCourses }:
     });
   };
 
+  // Prépare d'avance l'Étude guidée (analyse + toutes les leçons) des cours publiés : les étudiants
+  // du catalogue n'attendent plus et ne déclenchent aucune génération.
+  const handlePreparer = () => {
+    setActiveId('preparer');
+    setMessage('');
+    startTransition(async () => {
+      const res = await preparerEtudesCatalogue();
+      setMessage('error' in res && res.error ? res.error : `Préparation lancée pour ${(res as { count?: number }).count ?? 0} cours. Elle se poursuit en arrière-plan (quelques minutes par cours).`);
+      setActiveId(null);
+    });
+  };
+
   const sortedEntries = [...initialEntries].sort((a, b) => a.ordre - b.ordre);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-large)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--spacing-standard)' }}>
+        <Button type="button" onClick={handlePreparer} disabled={isPending && activeId === 'preparer'}>
+          {isPending && activeId === 'preparer' ? 'Lancement…' : 'Préparer les Études guidées du catalogue'}
+        </Button>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-2)' }}>Analyse et leçons générées une seule fois : ensuite, l’étude est instantanée pour les étudiants.</span>
+      </div>
       <form onSubmit={handlePublish} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-standard)', alignItems: 'end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label htmlFor="cours-a-publier" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Cours prêt à publier</label>
