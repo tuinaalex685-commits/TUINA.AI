@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { accesEtude } from '@/lib/etude3/store';
 
 export const dynamic = 'force-dynamic';
 // Le worker relancé ci-dessous tourne dans CETTE fonction (via after) : même durée maximale que lui.
 export const maxDuration = 300;
 
 const IN_FLIGHT = new Set(['processing', 'generating', 'saving']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Préparations COMMUNES de l'Étude guidée : un seul job par cours ou par leçon, que tous les
+// étudiants du cours attendent ensemble (même s'il a été lancé par un autre).
+const JOBS_PARTAGES = new Set(['etude3_analyse', 'etude3_sequence']);
 
 // Une relance du worker par job toutes les 15 s au plus (par instance) : quand la file IA est
 // pleine, des centaines d'étudiants qui attendent ne déclenchent pas des centaines de workers
@@ -31,18 +37,35 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Sans `result` : pendant une analyse, il contient l'état intermédiaire du moteur. Le renvoyer
   // toutes les 2,5 s coûtait des données mobiles à l'étudiant et du transfert à la base.
-  const { data: job, error } = await supabase
+  const { data: own, error } = await supabase
     .from('ai_jobs')
     .select('id, status, error, type, progress, phase, last_error, next_attempt_at, lease_until')
     .eq('id', id)
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: 'Lecture impossible.' }, { status: 500 });
+  let job = own;
+  let partage = false;
+  if (!job) {
+    // Job d'un autre étudiant (la RLS le cache) : visible seulement si c'est une préparation commune
+    // d'Étude guidée ET que l'appelant a lui-même accès à ce cours. Jamais son résultat ni ses détails.
+    const { data: autre } = await supabaseAdmin.from('ai_jobs')
+      .select('id, status, error, type, progress, phase, last_error, next_attempt_at, lease_until, payload')
+      .eq('id', id).maybeSingle();
+    const documentId = String((autre?.payload as any)?.documentId || '');
+    if (autre && JOBS_PARTAGES.has(autre.type) && UUID_RE.test(documentId) && (await accesEtude(user.id, user.email, documentId)).ok) {
+      const { payload: _p, ...sansPayload } = autre;
+      void _p;
+      // Message d'échec générique : les détails techniques d'un job commun ne sont pas exposés.
+      job = { ...sansPayload, last_error: null, error: autre.status === 'failed' ? 'La préparation n’a pas abouti. Réessaie dans un instant.' : null };
+      partage = true;
+    }
+  }
   if (!job) return NextResponse.json({ error: 'Job introuvable' }, { status: 404 });
 
   // Le résultat n'est lu qu'une fois, quand le job est terminé.
   let result: unknown = null;
-  if (job.status === 'completed' || job.status === 'done') {
+  if (!partage && (job.status === 'completed' || job.status === 'done')) {
     const { data: done } = await supabase.from('ai_jobs').select('result').eq('id', id).maybeSingle();
     result = done?.result ?? null;
   }

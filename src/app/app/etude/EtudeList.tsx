@@ -18,7 +18,7 @@ export default function EtudeList({ documents, progressByPdf }: {
     <div className={styles.page}>
       <header>
         <h1 className={styles.title}>Études guidées</h1>
-        <p className={styles.subtitle}>Choisis un cours : SJP le lit en entier, te remet une synthèse, puis t’accompagne séquence par séquence.</p>
+        <p className={styles.subtitle}>Choisis un cours : SJP le lit en entier, t’en montre la carte et les grandes questions, puis te l’enseigne notion par notion.</p>
       </header>
 
       {documents.length === 0 ? (

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node -e \"const fs = require('fs'); const path = 'node_modules/pdf-parse/index.js'; if(fs.existsSync(path)) { let data = fs.readFileSync(path, 'utf8'); data = data.replace('let isDebugMode = !module.parent;', 'let isDebugMode = false;'); fs.writeFileSync(path, data); }\"",
-    "test:unit": "node --test \"tests/unit/*.test.ts\"",
+    "test:unit": "node --import ./tests/ts-resolve.mjs --test \"tests/unit/*.test.ts\"",
     "test:integration": "node --test \"tests/integration/*.test.ts\""
   },
   "dependencies": {

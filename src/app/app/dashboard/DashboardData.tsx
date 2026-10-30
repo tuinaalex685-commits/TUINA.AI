@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { catalogLevelAllows } from '@/lib/access';
+import { ENGINE_VERSION } from '@/lib/etude3/types';
 import { exactEmailPattern } from '@/lib/email';
 import DashboardManager, { type ResumeItem, type ExamItem } from './DashboardManager';
 
@@ -30,7 +31,7 @@ export default async function DashboardData({ user }: { user: { id: string; emai
     supabase.from('flashcards').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('redactions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('etude_progression_cours').select('cours_id, statut, updated_at').eq('user_id', user.id)
+    supabase.from('etude_parcours').select('document_id, statut, updated_at').eq('user_id', user.id).eq('engine_version', ENGINE_VERSION)
       .order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('examen_sessions').select('id, document_id, score, submitted_at').eq('user_id', user.id)
       .eq('status', 'submitted').order('submitted_at', { ascending: false }).limit(3),
@@ -42,20 +43,19 @@ export default async function DashboardData({ user }: { user: { id: string; emai
 
   // « Reprendre » : le dernier cours ouvert, avec le bon lien (document personnel ou catalogue).
   let resume: ResumeItem | null = null;
-  if (lastProgress?.cours_id) {
-    const { data: cours } = await supabaseAdmin
-      .from('etude_cours').select('id, pdf_id').eq('id', lastProgress.cours_id).maybeSingle();
-    if (cours?.pdf_id) {
-      const [{ data: doc }, { data: catalog }] = await Promise.all([
-        supabaseAdmin.from('documents').select('id, nom, user_id').eq('id', cours.pdf_id).maybeSingle(),
-        supabaseAdmin.from('catalog_courses').select('id, titre_affiche, niveau').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle(),
-      ]);
-      if (doc && doc.user_id === user.id) {
-        resume = { title: doc.nom, href: `/app/etude/${doc.id}`, finished: lastProgress.statut === 'termine' };
-      } else if (catalog && (await catalogLevelAllows(supabaseAdmin, user.id, catalog.niveau ?? null))) {
-        // Cours d'une autre année (l'étudiant a changé d'année) : pas de lien « Reprendre » mort.
-        resume = { title: catalog.titre_affiche, href: `/app/etude/catalogue/${catalog.id}`, finished: lastProgress.statut === 'termine' };
-      }
+  if (lastProgress?.document_id) {
+    const [{ data: doc }, { data: cours }] = await Promise.all([
+      supabaseAdmin.from('documents').select('id, nom, user_id').eq('id', lastProgress.document_id).maybeSingle(),
+      supabaseAdmin.from('etude_cours').select('id').eq('pdf_id', lastProgress.document_id).maybeSingle(),
+    ]);
+    const { data: catalog } = cours
+      ? await supabaseAdmin.from('catalog_courses').select('id, titre_affiche, niveau').eq('etude_cours_id', cours.id).eq('actif', true).maybeSingle()
+      : { data: null };
+    if (doc && doc.user_id === user.id) {
+      resume = { title: doc.nom.replace(/\.pdf$/i, ''), href: `/app/etude/${doc.id}`, finished: lastProgress.statut === 'termine' };
+    } else if (catalog && (await catalogLevelAllows(supabaseAdmin, user.id, catalog.niveau ?? null))) {
+      // Cours d'une autre année (l'étudiant a changé d'année) : pas de lien « Reprendre » mort.
+      resume = { title: catalog.titre_affiche, href: `/app/etude/${lastProgress.document_id}`, finished: lastProgress.statut === 'termine' };
     }
   }
 

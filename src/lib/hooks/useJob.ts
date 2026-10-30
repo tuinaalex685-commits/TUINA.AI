@@ -60,6 +60,12 @@ export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
       try {
         // Délai maximal : sur un réseau mobile instable, une requête suspendue figeait le suivi.
         const res = await fetch(`/api/jobs/${jobId}`, { cache: 'no-store', signal: AbortSignal.timeout(15_000) });
+        // Job introuvable ou refusé : définitif, inutile de réessayer indéfiniment.
+        if (res.status === 404 || res.status === 401) {
+          stopped = true;
+          cbRef.current.onError?.(res.status === 401 ? 'Ta session a expiré : reconnecte-toi.' : 'Ce traitement est introuvable. Recharge la page.');
+          return;
+        }
         if (!res.ok) throw new Error('poll failed');
         const job = await res.json();
         if (stopped) return;

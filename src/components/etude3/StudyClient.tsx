@@ -70,7 +70,7 @@ export function BeginPath({ documentId }: { documentId: string }) {
         router.push(`/app/etude/${documentId}/sequence/1`);
       }}
     >
-      {busy ? 'Ouverture…' : 'Commencer le parcours'}
+      {busy ? 'Ouverture…' : 'Commencer la leçon 1'}
     </button>
   );
 }
@@ -113,8 +113,8 @@ export function SequencePreparing({ documentId, ordre }: { documentId: string; o
   }
   return (
     <div className={styles.panel} role="status" aria-live="polite">
-      <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || `Préparation de la séquence ${ordre}…`}</p>
-      <p className={styles.panelText} style={{ margin: 'var(--s-3) 0 0' }}>Elle est construite à partir des pages de ton cours qui la concernent. Cela prend en général moins d’une minute, et une seule fois pour tous les étudiants de ce cours.</p>
+      <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || `Préparation de la leçon ${ordre}…`}</p>
+      <p className={styles.panelText} style={{ margin: 'var(--s-3) 0 0' }}>Elle est construite à partir des pages de ton cours qui la concernent. Cela prend en général moins d’une minute, une seule fois pour tous les étudiants de ce cours.</p>
     </div>
   );
 }

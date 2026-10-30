@@ -574,10 +574,6 @@
   border-bottom: 1px solid var(--rule);
 }
 
-.seqDots { display: flex; gap: 6px; align-items: center; }
-.seqDot { width: 10px; height: 10px; border-radius: 50%; background: var(--paper-3); border: 1.5px solid var(--rule-strong); }
-.seqDotDone { background: var(--juste); border-color: var(--juste); }
-.seqDotOn { background: var(--action); border-color: var(--action); transform: scale(1.25); }
 
 .objective {
   max-width: 68ch;
@@ -687,17 +683,6 @@
 
 .finishReady { border-style: solid; border-color: var(--juste); background: var(--juste-soft); }
 
-/* ---------- Carte mentale ------------------------------------------------ */
-.mindmap {
-  width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-lg);
-  background: var(--paper);
-}
-
-.mindmap svg { display: block; min-width: 720px; width: 100%; height: auto; }
-
 .legend { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); margin-top: var(--s-3); font-size: var(--text-xs); color: var(--ink-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -741,8 +726,6 @@
   .memo h2, .memo .term { color: #0C2C45 !important; }
   .term { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .example, .trap, .warning, .process, .treeQuestion { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .mindmap { overflow: visible; border: 0; }
-  .mindmap svg { min-width: 0; }
   .printOnly { display: block !important; }
 }
 
@@ -765,3 +748,348 @@
 .badge { display: inline-flex; padding: 2px 10px; border-radius: 999px; background: var(--paper-3); color: var(--ink-2); font-size: var(--text-xs); font-weight: 700; }
 .badgeOn { background: var(--action-soft); color: var(--action); }
 .badgeDone { background: var(--juste-soft); color: var(--juste); }
+
+/* ==========================================================================
+   Études guidées v4 — leçons pas à pas, dessins, cartes, introduction.
+   Un seul geste fort : le fil de la leçon, surligné à l'étape en cours.
+   ========================================================================== */
+
+.kicker {
+  margin: 0 0 var(--s-2);
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-md);
+  color: var(--ink-2);
+}
+
+.seqCount { margin: 0; font-size: var(--text-sm); font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.seqLinks { display: inline-flex; gap: 2px; }
+
+/* ---------- Le fil de la leçon (stepper) -------------------------------- */
+.lesson { display: flex; flex-direction: column; gap: var(--s-6); }
+
+.stepper {
+  position: sticky;
+  top: 62px;
+  z-index: 5;
+  margin: 0 calc(var(--s-2) * -1);
+  padding: var(--s-2);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--paper-2) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(8px);
+  -webkit-backdrop-filter: saturate(1.4) blur(8px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.stepper::-webkit-scrollbar { display: none; }
+.stepper ol { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: max-content; }
+.stepper button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px 0 6px;
+  border-radius: 999px;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out);
+}
+.stepper button:disabled { cursor: default; opacity: 0.6; }
+.stepper button:not(:disabled):hover { background: var(--paper-3); color: var(--ink); }
+.stepperDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule-strong);
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 200ms var(--ease-out), border-color 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+.stepperDone button { color: var(--ink-2); }
+.stepperDone .stepperDot { border-color: var(--juste); background: var(--juste); color: #FFFFFF; }
+.stepperNow button { color: var(--ink); background: var(--surligneur-soft); }
+.stepperNow .stepperDot { border-color: var(--ink); background: var(--surligneur); color: var(--ink); transform: scale(1.06); }
+@media (max-width: 640px) {
+  .stepperLabel { display: none; }
+  .stepperNow .stepperLabel { display: inline; }
+  .stepper { top: 56px; }
+}
+
+/* ---------- L'accroche : la situation, écrite comme au tableau ---------- */
+.hook {
+  position: relative;
+  padding: var(--s-6) var(--s-6) var(--s-5);
+  border-radius: var(--radius-lg);
+  background: var(--sjp-blue);
+  color: #F3F6FA;
+  box-shadow: 0 1px 0 rgba(12, 44, 69, 0.08), 0 18px 40px -24px rgba(12, 44, 69, 0.55);
+}
+.hookLabel { margin: 0 0 var(--s-3); font-size: var(--text-sm); font-weight: 700; color: #BFD3E6; }
+.hookText { font-family: var(--font-serif); font-size: clamp(1.15rem, 2.4vw, 1.4rem); line-height: 1.5; }
+.hookText strong { color: #FFFFFF; background: none; }
+.hookQuestion {
+  display: inline-block;
+  margin: var(--s-4) 0 0;
+  padding: 0 4px;
+  font-weight: 700;
+  font-size: var(--text-md);
+  line-height: 1.7;
+  color: var(--ink);
+  background: linear-gradient(transparent 12%, var(--surligneur) 12%, var(--surligneur) 88%, transparent 88%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* ---------- Les étapes de la leçon -------------------------------------- */
+.lessonSteps { display: flex; flex-direction: column; gap: var(--s-8); }
+.lessonStep { scroll-margin-top: 130px; }
+.lessonStepHead { display: flex; align-items: flex-start; gap: var(--s-3); margin-bottom: var(--s-4); }
+.lessonStepNum {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--sjp-blue);
+  color: var(--sjp-blue);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.lessonStepTitle { margin: 0; font-family: var(--font-serif); font-size: clamp(1.3rem, 3vw, 1.6rem); font-weight: 600; color: var(--sjp-blue); line-height: 1.2; }
+.lessonStepSub { margin: 4px 0 0; font-size: var(--text-sm); color: var(--ink-3); }
+.lessonStepBody { display: flex; flex-direction: column; gap: var(--s-5); padding-left: calc(34px + var(--s-3)); }
+@media (max-width: 640px) { .lessonStepBody { padding-left: 0; } }
+
+.continueBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-5) 0 var(--s-2);
+  border-top: 1px dashed var(--rule-strong);
+}
+
+.explain {
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  border: 1.5px solid var(--sjp-blue);
+}
+
+/* Les mots du droit, un par un. */
+.terms { margin: 0; display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
+.termRow { display: grid; gap: 4px var(--s-4); padding: var(--s-3) 0; border-bottom: 1px solid var(--rule); }
+.termRow dt { font-weight: 700; }
+.termRow dd { margin: 0; color: var(--ink-2); line-height: 1.6; }
+@media (min-width: 720px) { .termRow { grid-template-columns: minmax(150px, 0.38fr) 1fr; } }
+
+.activityLevel {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--paper-3);
+  color: var(--sjp-blue);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+/* ---------- Dessins pédagogiques ---------------------------------------- */
+.dessin { display: flex; flex-direction: column; gap: var(--s-3); }
+.dessinScroll { overflow-x: auto; border-radius: var(--radius-lg); background: linear-gradient(180deg, #F7FAFD 0%, #FFFFFF 72%); border: 1px solid var(--rule); }
+.dessinSvg { display: block; width: 100%; min-width: 440px; height: auto; }
+.dessinActions { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); line-height: 1.5; }
+.dessinActions li { display: flex; align-items: baseline; gap: 10px; }
+.dessinNum {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #B8541E;
+  color: #B8541E;
+  font-size: 12px;
+  font-weight: 800;
+  transform: translateY(4px);
+}
+.dessinVers { color: var(--ink-3); }
+
+.compare { display: grid; gap: var(--s-5) var(--s-3); padding-top: 14px; }
+@media (max-width: 640px) { .compare { grid-template-columns: 1fr !important; } }
+.compareCard { position: relative; padding: var(--s-5) var(--s-4) var(--s-4); border-radius: var(--radius-md); background: var(--paper); border: 1.5px solid var(--rule-strong); }
+.compareTag {
+  position: absolute;
+  top: -13px;
+  left: var(--s-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sjp-blue);
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 13px;
+}
+.compareTitle { margin: 0 0 6px; font-weight: 700; color: var(--ink); }
+.compareText { margin: 0; font-size: var(--text-sm); color: var(--ink-2); line-height: 1.55; }
+.compareResult { margin: var(--s-3) 0 0; padding-top: var(--s-3); border-top: 1px dashed var(--rule-strong); font-size: var(--text-sm); font-weight: 600; color: var(--sjp-blue); }
+.compareCritere { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--radius-md); background: var(--surligneur-soft); line-height: 1.55; }
+
+/* ---------- Carte mentale interactive ----------------------------------- */
+.map { border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--paper); overflow: hidden; }
+.mapBar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3); border-bottom: 1px solid var(--rule); background: var(--paper-2); }
+.mapNav { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: var(--radius-md); color: var(--ink-2); border: 1px solid var(--rule-strong); background: var(--paper); transition: background-color 150ms var(--ease-out); }
+.mapNav:hover:not(:disabled) { background: var(--paper-3); }
+.mapNav:disabled { opacity: 0.4; }
+.mapSelect { flex: 1; min-width: 0; }
+.mapSelect select { width: 100%; min-height: 44px; padding: 0 12px; border-radius: var(--radius-md); border: 1px solid var(--rule-strong); background: var(--paper); font: inherit; font-weight: 600; color: var(--ink); text-overflow: ellipsis; }
+
+.mapBody { display: grid; }
+@media (min-width: 900px) { .mapBody { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); } }
+.mapTree { padding: var(--s-5) var(--s-4) var(--s-4); overflow-x: auto; }
+.mapCentre {
+  display: inline-block;
+  margin-bottom: var(--s-3);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--sjp-blue);
+  color: #FFFFFF;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.mapRoots, .mapChildren { margin: 0; padding: 0; list-style: none; }
+.mapRoots { padding-left: 14px; border-left: 2px solid var(--sjp-blue); margin-left: 22px; }
+.mapChildren { margin-left: 20px; padding-left: 16px; border-left: 2px solid var(--rule-strong); }
+.mapItem { position: relative; padding: 6px 0; }
+.mapItem::before { content: ""; position: absolute; left: -16px; top: 27px; width: 14px; height: 2px; background: var(--rule-strong); }
+.mapRoots > .mapItem::before { left: -14px; background: var(--sjp-blue); }
+.mapLink { display: block; margin: 0 0 3px 30px; font-family: var(--font-serif); font-style: italic; font-size: var(--text-xs); color: var(--ink-3); }
+.mapRow { display: flex; align-items: center; gap: 4px; }
+.mapToggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; color: var(--ink-2); }
+.mapToggle:hover { background: var(--paper-3); }
+.mapToggleVide { width: 28px; flex-shrink: 0; }
+.mapNode {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid;
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.35;
+  transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+.mapNode:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -10px rgba(12, 44, 69, 0.45); }
+.mapNodeOn { box-shadow: 0 0 0 3px var(--surligneur) !important; }
+.mapNodeType { font-size: 11px; font-weight: 800; opacity: 0.75; }
+.mapCount { font-size: 11px; font-weight: 800; color: var(--ink-3); }
+.nodeNotion { background: #E8F0F7; border-color: #1E5A96; color: #12324F; }
+.nodeRegle { background: #0C2C45; border-color: #0C2C45; color: #FFFFFF; }
+.nodeRegle .mapNodeType, .nodeRegle .mapCount { color: #BFD3E6; }
+.nodeCondition { background: #FFF3C4; border-color: #8A5A00; color: #4A3200; }
+.nodeException { background: #FCE9E7; border-color: #B42E2E; color: #6E1A1A; }
+.nodeConsequence { background: #E3F3EA; border-color: #26734D; color: #164A31; }
+.mapTools { display: flex; gap: var(--s-2); margin-top: var(--s-4); }
+
+.mapDetail { padding: var(--s-5); border-top: 1px solid var(--rule); background: var(--paper-2); }
+@media (min-width: 900px) { .mapDetail { border-top: 0; border-left: 1px solid var(--rule); } }
+.mapDetailType { display: inline-block; margin-bottom: 6px; color: var(--ink-3); }
+.mapDetailTitle { margin: 0 0 var(--s-2); font-family: var(--font-serif); font-size: var(--text-lg); font-weight: 600; color: var(--sjp-blue); }
+.mapDetailRel { margin: 0 0 var(--s-3); font-size: var(--text-sm); color: var(--ink-2); }
+.mapLessons { margin-top: var(--s-4); }
+.mapLessons ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.mapLessons a { color: var(--action); font-weight: 600; }
+.mapLessons a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+ul.legend { padding: 0; list-style: none; }
+
+/* ---------- Introduction au cours --------------------------------------- */
+.questions { display: grid; gap: var(--s-3); margin: var(--s-4) 0 0; padding: 0; list-style: none; }
+@media (min-width: 760px) { .questions { grid-template-columns: 1fr 1fr; } }
+.questionCard { padding: var(--s-4) var(--s-5); border-left: 3px solid var(--sjp-blue); background: var(--paper); border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.questionQ { margin: 0 0 6px; font-family: var(--font-serif); font-size: var(--text-md); font-weight: 600; color: var(--sjp-blue); }
+.questionR { margin: 0; line-height: 1.55; }
+.questionOu { margin: 6px 0 0; font-size: var(--text-xs); color: var(--ink-3); }
+
+.branches { display: flex; flex-direction: column; gap: var(--s-8); margin-top: var(--s-5); }
+.branch { position: relative; display: flex; flex-direction: column; gap: var(--s-3); padding-left: 52px; }
+.branchNum {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--sjp-blue);
+  color: #FFFFFF;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+.branch .h3 { margin: 4px 0 0; }
+.branchIdee { font-size: var(--text-md); font-weight: 600; color: var(--ink); }
+.branchLabel { font-weight: 700; color: var(--sjp-blue); }
+.branchMeta { margin: 0; font-size: var(--text-sm); color: var(--ink-3); }
+.branchMeta a { color: var(--action); font-weight: 600; }
+@media (max-width: 640px) { .branch { padding-left: 0; } .branchNum { position: static; } }
+
+/* ---------- Parcours groupé par partie ---------------------------------- */
+.partie { margin-top: var(--s-6); }
+.partieTitre { margin: 0 0 var(--s-3); font-family: var(--font-serif); font-size: var(--text-lg); font-weight: 600; color: var(--sjp-blue); }
+.moduleBox { margin-bottom: var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--paper); }
+.moduleBox[open] { border-color: var(--rule-strong); }
+.moduleHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 52px;
+  padding: var(--s-3) var(--s-4);
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-lg);
+}
+.moduleHead::-webkit-details-marker { display: none; }
+.moduleHead::after { content: ""; width: 9px; height: 9px; flex-shrink: 0; margin-top: -4px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform 180ms var(--ease-out); }
+.moduleBox[open] > .moduleHead::after { transform: rotate(225deg); margin-top: 4px; }
+.moduleHead:hover { background: var(--paper-2); }
+.moduleTitre { flex: 1; min-width: 0; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.moduleCompte { font-size: var(--text-xs); font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.moduleBox > .rail { padding: var(--s-2) var(--s-4) 0; }
+.railRevoir .railDot { border-color: var(--partiel); background: var(--partiel-soft); color: var(--partiel); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stepper button, .stepperDot, .mapNode, .moduleHead::after { transition: none; }
+  .mapNode:hover { transform: none; }
+}
+
+@media print {
+  .stepper, .continueBox, .map { display: none !important; }
+  .hook { background: #FFFFFF !important; color: #000000 !important; border: 1.5pt solid #0C2C45; box-shadow: none; }
+  .hookLabel { color: #0C2C45 !important; }
+  .dessinScroll { border: 0; background: none; }
+  .dessinSvg { min-width: 0; }
+  .branch, .questionCard, .compareCard, .dessin { break-inside: avoid; page-break-inside: avoid; }
+}

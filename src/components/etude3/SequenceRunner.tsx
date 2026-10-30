@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { answerActivity, completeSequence } from '@/app/actions/etude3';
-import { MAX_TENTATIVES, type Activite, type RetourActivite } from '@/lib/etude3/types';
+import { MAX_TENTATIVES, type ActivitePublique, type NiveauActivite, type RetourActivite } from '@/lib/etude3/types';
 import { Rich } from './Blocks';
 import styles from './etude3.module.css';
 
@@ -19,6 +19,7 @@ export interface EtatInitial {
 
 const LETTRES = ['A', 'B', 'C', 'D', 'E'];
 const TITRES: Record<RetourActivite['verdict'], string> = { juste: 'C’est juste.', partiel: 'C’est en partie juste.', faux: 'Pas tout à fait.' };
+const NIVEAUX: Record<NiveauActivite, string> = { comprendre: 'Comprendre', distinguer: 'Distinguer', appliquer: 'Appliquer', examen: 'Niveau examen' };
 
 function Feedback({ r }: { r: RetourActivite }) {
   const cls = r.verdict === 'juste' ? styles.feedbackJuste : r.verdict === 'partiel' ? styles.feedbackPartiel : styles.feedbackFaux;
@@ -32,6 +33,12 @@ function Feedback({ r }: { r: RetourActivite }) {
       {r.verdict !== 'juste' && r.autre_explication && !r.bonne_reponse && (
         <div className={styles.feedbackMore}><strong>Une autre façon de voir</strong><Rich text={r.autre_explication} /></div>
       )}
+      {r.verdict !== 'juste' && r.explication_simple && !r.bonne_reponse && (
+        <div className={styles.feedbackMore}><strong>Reprenons plus simplement, pas à pas</strong><Rich text={r.explication_simple} /></div>
+      )}
+      {r.verdict !== 'juste' && r.prerequis && (
+        <div className={styles.feedbackMore}><strong>À revoir d’abord</strong><Rich text={r.prerequis} /></div>
+      )}
       {r.bonne_reponse && (
         <div className={styles.feedbackMore}>
           <strong>Le raisonnement attendu</strong><Rich text={r.bonne_reponse} />
@@ -43,7 +50,7 @@ function Feedback({ r }: { r: RetourActivite }) {
 }
 
 function ActivityCard({ documentId, ordre, a, initial, onTermine }: {
-  documentId: string; ordre: number; a: Activite; initial: EtatInitial; onTermine: () => void;
+  documentId: string; ordre: number; a: ActivitePublique; initial: EtatInitial; onTermine: () => void;
 }) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState('');
@@ -64,11 +71,13 @@ function ActivityCard({ documentId, ordre, a, initial, onTermine }: {
     if (r.termine) onTermine();
   };
 
-  const showRight = a.type === 'choix' && state.termine;
+  // La bonne proposition n'est connue du navigateur qu'une fois l'activité terminée (renvoyée par le serveur).
+  const bonne = state.termine ? state.dernier?.bonne_index : undefined;
+  const showRight = a.type === 'choix' && typeof bonne === 'number';
   return (
     <section className={styles.activity} aria-labelledby={`q-${a.id}`}>
       <div className={styles.activityHead}>
-        <span className={styles.activityNotion}>{a.notion}</span>
+        <span className={styles.activityNotion}>{a.niveau && <span className={styles.activityLevel}>{NIVEAUX[a.niveau]}</span>}{a.notion}</span>
         <span className={styles.attempts} aria-label={`Tentative ${Math.min(state.tentatives, MAX_TENTATIVES)} sur ${MAX_TENTATIVES}`}>
           {Array.from({ length: MAX_TENTATIVES }, (_, i) => (
             <i key={i} className={`${styles.attempt} ${i < state.tentatives ? (state.reussie && i === state.tentatives - 1 ? styles.attemptOk : styles.attemptUsed) : ''}`} />
@@ -80,7 +89,7 @@ function ActivityCard({ documentId, ordre, a, initial, onTermine }: {
       {a.type === 'choix' ? (
         <ul className={styles.choices} role="radiogroup" aria-labelledby={`q-${a.id}`}>
           {a.choix.map((c, i) => {
-            const right = showRight && i === a.bonne;
+            const right = showRight && i === bonne;
             const on = choice === i;
             return (
               <li key={i}>
@@ -119,8 +128,8 @@ function ActivityCard({ documentId, ordre, a, initial, onTermine }: {
   );
 }
 
-export default function SequenceRunner({ documentId, ordre, activites, initial, isLast }: {
-  documentId: string; ordre: number; activites: Activite[]; initial: Record<string, EtatInitial>; isLast: boolean;
+export default function SequenceRunner({ documentId, ordre, activites, initial, isLast, suite }: {
+  documentId: string; ordre: number; activites: ActivitePublique[]; initial: Record<string, EtatInitial>; isLast: boolean; suite?: string;
 }) {
   const router = useRouter();
   const [done, setDone] = useState(() => new Set(activites.filter((a) => initial[a.id]?.termine).map((a) => a.id)));
@@ -138,6 +147,7 @@ export default function SequenceRunner({ documentId, ordre, activites, initial, 
     <MotionConfig reducedMotion="user">
       <div className={styles.check}>
         <h2 className={styles.h2} style={{ marginTop: 0 }}>Vérifie ta compréhension</h2>
+        <p className={styles.p} style={{ marginTop: 'calc(-1 * var(--s-2))' }}>Des questions de plus en plus exigeantes. On ne passe pas à la suite parce qu’on a lu, mais parce qu’on a compris : en cas d’erreur, tu reçois une autre explication.</p>
         {activites.map((a) => (
           <ActivityCard
             key={a.id}
@@ -150,11 +160,12 @@ export default function SequenceRunner({ documentId, ordre, activites, initial, 
         ))}
         <div className={`${styles.finish} ${all ? styles.finishReady : ''}`}>
           <p className={styles.p} style={{ fontWeight: 700 }}>
-            {all ? (isLast ? 'Tu as terminé le parcours.' : 'Séquence terminée.') : `Encore ${activites.length - done.size} activité${activites.length - done.size > 1 ? 's' : ''} pour terminer cette séquence.`}
+            {all ? (isLast ? 'Tu as terminé le parcours.' : 'Leçon terminée.') : `Encore ${activites.length - done.size} question${activites.length - done.size > 1 ? 's' : ''} pour valider cette leçon.`}
           </p>
+          {all && suite && <p className={styles.p}><span className={styles.calloutLabel}>Et maintenant ? </span><Rich text={suite} /></p>}
           <div className={styles.actions}>
             <button type="button" className={styles.primary} onClick={finish} disabled={!all || busy}>
-              {busy ? 'Enregistrement…' : isLast ? 'Voir mon bilan' : 'Séquence suivante'}
+              {busy ? 'Enregistrement…' : isLast ? 'Voir mon bilan' : 'Leçon suivante'}
             </button>
           </div>
         </div>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { ENGINE_VERSION } from '@/lib/etude3/types';
 import CatalogueList from './CatalogueList';
 import AdSlot from '@/components/ads/AdSlot';
 import { isPremium } from '@/lib/plan';
@@ -34,16 +36,18 @@ export default async function CataloguePage() {
   const visibles = (entries || []).filter((e) => catalogVisibleFor(e.niveau, niveau));
   const coursIds = visibles.map((e) => e.etude_cours_id);
 
-  const { data: progressions } = coursIds.length
-    ? await supabase
-        .from('etude_progression_cours')
-        .select('cours_id, statut')
-        .eq('user_id', user.id)
-        .in('cours_id', coursIds)
-    : { data: [] as { cours_id: string; statut: string }[] };
+  // État réel de l'Étude guidée (parcours v4, enregistré par le serveur), retrouvé par document.
+  const { data: cours } = coursIds.length
+    ? await supabaseAdmin.from('etude_cours').select('id, pdf_id').in('id', coursIds)
+    : { data: [] as { id: string; pdf_id: string }[] };
+  const pdfIds = (cours || []).map((c) => c.pdf_id).filter(Boolean);
+  const { data: parcours } = pdfIds.length
+    ? await supabase.from('etude_parcours').select('document_id, statut, engine_version').eq('user_id', user.id).in('document_id', pdfIds)
+    : { data: [] as { document_id: string; statut: string; engine_version: string }[] };
+  const statutParPdf = new Map((parcours || []).filter((p) => p.engine_version === ENGINE_VERSION).map((p) => [p.document_id, p.statut]));
 
   const progressByCours: Record<string, string> = {};
-  (progressions || []).forEach((p) => { progressByCours[p.cours_id] = p.statut; });
+  (cours || []).forEach((c) => { const st = statutParPdf.get(c.pdf_id); if (st) progressByCours[c.id] = st; });
 
   return (
     <>
