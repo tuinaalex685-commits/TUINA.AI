@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from '@/lib/supabase/server';
+import { documentsAvecEtudeV4 } from '@/lib/etude3/examen';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
@@ -148,6 +149,8 @@ export async function getExamDashboard() {
   const { data: cours } = await supabaseAdmin
     .from('etude_cours').select('pdf_id, statut_generation').in('pdf_id', ids);
   for (const c of cours || []) if ((c as any).statut_generation === 'pret') pretPdf.add((c as any).pdf_id);
+  // Étude guidée v4 prête (analyse commune du cours) : l'examen est disponible aussi.
+  for (const id of (await documentsAvecEtudeV4(ids)).keys()) pretPdf.add(id);
 
   // Banques prêtes (clé = text_hash = source_hash de la banque).
   const hashes = docList.map((d: any) => d.text_hash).filter(Boolean);

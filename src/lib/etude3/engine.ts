@@ -45,7 +45,7 @@ const SYNTHESE_MAX_CHARS = 110000;
  * coupe une exécution à 300 s. Chaque appel doit rester bien sous la minute.
  */
 const THINK = { module: 0, synthese: 512, lecon: 512 };
-const MAX_TOKENS = { module: 8192, synthese: 8192, lecon: 12288 };
+const MAX_TOKENS = { module: 8192, synthese: 12288, lecon: 12288 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;
@@ -335,6 +335,7 @@ export async function processEtudeSequence(job: any, deps: EngineDeps): Promise<
     const prompt = [
       `COURS : ${analyse.titre || ''}`,
       mod ? `MODULE : ${[...mod.chemin, mod.titre].join(' > ')} — ${mod.idee_centrale}` : '',
+      `PROFIL DU MODULE : ${compris?.profil || 'concepts'}`,
       precedente ? `LEÇON PRÉCÉDENTE (déjà étudiée) : ${precedente.titre}` : 'C’est la PREMIÈRE leçon du parcours.',
       `LEÇON ${ordre} sur ${plan.length} : ${item.titre}\nObjectif : ${item.objectif}\nNotions : ${item.notions.join(', ')}${item.accroche ? `\nAccroche prévue : ${item.accroche}` : ''}`,
       suivante ? `LEÇON SUIVANTE (à annoncer dans « suite ») : ${suivante.titre} — ${suivante.objectif}` : 'C’est la DERNIÈRE leçon : « suite » vide.',

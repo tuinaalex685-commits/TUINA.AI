@@ -45,15 +45,14 @@ export const DIRECTEUR_COMPRENDRE = `COMPRENDRE AVANT D'EXPLIQUER (travail inter
 Pour chaque notion, établis : ce qu'elle signifie ; le problème auquel elle répond et pourquoi elle existe ; comment elle fonctionne ; les notions qui lui sont liées ; les connaissances préalables nécessaires ; les erreurs de compréhension fréquentes ; les exemples qui la rendent compréhensible ; les pages du cours qui la fondent.
 Hiérarchise : indispensable, importante, subtile, complémentaire. Ne supprime pas le « secondaire » : une règle secondaire peut être décisive dans un exercice.`;
 
-export const DIRECTEUR_VISUELS = `DESSINS ET SCHÉMAS PÉDAGOGIQUES (jamais décoratifs, jamais obligatoires)
-Avant d'en proposer un, demande-toi s'il apporte une information que le texte seul transmet mal.
-- OUI quand : une situation est difficile à imaginer ; un mécanisme met en jeu plusieurs acteurs ou étapes ; une notion abstraite peut devenir concrète ; une comparaison visuelle aide à distinguer deux notions ; un ordre dans le temps ou dans l'espace compte.
-- NON quand : le contenu est théorique et s'explique mieux par le texte ; un tableau suffit ; l'image n'ajouterait rien ou distrairait. Dans le doute, n'en mets pas. Au plus UNE scène ou comparaison par leçon.
-Types :
-- scene : un dessin de la situation, avec 2 à 4 acteurs (genre : personne, juge, avocat, institution, groupe ; rôle juridique exact : créancier, débiteur, demandeur, défendeur…), une courte réplique facultative (« dit ») et 1 à 5 actions orientées (« prête 100 000 FCFA », « refuse de rembourser », « saisit le tribunal », « tranche le litige »).
-- comparaison : 2 ou 3 situations côte à côte qui ne diffèrent que par le critère à comprendre (« critere »), chacune avec sa conséquence.
-- processus (étapes dans l'ordre), arbre (succession de conditions), frise (chronologie), tableau (comparaison détaillée).
-Une représentation n'invente JAMAIS une règle, un acteur ou une relation juridique absente du cours. Sa « legende » dit toujours ce qu'elle représente ET ce que l'étudiant doit en comprendre ; le texte de la leçon reste l'explication principale.`;
+export const DIRECTEUR_VISUELS = `DESSINS PÉDAGOGIQUES (l'étudiant doit pouvoir SE REPRÉSENTER la situation)
+- Dès qu'une notion met en scène des PERSONNES (mariage, contrat, dette, procès, succession, famille, travail, institutions et citoyens…), mets UN dessin (bloc « scene ») dans l'étape « illustrer » : les personnages, leur rôle juridique en étiquette (« Officier d'état civil », « Époux », « Créancier », « Juge »…), ce qu'ils disent dans une bulle courte avec « etat » oui (✓ accord, consentement) ou non (✗ refus, contrainte, vice), et les actions entre eux.
+  Exemple mariage : l'officier d'état civil (genre « officier ») face aux futurs époux (sexe « homme » / « femme »), bulles « Oui » avec ✓.
+- Quand deux situations s'opposent (consentement libre / vicié, action recevable / irrecevable), préfère un bloc « comparaison » en deux panneaux, chaque panneau marqué « valide » vrai ou faux.
+- PAS de dessin pour une notion purement théorique (une classification, une source du droit, une date) : un tableau ou un processus convient mieux.
+- Chaque acteur a une « explication » d'une phrase (son rôle juridique) ; le dessin a une « legende » qui dit ce qu'il montre ET ce qu'il faut en comprendre, et 2 ou 3 « questions » qu'un étudiant se poserait en le regardant, avec leur réponse courte et exacte.
+- Autres représentations : processus (étapes), arbre (conditions), frise (chronologie), tableau (comparaison détaillée).
+Un dessin n'invente JAMAIS une règle, un acteur ou une relation juridique absente du cours ; le texte de la leçon reste l'explication principale.`;
 
 /** En-tête commun de toutes les consignes système du moteur. */
 export const DIRECTEUR = [DIRECTEUR_IDENTITE, DIRECTEUR_FIDELITE, DIRECTEUR_METHODE].join('\n\n');

@@ -13,7 +13,7 @@ const strs = (v: unknown, maxItems = 30, max = 600) =>
 const ints = (v: unknown, maxPage: number) =>
   Array.from(new Set((Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= maxPage))).slice(0, 40);
 const origine = (v: unknown): Origine | undefined => (v === 'cours' || v === 'explication' || v === 'complement' ? v : undefined);
-const GENRES = new Set<Acteur['genre']>(['personne', 'juge', 'avocat', 'institution', 'groupe']);
+const GENRES = new Set<Acteur['genre']>(['personne', 'officier', 'juge', 'avocat', 'institution', 'groupe']);
 
 export function normalizeBloc(raw: any, maxPage: number): Bloc | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -32,6 +32,9 @@ export function normalizeBloc(raw: any, maxPage: number): Bloc | null {
       return items.length ? { type: 'termes', items } : null;
     }
     case 'exemple': return str(raw.texte) ? { type: 'exemple', titre: str(raw.titre, 200) || undefined, texte: str(raw.texte) } : null;
+    case 'revele': return str(raw.question, 400) && str(raw.reponse, 1200) ? { type: 'revele', question: str(raw.question, 400), reponse: str(raw.reponse, 1200) } : null;
+    case 'vraifaux': return str(raw.affirmation, 400) && typeof raw.vrai === 'boolean' && str(raw.explication, 800)
+      ? { type: 'vraifaux', affirmation: str(raw.affirmation, 400), vrai: raw.vrai, explication: str(raw.explication, 800) } : null;
     case 'piege': return str(raw.texte) ? { type: 'piege', texte: str(raw.texte) } : null;
     case 'attention': return str(raw.texte) ? { type: 'attention', texte: str(raw.texte) } : null;
     case 'incertitude': return str(raw.texte) ? { type: 'incertitude', texte: str(raw.texte) } : null;
@@ -48,7 +51,10 @@ export function normalizeBloc(raw: any, maxPage: number): Bloc | null {
       const acteurs: Acteur[] = (Array.isArray(raw.acteurs) ? raw.acteurs : [])
         .map((a: any) => ({
           id: str(a?.id, 20), nom: str(a?.nom, 40), role: str(a?.role, 60),
-          genre: GENRES.has(a?.genre) ? a.genre : 'personne', dit: str(a?.dit, 120) || undefined,
+          genre: GENRES.has(a?.genre) ? a.genre : 'personne', dit: str(a?.dit, 90) || undefined,
+          sexe: a?.sexe === 'femme' || a?.sexe === 'homme' ? a.sexe : undefined,
+          etat: a?.etat === 'oui' || a?.etat === 'non' ? a.etat : undefined,
+          explication: str(a?.explication, 400) || undefined,
         }))
         .filter((a: Acteur) => a.id && a.nom && !vus.has(a.id) && vus.add(a.id))
         .slice(0, 4);
@@ -57,13 +63,18 @@ export function normalizeBloc(raw: any, maxPage: number): Bloc | null {
         .map((r: any) => ({ de: str(r?.de, 20), vers: str(r?.vers, 20), action: str(r?.action, 80) }))
         .filter((r: { de: string; vers: string; action: string }) => ids.has(r.de) && ids.has(r.vers) && r.de !== r.vers && r.action)
         .slice(0, 5);
-      return acteurs.length >= 2 && relations.length >= 1 && legende
-        ? { type: 'scene', titre: str(raw.titre, 200) || 'La situation', acteurs, relations, legende }
+      return acteurs.length >= 2 && legende
+        ? {
+            type: 'scene', titre: str(raw.titre, 200) || 'La situation', acteurs, relations, legende,
+            questions: (Array.isArray(raw.questions) ? raw.questions : [])
+              .map((q: any) => ({ question: str(q?.question, 200), reponse: str(q?.reponse, 800) }))
+              .filter((q: { question: string; reponse: string }) => q.question && q.reponse).slice(0, 4),
+          }
         : null;
     }
     case 'comparaison': {
       const cotes = (Array.isArray(raw.cotes) ? raw.cotes : [])
-        .map((c: any) => ({ titre: str(c?.titre, 120), situation: str(c?.situation, 600), consequence: str(c?.consequence, 400) }))
+        .map((c: any) => ({ titre: str(c?.titre, 120), situation: str(c?.situation, 600), consequence: str(c?.consequence, 400), valide: typeof c?.valide === 'boolean' ? c.valide : undefined }))
         .filter((c: { titre: string; situation: string }) => c.titre && c.situation).slice(0, 3);
       return cotes.length >= 2 && legende && str(raw.critere, 300)
         ? { type: 'comparaison', titre: str(raw.titre, 200) || 'Comparer', cotes, critere: str(raw.critere, 300), legende }
@@ -143,6 +154,7 @@ export interface AnalyseModule {
   ambiguites: string[];
   lecons: Omit<PlanSequence, 'ordre'>[];
   carte: CarteMentale;
+  profil: string;
 }
 
 /**
@@ -184,6 +196,7 @@ export function normalizeModule(raw: any, mod: { id: string; titre: string; page
     ambiguites: strs(raw?.ambiguites, 8, 500),
     lecons,
     carte: normalizeCarteMentale(raw?.carte),
+    profil: ['situations', 'institutions', 'chiffres', 'concepts', 'histoire'].includes(raw?.profil) ? raw.profil : 'concepts',
   };
 }
 
@@ -204,6 +217,7 @@ export function normalizeSynthese(raw: any, moduleIds: string[]): Synthese {
     .map((b: any, i: number) => ({
       id: `b${i + 1}`, titre: str(b?.titre, 200), idee: str(b?.idee, 800), simple: str(b?.simple, 1500), liens: str(b?.liens, 1000),
       exemple: str(b?.exemple, 1000) || undefined, avant_de_commencer: str(b?.avant_de_commencer, 800),
+      essentiel: strs(b?.essentiel, 10, 500),
       modules: strs(b?.modules, 60, 10).filter((m) => valides.has(m) && !dejaPris.has(m) && dejaPris.add(m)),
     }))
     .filter((b: BrancheSynthese) => b.titre && b.idee && b.simple)

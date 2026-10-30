@@ -66,7 +66,7 @@ export default async function SynthesePage({ params }: { params: Promise<{ pdfId
             <li><a href="#apprendre">Ce que tu vas apprendre</a></li>
             {s.questions.length > 0 && <li><a href="#questions">Les grandes questions</a></li>}
             {vues.length > 0 && <li><a href="#carte">La carte du cours</a></li>}
-            <li><a href="#branches">Les grandes branches</a></li>
+            <li><a href="#branches">Le cours, partie par partie</a></li>
             {(s.pieges.length > 0 || s.a_retenir.length > 0) && <li><a href="#retenir">Pièges et points clés</a></li>}
           </ol>
         </nav>
@@ -103,7 +103,7 @@ export default async function SynthesePage({ params }: { params: Promise<{ pdfId
           )}
 
           <section id="branches" aria-labelledby="branches-t">
-            <h2 id="branches-t" className={styles.h2}>Les grandes branches, expliquées</h2>
+            <h2 id="branches-t" className={styles.h2}>Le cours, partie par partie</h2>
             <div className={styles.branches}>
               {s.branches.map((b, i) => {
                 const bornes = bornesLecons(plan, b.modules);
@@ -114,6 +114,12 @@ export default async function SynthesePage({ params }: { params: Promise<{ pdfId
                     <p className={`${styles.p} ${styles.branchIdee}`}><Rich text={b.idee} /></p>
                     <p className={styles.p}><span className={styles.branchLabel}>En mots simples. </span><Rich text={b.simple} /></p>
                     <p className={styles.p}><span className={styles.branchLabel}>Comment elle se relie au reste. </span><Rich text={b.liens} /></p>
+                    {b.essentiel && b.essentiel.length > 0 && (
+                      <div className={styles.essentiel}>
+                        <p className={styles.essentielTitre}>L’essentiel de cette partie</p>
+                        <ul className={styles.list}>{b.essentiel.map((e, k) => <li key={k}><Rich text={e} /></li>)}</ul>
+                      </div>
+                    )}
                     {b.exemple && (
                       <aside className={styles.example}><p className={styles.exampleTitle}>Exemple</p><p className={styles.p}><Rich text={b.exemple} /></p></aside>
                     )}
