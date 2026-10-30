@@ -22,6 +22,8 @@ const MESSAGE_ENVOI = 'Si un compte gratuit existe pour cette adresse, un lien d
 
 /** Durée minimale de réponse : le temps de réponse ne révèle ni l'existence ni le type de compte. */
 const DUREE_REPONSE_MS = 1500;
+/** Attente maximale de l'envoi par Supabase avant de répondre à l'étudiant. */
+const DELAI_ENVOI_MS = 6000;
 
 export async function requestPasswordReset(email: string) {
   const clean = normalizeEmail(email);
@@ -35,8 +37,11 @@ export async function requestPasswordReset(email: string) {
     const base = appBaseUrl();
     if (base && !(await isPremium(null, clean))) {
       const supabase = await createAuthClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo: `${base}/auth/callback?next=/reinitialiser` });
-      if (error) console.error('[motdepasse] envoi du lien:', error.status, error.message);
+      // L'envoi passe par le serveur d'emails configuré dans Supabase : s'il est lent ou mal réglé,
+      // l'étudiant n'attend pas plus de quelques secondes (le message reste le même).
+      const envoi = supabase.auth.resetPasswordForEmail(clean, { redirectTo: `${base}/auth/callback?next=/reinitialiser` })
+        .then(({ error }) => { if (error) console.error('[motdepasse] envoi du lien:', error.status, error.message); });
+      await Promise.race([envoi, new Promise((r) => setTimeout(r, DELAI_ENVOI_MS))]);
     }
   } catch (err) {
     console.error('[motdepasse] demande:', err instanceof Error ? err.message : err);
