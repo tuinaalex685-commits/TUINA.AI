@@ -20,23 +20,50 @@ import { appBaseUrl } from '@/lib/jobs/workerUrl';
 
 const MESSAGE_ENVOI = 'Si un compte gratuit existe pour cette adresse, un lien de réinitialisation vient de lui être envoyé. Pense à regarder dans les courriers indésirables.';
 
+/** Durée minimale de réponse : le temps de réponse ne révèle ni l'existence ni le type de compte. */
+const DUREE_REPONSE_MS = 1500;
+
 export async function requestPasswordReset(email: string) {
   const clean = normalizeEmail(email);
   if (!clean || hasWildcardChars(clean) || clean.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) {
     return { error: 'Adresse email invalide.' };
   }
-  // Premium : aucun envoi, même réponse (on ne révèle pas le type de compte).
-  if (await isPremium(null, clean)) return { success: true, message: MESSAGE_ENVOI };
-
-  const base = appBaseUrl();
-  if (!base) return { error: 'Service momentanément indisponible. Réessaie plus tard.' };
-  const supabase = await createAuthClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo: `${base}/auth/callback?next=/reinitialiser` });
-  if (error && (error.status === 429 || /rate limit/i.test(error.message || ''))) {
-    return { error: 'Trop de demandes en peu de temps. Réessaie dans quelques minutes.' };
+  const debut = Date.now();
+  try {
+    // Premium : aucun envoi. Toutes les branches (Premium, inconnu, limite d'envoi, panne)
+    // aboutissent au MÊME message après la même durée : aucune énumération possible.
+    const base = appBaseUrl();
+    if (base && !(await isPremium(null, clean))) {
+      const supabase = await createAuthClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(clean, { redirectTo: `${base}/auth/callback?next=/reinitialiser` });
+      if (error) console.error('[motdepasse] envoi du lien:', error.status, error.message);
+    }
+  } catch (err) {
+    console.error('[motdepasse] demande:', err instanceof Error ? err.message : err);
   }
-  if (error) console.error('[motdepasse] envoi du lien:', error.message);
+  const reste = DUREE_REPONSE_MS - (Date.now() - debut);
+  if (reste > 0) await new Promise((r) => setTimeout(r, reste));
   return { success: true, message: MESSAGE_ENVOI };
+}
+
+/**
+ * La session vient-elle d'un lien « mot de passe oublié » récent ? On lit la méthode
+ * d'authentification (amr) du jeton, APRÈS que getUser() l'a validé auprès de Supabase.
+ * Sans cette preuve, une session simplement ouverte (ordinateur partagé) ne peut pas changer le mot de passe.
+ */
+const RECUPERATION_MAX_S = 15 * 60;
+async function sessionDeRecuperation(supabase: Awaited<ReturnType<typeof createClient>>): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  const jeton = data.session?.access_token;
+  if (!jeton) return false;
+  try {
+    const charge = JSON.parse(Buffer.from(jeton.split('.')[1], 'base64url').toString('utf8'));
+    const amr: { method?: string; timestamp?: number }[] = Array.isArray(charge.amr) ? charge.amr : [];
+    const maintenant = Math.floor(Date.now() / 1000);
+    return amr.some((m) => m.method === 'recovery' && typeof m.timestamp === 'number' && maintenant - m.timestamp <= RECUPERATION_MAX_S);
+  } catch {
+    return false;
+  }
 }
 
 /** Nouveau mot de passe, dans la session ouverte par le lien reçu par email. */
@@ -46,6 +73,7 @@ export async function setNewPassword(password: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Le lien a expiré. Demande un nouveau lien de réinitialisation.' };
+  if (!(await sessionDeRecuperation(supabase))) return { error: 'Ce lien a expiré (15 minutes). Demande un nouveau lien de réinitialisation.' };
   if (await isPremium(supabase, user.email)) return { error: 'Les comptes Premium ne se réinitialisent pas par email. Contacte l’administrateur.' };
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
