@@ -35,7 +35,12 @@ export function normalizeBloc(raw: any, maxPage: number): Bloc | null {
     case 'piege': return str(raw.texte) ? { type: 'piege', texte: str(raw.texte) } : null;
     case 'attention': return str(raw.texte) ? { type: 'attention', texte: str(raw.texte) } : null;
     case 'incertitude': return str(raw.texte) ? { type: 'incertitude', texte: str(raw.texte) } : null;
-    case 'liste': { const items = strs(raw.items); return items.length ? { type: 'liste', titre: str(raw.titre, 200) || undefined, items } : null; }
+    case 'liste': {
+      let items = strs(raw.items);
+      if (!items.length && Array.isArray(raw.termes)) items = raw.termes.map((t: any) => [str(t?.terme, 120), str(t?.sens, 500)].filter(Boolean).join(' : ')).filter(Boolean).slice(0, 30);
+      if (!items.length && Array.isArray(raw.etapes)) items = raw.etapes.map((e: any) => [str(e?.nom, 150), str(e?.detail, 500)].filter(Boolean).join(' : ')).filter(Boolean).slice(0, 30);
+      return items.length ? { type: 'liste', titre: str(raw.titre, 200) || undefined, items } : null;
+    }
     case 'scene': {
       // Un dessin n'est gardé que s'il est cohérent : 2 à 4 acteurs distincts, des actions qui relient
       // des acteurs existants, et une légende (ce qu'il montre et ce qu'il faut en comprendre).
@@ -248,6 +253,17 @@ export function normalizeSequence(raw: any, ordre: number, maxPage: number): Seq
     };
     if (!base.consigne) continue;
     if (a?.type === 'choix') {
+      // Format v4.1 : chaque proposition dit elle-même si elle est juste (pas d'index à deviner).
+      if (Array.isArray(a?.propositions)) {
+        const props = a.propositions.map((p: any) => ({ texte: str(p?.texte, 400), juste: p?.juste === true, pourquoi: str(p?.pourquoi, 800) }))
+          .filter((p: { texte: string }) => p.texte).slice(0, 5);
+        const justes = props.filter((p: { juste: boolean }) => p.juste).length;
+        if (props.length < 2 || justes !== 1) continue; // il faut exactement une bonne proposition
+        activites.push({ ...base, type: 'choix', choix: props.map((p: { texte: string }) => p.texte), bonne: props.findIndex((p: { juste: boolean }) => p.juste), explication: str(a?.explication, 1500), pourquoi_faux: props.map((p: { pourquoi: string }) => p.pourquoi) });
+        seen.add(id);
+        if (activites.length >= 5) break;
+        continue;
+      }
       const choix = strs(a?.choix, 5, 400);
       const bonne = Number(a?.bonne);
       if (choix.length < 2 || !Number.isInteger(bonne) || bonne < 0 || bonne >= choix.length) continue; // bonne réponse absente : rejet

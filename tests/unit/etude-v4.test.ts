@@ -61,7 +61,7 @@ test('modules : le plafond est respecté', () => {
 });
 
 test('leçons : proportionnelles à la matière, au moins une par module, 60 au plus', () => {
-  assert.deepEqual(repartirLecons([{ caracteres: 9000 }, { caracteres: 27000 }]), [1, 3]);
+  assert.deepEqual(repartirLecons([{ caracteres: 6000 }, { caracteres: 18000 }]), [1, 3]);
   const gros = repartirLecons(Array.from({ length: 40 }, () => ({ caracteres: 60000 })));
   assert.ok(gros.reduce((a, b) => a + b, 0) <= 60);
   assert.ok(gros.every((n) => n >= 1));
@@ -147,7 +147,7 @@ test('leçon : étapes dans l’ordre pédagogique, vérifications de difficult�
   }, 1, 50);
   assert.deepEqual(seq.etapes!.map((e) => e.cle), ['comprendre', 'formuler', 'illustrer', 'retenir']);
   assert.deepEqual(seq.activites.map((a) => a.niveau), ['comprendre', 'examen'], 'QCM sans bonne réponse rejeté, ordre de difficulté');
-  assert.ok(seq.activites.every((a) => a.id.startsWith('l4')), 'identifiants préfixés par la version');
+  assert.ok(seq.activites.every((a) => a.id.startsWith('l41')), 'identifiants préfixés par la version');
   const dessins = seq.etapes!.flatMap((e) => e.blocs).filter((b) => b.type === 'scene');
   assert.equal(dessins.length, 1, 'un dessin par leçon au plus');
 });
@@ -156,4 +156,17 @@ test('leçon : refusée sans explication de fond ou sans formulation juridique',
   const act = [{ id: 'a', type: 'choix', notion: 'n', consigne: 'c', choix: ['a', 'b'], bonne: 0, autre_explication: 'x' }];
   assert.throws(() => normalizeSequence({ etapes: [{ cle: 'formuler', blocs: [{ type: 'paragraphe', texte: 't' }] }], activites: act }, 1, 10));
   assert.throws(() => normalizeSequence({ etapes: [{ cle: 'comprendre', blocs: [{ type: 'paragraphe', texte: 't' }] }], activites: act }, 1, 10));
+});
+
+test('QCM v4.1 : la bonne réponse vient de la proposition marquée juste (une seule)', () => {
+  const base = { etapes: [{ cle: 'comprendre', blocs: [{ type: 'paragraphe', texte: 't' }] }, { cle: 'formuler', blocs: [{ type: 'paragraphe', texte: 't' }] }] };
+  const p = (j: boolean[]) => j.map((juste, i) => ({ texte: `P${i}`, juste, pourquoi: `car ${i}` }));
+  const seq = normalizeSequence({ ...base, activites: [
+    { id: 'a', type: 'choix', niveau: 'comprendre', notion: 'n', consigne: 'c', propositions: p([false, false, true]), autre_explication: 'x' },
+    { id: 'b', type: 'choix', niveau: 'distinguer', notion: 'n', consigne: 'c', propositions: p([true, true, false]), autre_explication: 'x' },
+    { id: 'c', type: 'choix', niveau: 'appliquer', notion: 'n', consigne: 'c', propositions: p([false, false, false]), autre_explication: 'x' },
+  ] }, 1, 10);
+  assert.equal(seq.activites.length, 1, 'zéro ou deux bonnes réponses : rejeté');
+  const a = seq.activites[0];
+  assert.ok(a.type === 'choix' && a.bonne === 2 && a.pourquoi_faux[2] === 'car 2');
 });

@@ -119,6 +119,15 @@ export async function deleteDocument(documentId: string, _clientUrl?: string) {
     // n'affiche pas d'erreur) ; on ne révèle pas si le document existe chez quelqu'un d'autre.
     if (fetchError || !document) return { success: true };
 
+    // Un PDF publié au catalogue fait vivre le cours de TOUS les étudiants qui l'étudient (Étude
+    // guidée, examens) : le supprimer cassait ce cours pour tout le monde. On le refuse tant qu'il
+    // n'a pas été retiré du catalogue.
+    const { data: cours } = await supabaseAdmin.from('etude_cours').select('id').eq('pdf_id', documentId).maybeSingle();
+    if (cours) {
+      const { data: publie } = await supabaseAdmin.from('catalog_courses').select('id').eq('etude_cours_id', cours.id).eq('actif', true).limit(1);
+      if (publie?.length) return { error: 'Ce cours est publié au catalogue : retire-le d’abord du catalogue (Administration > Catalogue), puis supprime-le.' };
+    }
+
     // 2. Supprimer la ligne d'abord, puis le fichier (voir removeOwnedFiles). Avant, le fichier
     // était retiré par le client de l'étudiant, ce que le bucket privé peut refuser en silence.
     const { error: dbError } = await supabase

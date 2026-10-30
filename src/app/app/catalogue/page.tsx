@@ -41,6 +41,12 @@ export default async function CataloguePage() {
     ? await supabaseAdmin.from('etude_cours').select('id, pdf_id').in('id', coursIds)
     : { data: [] as { id: string; pdf_id: string }[] };
   const pdfIds = (cours || []).map((c) => c.pdf_id).filter(Boolean);
+  const { data: docs } = pdfIds.length
+    ? await supabaseAdmin.from('documents').select('id').in('id', pdfIds)
+    : { data: [] as { id: string }[] };
+  const existants = new Set((docs || []).map((d) => d.id));
+  const coursOuvrables = new Set((cours || []).filter((c) => existants.has(c.pdf_id)).map((c) => c.id));
+  const ouvrables = visibles.filter((e) => coursOuvrables.has(e.etude_cours_id));
   const { data: parcours } = pdfIds.length
     ? await supabase.from('etude_parcours').select('document_id, statut, engine_version').eq('user_id', user.id).in('document_id', pdfIds)
     : { data: [] as { document_id: string; statut: string; engine_version: string }[] };
@@ -51,7 +57,7 @@ export default async function CataloguePage() {
 
   return (
     <>
-      <CatalogueList entries={visibles} progressByCours={progressByCours} niveau={niveau} />
+      <CatalogueList entries={ouvrables} progressByCours={progressByCours} niveau={niveau} />
       {/* Sous la liste : l'étudiant a vu toute l'offre pédagogique avant la publicité. */}
       <AdSlot placement="catalogue" />
     </>

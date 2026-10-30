@@ -5,5 +5,12 @@
  */
 
 /** Message d'erreur lisible (le préfixe technique PDF_SCANNE est retiré). */
-export const cleanError = (msg: string | null | undefined) =>
-  String(msg || 'Le traitement n’a pas abouti.').replace(/^PDF_SCANNE:\s*/, '');
+export const cleanError = (msg: string | null | undefined) => {
+  const m = String(msg || 'Le traitement n’a pas abouti.').replace(/^PDF_SCANNE:\s*/, '');
+  // Erreur technique du service d'IA (délai dépassé, surcharge, réponse illisible) : un message
+  // compréhensible, sans le détail interne de Google.
+  if (/gemini|deadline|overloaded|\b50[0-4]\b|unavailable|rpc|json|schema|invalide/i.test(m)) {
+    return 'Le service d’IA a mis trop de temps à répondre ou est momentanément surchargé. Réessaie dans une minute : ce qui est déjà fait est conservé.';
+  }
+  return m;
+};
