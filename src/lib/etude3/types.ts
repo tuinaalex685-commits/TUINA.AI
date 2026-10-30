@@ -6,7 +6,7 @@
  * effacer. Ils restent en base ; les étudiants concernés se voient proposer la nouvelle
  * version à la demande (E-05).
  */
-export const ENGINE_VERSION = 'v4.1-lecons';
+export const ENGINE_VERSION = 'v4.2-lecons';
 
 /**
  * Préfixe des identifiants d'activités de cette version (« l4a1 »…). Les tentatives et les
@@ -14,7 +14,7 @@ export const ENGINE_VERSION = 'v4.1-lecons';
  * empêche qu'une réponse donnée dans l'ancien parcours compte dans le nouveau. À changer en
  * même temps que ENGINE_VERSION si le contenu des leçons change.
  */
-export const ACTIVITE_PREFIXE = 'l41';
+export const ACTIVITE_PREFIXE = 'l42';
 
 export type Origine = 'cours' | 'explication' | 'complement';
 
@@ -30,9 +30,11 @@ export type Bloc =
   | { type: 'processus'; titre: string; etapes: { nom: string; detail: string }[]; legende?: string }
   | { type: 'frise'; titre: string; jalons: { date: string; evenement: string }[]; legende?: string }
   | { type: 'liste'; titre?: string; items: string[] }
-  | { type: 'scene'; titre: string; acteurs: Acteur[]; relations: { de: string; vers: string; action: string }[]; legende: string }
-  | { type: 'comparaison'; titre: string; cotes: { titre: string; situation: string; consequence: string }[]; critere: string; legende: string }
+  | { type: 'scene'; titre: string; acteurs: Acteur[]; relations: { de: string; vers: string; action: string }[]; legende: string; questions?: { question: string; reponse: string }[] }
+  | { type: 'comparaison'; titre: string; cotes: { titre: string; situation: string; consequence: string; valide?: boolean }[]; critere: string; legende: string }
   | { type: 'termes'; items: { terme: string; sens: string }[] }
+  | { type: 'revele'; question: string; reponse: string }
+  | { type: 'vraifaux'; affirmation: string; vrai: boolean; explication: string }
   | { type: 'memo'; items: string[] }
   | { type: 'incertitude'; texte: string };
 
@@ -41,8 +43,11 @@ export interface Acteur {
   id: string;
   nom: string;
   role: string;
-  genre: 'personne' | 'juge' | 'avocat' | 'institution' | 'groupe';
-  dit?: string;   // courte réplique affichée dans une bulle
+  genre: 'personne' | 'officier' | 'juge' | 'avocat' | 'institution' | 'groupe';
+  sexe?: 'homme' | 'femme';
+  dit?: string;          // courte réplique affichée dans une bulle
+  etat?: 'oui' | 'non';  // ✓ accord, consentement… / ✗ refus, contrainte, vice…
+  explication?: string;  // son rôle, affiché quand on touche le personnage
 }
 
 export interface SyntheseSection {
@@ -65,6 +70,7 @@ export interface BrancheSynthese {
   liens: string;                // comment elle s'articule avec les autres branches
   exemple?: string;
   avant_de_commencer: string;   // ce qu'il faut avoir compris avant le parcours détaillé
+  essentiel?: string[];         // le résumé de cette partie du cours : ce qu'il faut en retenir
   modules: string[];            // modules du parcours couverts (m1, m2…)
 }
 

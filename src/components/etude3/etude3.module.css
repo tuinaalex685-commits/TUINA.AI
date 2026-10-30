@@ -1097,3 +1097,36 @@ ul.legend { padding: 0; list-style: none; }
 /* Minuteur d'attente : estimation en avant, temps écoulé en retrait. */
 .timer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--s-4); margin: var(--s-3) 0 0; font-size: var(--text-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .timer strong { color: var(--sjp-blue); }
+
+/* Dessin interactif : personnage sélectionnable, explication et questions sous le dessin. */
+.dessinScroll { background: #FFFFFF; }
+.dessinActeur { cursor: pointer; outline: none; }
+.dessinActeur:focus-visible rect:first-of-type { stroke-width: 3; }
+.dessinAide { margin: 0; font-size: var(--text-sm); color: var(--ink-3); }
+.dessinFocus { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--radius-md); background: var(--surligneur-soft); line-height: 1.55; }
+.dessinExplication { margin: 0; padding: var(--s-3) 0 0; border-top: 1px solid var(--rule); font-size: var(--text-md); line-height: 1.6; color: var(--ink); }
+.dessinQuestions { display: flex; flex-direction: column; gap: var(--s-2); }
+.dessinQ { border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--paper); }
+.dessinQ summary { cursor: pointer; padding: var(--s-3) var(--s-4); font-weight: 600; color: var(--sjp-blue); min-height: 44px; display: flex; align-items: center; }
+.dessinQ[open] summary { border-bottom: 1px solid var(--rule); }
+.dessinQ .p { margin: 0; padding: var(--s-3) var(--s-4); }
+.compareOui { border-color: #2E8B57; }
+.compareOui .compareTag { background: #2E8B57; }
+.compareNon { border-color: #C0392B; }
+.compareNon .compareTag { background: #C0392B; }
+
+/* Synthèse : l'essentiel de chaque partie (le résumé à réviser). */
+.essentiel { padding: var(--s-4) var(--s-5); border-radius: var(--radius-md); background: var(--paper); border-left: 3px solid var(--surligneur); }
+.essentielTitre { margin: 0 0 var(--s-2); font-weight: 800; color: var(--sjp-blue); }
+@media print { .dessinAide, .dessinFocus { display: none !important; } .dessinQ { break-inside: avoid; } .dessinQ > *:not(summary) { display: block !important; } }
+
+/* Interactions pendant la lecture. */
+.revele, .vraifaux { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4) var(--s-5); border-radius: var(--radius-md); border: 1.5px dashed var(--sjp-blue); background: #F7FAFD; }
+.reveleQ { margin: 0; line-height: 1.55; font-weight: 600; color: var(--ink); }
+.reveleLabel { display: block; margin-bottom: 4px; font-family: var(--font-serif); font-style: italic; font-weight: 600; color: var(--sjp-blue); }
+.reveleR { margin: 0; padding-top: var(--s-3); border-top: 1px solid var(--rule); line-height: 1.6; }
+.vfBon { border-color: #2E8B57 !important; background: #EEF7F1 !important; }
+.vfFaux { border-color: #C0392B !important; background: #FDF0EE !important; }
+.vfOk, .vfKo { margin: 0; line-height: 1.55; }
+.vfOk strong { color: #2E8B57; }
+.vfKo strong { color: #C0392B; }

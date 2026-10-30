@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Bloc, Origine } from '@/lib/etude3/types';
 import { DessinComparaison, DessinScene } from './Dessin';
+import { Rich } from './Rich';
+import { Revele, VraiFaux } from './Interactif';
 import styles from './etude3.module.css';
 
 /**
@@ -9,18 +11,7 @@ import styles from './etude3.module.css';
  * uniquement (jamais de HTML injecté) ; seul le **gras** devient un terme surligné.
  */
 
-export function Rich({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.startsWith('**') && p.endsWith('**') && p.length > 4
-          ? <strong key={i} className={styles.term}>{p.slice(2, -2)}</strong>
-          : <React.Fragment key={i}>{p}</React.Fragment>,
-      )}
-    </>
-  );
-}
+export { Rich };
 
 /** Paragraphes séparés par des lignes vides. */
 function Paras({ text }: { text: string }) {
@@ -73,6 +64,10 @@ export function BlocView({ bloc }: { bloc: Bloc }) {
       );
     case 'scene':
       return <DessinScene bloc={bloc} />;
+    case 'revele':
+      return <Revele question={bloc.question} reponse={bloc.reponse} />;
+    case 'vraifaux':
+      return <VraiFaux affirmation={bloc.affirmation} vrai={bloc.vrai} explication={bloc.explication} />;
     case 'comparaison':
       return <DessinComparaison bloc={bloc} />;
     case 'exemple':

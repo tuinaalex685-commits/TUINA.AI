@@ -15,6 +15,7 @@
  * reste la seule source de la maîtrise Étude, cf theme_mastery / INC.1).
  */
 import { estMaitrise } from '@/lib/config/mastery';
+import { structureExamenV4 } from '@/lib/etude3/examen';
 import {
   computeExamMastery, corriger, formatReponse, keyOf,
   CompositionItem, PoolQuestion, ThemeExamMastery,
@@ -62,7 +63,18 @@ export async function resolveThemeMap(
   db: Db, documentId: string
 ): Promise<{ pdfId: string; coursId: string | null; map: Record<string, ThemeInfo> }> {
   const { data: cours } = await db.from('etude_cours').select('id, pdf_id').eq('pdf_id', documentId).maybeSingle();
-  if (!cours) return { pdfId: documentId, coursId: null, map: {} };
+  if (!cours) {
+    // Étude guidée v4 : thèmes = leçons de chaque module (mêmes positions que la banque d'examen).
+    const v4 = await structureExamenV4(documentId);
+    const map: Record<string, ThemeInfo> = {};
+    for (const s of v4 || []) for (const t of s.themes) {
+      map[keyOf(s.section_ordre, t.theme_ordre)] = {
+        section_ordre: s.section_ordre, theme_ordre: t.theme_ordre, theme_id: `v4-${s.section_ordre}-${t.theme_ordre}`,
+        theme_titre: t.titre, section_titre: s.section_titre,
+      };
+    }
+    return { pdfId: documentId, coursId: null, map };
+  }
   const { data: sections } = await db.from('etude_sections').select('id, ordre, titre').eq('cours_id', cours.id);
   const secList = sections || [];
   const secById = new Map<string, { ordre: number; titre: string }>(secList.map((s: any) => [s.id, { ordre: s.ordre, titre: s.titre }]));

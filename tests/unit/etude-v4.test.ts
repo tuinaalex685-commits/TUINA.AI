@@ -67,7 +67,7 @@ test('leçons : proportionnelles à la matière, au moins une par module, 60 au 
   assert.ok(gros.every((n) => n >= 1));
 });
 
-test('dessin : rejeté s’il est incohérent (acteur inconnu, sans légende)', () => {
+test('dessin : incohérences retirées, rejeté sans légende ou avec un seul personnage', () => {
   const base = {
     type: 'scene', titre: 'Un prêt', legende: 'Awa est créancière de Paul.',
     acteurs: [{ id: 'a', nom: 'Awa', role: 'créancière', genre: 'personne' }, { id: 'p', nom: 'Paul', role: 'débiteur', genre: 'personne' }],
@@ -75,7 +75,8 @@ test('dessin : rejeté s’il est incohérent (acteur inconnu, sans légende)', 
   };
   assert.ok(normalizeBloc(base, 10));
   assert.equal(normalizeBloc({ ...base, legende: '' }, 10), null);
-  assert.equal(normalizeBloc({ ...base, relations: [{ de: 'a', vers: 'x', action: 'saisit' }] }, 10), null);
+  const sansFleche = normalizeBloc({ ...base, relations: [{ de: 'a', vers: 'x', action: 'saisit' }] }, 10) as any;
+  assert.equal(sansFleche?.relations.length, 0, 'une action vers un acteur inconnu est retirée (le dessin reste, avec ses bulles)');
   assert.equal(normalizeBloc({ ...base, acteurs: base.acteurs.slice(0, 1) }, 10), null);
 });
 
@@ -147,7 +148,7 @@ test('leçon : étapes dans l’ordre pédagogique, vérifications de difficult�
   }, 1, 50);
   assert.deepEqual(seq.etapes!.map((e) => e.cle), ['comprendre', 'formuler', 'illustrer', 'retenir']);
   assert.deepEqual(seq.activites.map((a) => a.niveau), ['comprendre', 'examen'], 'QCM sans bonne réponse rejeté, ordre de difficulté');
-  assert.ok(seq.activites.every((a) => a.id.startsWith('l41')), 'identifiants préfixés par la version');
+  assert.ok(seq.activites.every((a) => a.id.startsWith('l42')), 'identifiants préfixés par la version');
   const dessins = seq.etapes!.flatMap((e) => e.blocs).filter((b) => b.type === 'scene');
   assert.equal(dessins.length, 1, 'un dessin par leçon au plus');
 });

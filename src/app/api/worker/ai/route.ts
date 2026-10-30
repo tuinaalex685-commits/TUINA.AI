@@ -15,6 +15,7 @@ import { COMPARTIMENT_BY_TYPE, LIMITS, isRapportV2, type RapportV2 } from '@/lib
 import { processEtudeAnalyse, processEtudeSequence, type EngineDeps } from '@/lib/etude3/engine';
 import { NonRetryableError } from '@/lib/etude3/extract';
 import { mockEtude3 } from '@/lib/etude3/mock';
+import { structureExamenV4 } from '@/lib/etude3/examen';
 import crypto from 'crypto';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
@@ -414,7 +415,10 @@ async function getEtudeStructure(documentId: string): Promise<ExamenStructure> {
   const { data: cours } = await supabaseAdmin
     .from('etude_cours').select('id, statut_generation').eq('pdf_id', documentId).maybeSingle();
   if (!cours || cours.statut_generation !== 'pret') {
-    throw new Error("L'Étude Guidée de ce document doit être générée avant de créer un examen.");
+    // Étude guidée v4 : le plan vient de l'analyse commune du cours (modules → leçons).
+    const v4 = await structureExamenV4(documentId);
+    if (v4) return v4;
+    throw new NonRetryableError("Commence d'abord l'Étude guidée de ce cours : l'examen s'appuie sur son plan.");
   }
   const { data: sections } = await supabaseAdmin
     .from('etude_sections').select('id, ordre, titre').eq('cours_id', cours.id).order('ordre', { ascending: true });
