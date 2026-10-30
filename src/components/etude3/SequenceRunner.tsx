@@ -25,10 +25,10 @@ function Feedback({ r }: { r: RetourActivite }) {
   const cls = r.verdict === 'juste' ? styles.feedbackJuste : r.verdict === 'partiel' ? styles.feedbackPartiel : styles.feedbackFaux;
   return (
     <motion.div className={`${styles.feedback} ${cls}`} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} role="status">
-      <p className={styles.feedbackTitle}>{TITRES[r.verdict]}</p>
+      <p className={styles.feedbackTitle}>{r.comparaison ? 'Compare ta réponse' : TITRES[r.verdict]}</p>
       <p className={styles.feedbackText}><Rich text={r.message} /></p>
       {r.manquants && r.manquants.length > 0 && (
-        <div className={styles.feedbackMore}><strong>Ce qui manque</strong><ul className={styles.list}>{r.manquants.map((m, i) => <li key={i}>{m}</li>)}</ul></div>
+        <div className={styles.feedbackMore}><strong>{r.comparaison ? 'Ce qu’une bonne réponse contient' : 'Ce qui manque'}</strong><ul className={styles.list}>{r.manquants.map((m, i) => <li key={i}>{m}</li>)}</ul></div>
       )}
       {r.verdict !== 'juste' && r.autre_explication && !r.bonne_reponse && (
         <div className={styles.feedbackMore}><strong>Une autre façon de voir</strong><Rich text={r.autre_explication} /></div>
@@ -41,8 +41,8 @@ function Feedback({ r }: { r: RetourActivite }) {
       )}
       {r.bonne_reponse && (
         <div className={styles.feedbackMore}>
-          <strong>Le raisonnement attendu</strong><Rich text={r.bonne_reponse} />
-          <p style={{ margin: 'var(--s-2) 0 0', fontSize: 'var(--text-sm)' }}>Cette notion est ajoutée à ta liste « À revoir ». Tu peux continuer.</p>
+          <strong>{r.comparaison ? 'Une réponse modèle' : 'Le raisonnement attendu'}</strong><Rich text={r.bonne_reponse} />
+          {!r.comparaison && <p style={{ margin: 'var(--s-2) 0 0', fontSize: 'var(--text-sm)' }}>Cette notion est ajoutée à ta liste « À revoir ». Tu peux continuer.</p>}
         </div>
       )}
     </motion.div>
