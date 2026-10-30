@@ -6,7 +6,7 @@
  * effacer. Ils restent en base ; les étudiants concernés se voient proposer la nouvelle
  * version à la demande (E-05).
  */
-export const ENGINE_VERSION = 'v4.0-lecons';
+export const ENGINE_VERSION = 'v4.1-lecons';
 
 /**
  * Préfixe des identifiants d'activités de cette version (« l4a1 »…). Les tentatives et les
@@ -14,7 +14,7 @@ export const ENGINE_VERSION = 'v4.0-lecons';
  * empêche qu'une réponse donnée dans l'ancien parcours compte dans le nouveau. À changer en
  * même temps que ENGINE_VERSION si le contenu des leçons change.
  */
-export const ACTIVITE_PREFIXE = 'l4';
+export const ACTIVITE_PREFIXE = 'l41';
 
 export type Origine = 'cours' | 'explication' | 'complement';
 

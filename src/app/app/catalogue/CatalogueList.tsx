@@ -49,6 +49,12 @@ export default function CatalogueList({ entries, progressByCours, niveau }: {
           <p className={styles.lead}>Des cours déjà préparés par SJP : étude guidée, révisions et examens, sans rien importer.</p>
         </div>
 
+        {niveau ? (
+          <div className={styles.levelBox} aria-label="Ton année d’études">
+            <span className={styles.levelLabel}>Ton année</span>
+            <span className={`${styles.segBtn} ${styles.segOn}`}>{NIVEAUX.find((n) => n.code === niveau)?.court ?? niveau}</span>
+          </div>
+        ) : (
         <div className={styles.levelBox} role="group" aria-label="Ton année d’études">
           <span className={styles.levelLabel}>{choice ? 'Ton année' : 'Tu es en…'}</span>
           <div className={styles.segment}>
@@ -66,6 +72,7 @@ export default function CatalogueList({ entries, progressByCours, niveau }: {
             ))}
           </div>
         </div>
+        )}
       </header>
 
       {!choice && (

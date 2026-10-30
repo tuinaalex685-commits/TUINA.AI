@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { supabaseAdmin } from './supabase/admin';
+import { mockEtude3 } from './etude3/mock';
 
 // Interface pour le tracking des coûts et de l'usage
 export interface GeminiTrackingContext {
@@ -92,8 +93,9 @@ export function isRetryableError(error: any): boolean {
       message.includes('prepayment') || message.includes('insufficient') || message.includes('exceeded your current quota')) {
     return false;
   }
-  // 429 = Rate limit, 500 = Internal error, 503 = Overloaded
-  if ([429, 500, 503].includes(status)) return true;
+  // 429 = Rate limit, 500 = Internal error, 503 = Overloaded, 504 = délai dépassé chez Google
+  if ([429, 500, 503, 504].includes(status)) return true;
+  if (message.includes('504') || message.includes('deadline') || message.includes('stream cancelled')) return true;
   if (message.includes('429') || message.includes('rate limit') || message.includes('quota')) return true;
   if (message.includes('500') || message.includes('internal')) return true;
   if (message.includes('503') || message.includes('overloaded') || message.includes('unavailable')) return true;
@@ -168,6 +170,14 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
  * Non fourni : comportement par défaut du modèle (inchangé pour les fonctionnalités existantes).
  */
 export async function generateStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, trackingContext?: GeminiTrackingContext, temperature?: number, options?: { thinkingBudget?: number }) {
+  // Verrou des tests de charge : en mode simulé, AUCUN appel ne part chez Google, quel que soit
+  // le chemin (file IA, action serveur, ancienne route). Jamais actif en production Vercel.
+  if (process.env.AI_MOCK_ALL === '1' && process.env.AI_MOCK_ENABLED === '1' && process.env.VERCEL_ENV !== 'production') {
+    const feature = trackingContext?.feature || '';
+    await new Promise((r) => setTimeout(r, Math.max(0, Number(process.env.AI_MOCK_DELAY_MS ?? 800))));
+    if (feature.startsWith('etude3_')) return mockEtude3(feature);
+    throw new Error(`Mode test : appel Gemini simulé indisponible pour « ${feature || 'inconnu'} ».`);
+  }
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);

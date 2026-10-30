@@ -221,11 +221,11 @@ export function construireModules(pages: string[], opts: OptionsModules = {}): M
 }
 
 /**
- * Nombre de leçons par module : proportionnel à la matière réelle (≈ une leçon pour 9 000
- * caractères, soit 3 pages denses), au moins 1, au plus `parModule`, et `total` au maximum
+ * Nombre de leçons par module : proportionnel à la matière réelle (≈ une leçon pour 6 000
+ * caractères, soit 2 pages denses), au moins 1, au plus `parModule`, et `total` au maximum
  * pour tout le cours (les plus gros modules cèdent d'abord).
  */
-export function repartirLecons(modules: Pick<Module, 'caracteres'>[], total = 60, parModule = 6, parLecon = 9000): number[] {
+export function repartirLecons(modules: Pick<Module, 'caracteres'>[], total = 60, parModule = 6, parLecon = 6000): number[] {
   const budget = modules.map((m) => Math.min(parModule, Math.max(1, Math.round(m.caracteres / parLecon))));
   let somme = budget.reduce((a, b) => a + b, 0);
   while (somme > total) {

@@ -42,7 +42,7 @@ const SYNTHESE_MAX_CHARS = 110000;
  * Budget de « réflexion » Gemini par étape (tokens facturés au tarif de sortie, et lents).
  * Comprendre un module et rédiger une leçon sont les deux étapes où la qualité se joue.
  */
-const THINK = { module: 1024, synthese: 1024, lecon: 2048 };
+const THINK = { module: 1024, synthese: 1024, lecon: 1024 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;

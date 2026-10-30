@@ -210,7 +210,7 @@ PROGRESSION (un cadre, pas un formulaire : adapte-la à la notion, omets une ét
   2. niveau « distinguer », type « choix » : choisir entre la notion et une notion voisine qu'on confond souvent ;
   3. niveau « appliquer », type « choix » : une situation nouvelle où il faut prévoir la conséquence ou repérer la condition qui manque ;
   4. niveau « examen », type « ouverte » : reformuler avec ses mots en employant le terme exact, ou résoudre un mini-cas en 2 ou 3 phrases.
-  Pour « choix » : 3 propositions plausibles ; « bonne » = index (0 à 2) ; « pourquoi_faux » = pour CHAQUE proposition, dans l'ordre, pourquoi elle est juste ou fausse, en nommant la confusion qu'elle trahit ; « explication » = le raisonnement attendu.
+  Pour « choix » : « propositions » = 3 propositions plausibles, chacune avec « texte », « juste » (true pour UNE SEULE proposition, false pour les autres) et « pourquoi » (pourquoi elle est juste ou fausse, en nommant la confusion qu'elle trahit) ; « explication » = le raisonnement attendu.
   Pour « ouverte » : « attendus » = 2 à 4 éléments qu'une bonne réponse doit contenir ; « erreurs_typiques » ; « reponse_modele » courte.
   REMÉDIATION (pour chaque activité ; jamais la même explication répétée) : « autre_explication » = un autre angle ou un autre exemple (servi après une 1re erreur) ; « explication_simple » = la notion décomposée en étapes encore plus simples (après une 2e erreur) ; « prerequis » = la notion préalable à revoir si l'erreur vient de là (vide sinon).
 - « suite » : une ou deux phrases qui annoncent la leçon suivante par la question qu'elle va résoudre (vide si c'est la dernière).
@@ -241,10 +241,11 @@ export const LECON_SCHEMA = {
           type: { type: S, enum: ['choix', 'ouverte'] },
           notion: { type: S },
           consigne: { type: S },
-          choix: strArr,
-          bonne: { type: Type.INTEGER },
+          propositions: {
+            type: Type.ARRAY,
+            items: { type: Type.OBJECT, properties: { texte: { type: S }, juste: { type: Type.BOOLEAN }, pourquoi: { type: S } }, required: ['texte', 'juste', 'pourquoi'] },
+          },
           explication: { type: S },
-          pourquoi_faux: strArr,
           attendus: strArr,
           erreurs_typiques: strArr,
           reponse_modele: { type: S },

@@ -19,8 +19,6 @@ import { ENGINE_VERSION, MAX_TENTATIVES, type Activite, type RetourActivite, typ
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_REPONSE = 4000;
 const ANALYSES_PAR_HEURE = 6;
-// Une analyse d'un précis de 450 pages coûte de l'ordre d'un dollar : plafond journalier par étudiant.
-const ANALYSES_PAR_JOUR = 4;
 
 async function currentUser() {
   const supabase = await createClient();
@@ -74,17 +72,12 @@ export async function startEtude(documentId: string) {
     return { success: true, status: 'analysing' as const, jobId: enCours.id as string };
   }
   // Garde-fou de coût avant une NOUVELLE analyse : nombre lancé par heure et par étudiant.
-  const [{ count: heure }, { count: jour }] = await Promise.all([
-    supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', new Date(Date.now() - 3600_000).toISOString()),
-    supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', new Date(Date.now() - 86_400_000).toISOString()),
-  ]);
+  // Garde-fou anti-robot (pas une limite d'usage) : nouvelles analyses lancées dans l'heure,
+  // échecs non comptés. Les cours déjà analysés ou en cours d'analyse ne comptent jamais.
+  const { count: heure } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id).eq('type', 'etude3_analyse').neq('status', 'failed').gte('created_at', new Date(Date.now() - 3600_000).toISOString());
   if ((heure || 0) >= ANALYSES_PAR_HEURE) {
-    return { error: `Tu as lancé ${ANALYSES_PAR_HEURE} analyses dans l’heure. Réessaie un peu plus tard.` };
-  }
-  if ((jour || 0) >= ANALYSES_PAR_JOUR) {
-    return { error: `Tu as lancé ${ANALYSES_PAR_JOUR} analyses de nouveaux cours aujourd’hui. Réessaie demain : les cours déjà analysés restent disponibles.` };
+    return { error: `Tu as lancé l’analyse de ${ANALYSES_PAR_HEURE} nouveaux cours en une heure. Patiente quelques minutes avant d’en lancer un autre.` };
   }
   const res = await enqueueDedup({ userId: user.id, type: 'etude3_analyse', payload: { documentId }, dedupKey });
   if ('error' in res) return { error: res.error };
