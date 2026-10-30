@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Bloc, Origine } from '@/lib/etude3/types';
+import { DessinComparaison, DessinScene } from './Dessin';
 import styles from './etude3.module.css';
 
 /**
@@ -59,6 +60,21 @@ export function BlocView({ bloc }: { bloc: Bloc }) {
           {bloc.reformulation && <dd className={styles.defSimple} style={{ marginLeft: 0 }}><Rich text={bloc.reformulation} /></dd>}
         </dl>
       );
+    case 'termes':
+      return (
+        <dl className={styles.terms}>
+          {bloc.items.map((t, i) => (
+            <div key={i} className={styles.termRow}>
+              <dt><span className={styles.term}>{t.terme}</span></dt>
+              <dd><Rich text={t.sens} /></dd>
+            </div>
+          ))}
+        </dl>
+      );
+    case 'scene':
+      return <DessinScene bloc={bloc} />;
+    case 'comparaison':
+      return <DessinComparaison bloc={bloc} />;
     case 'exemple':
       return (
         <aside className={styles.example}>

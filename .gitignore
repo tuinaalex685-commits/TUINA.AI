@@ -53,3 +53,10 @@ _mock*.log
 _diag*.log
 _smoke*.log
 _loadtest*.log
+
+# Tests de charge : données de test générées (mots de passe de test, identifiants de build)
+tests/load/comptes.json
+tests/load/actions.json
+
+# Sorties du test pédagogique comparatif (contenu de cours protégé)
+tests/pedagogie/resultats/

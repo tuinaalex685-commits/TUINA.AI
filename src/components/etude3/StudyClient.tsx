@@ -7,10 +7,9 @@ import { Printer } from 'lucide-react';
 import { useJob } from '@/lib/hooks/useJob';
 import { markSyntheseVue, prepareSequence, startEtude } from '@/app/actions/etude3';
 import styles from './etude3.module.css';
+import { cleanError } from '@/lib/etude3/messages';
 
-/** Message d'erreur lisible (le préfixe technique PDF_SCANNE est retiré). */
-export const cleanError = (msg: string | null | undefined) =>
-  String(msg || 'Le traitement n’a pas abouti.').replace(/^PDF_SCANNE:\s*/, '');
+
 
 /** « Commencer l'étude » : démarrage enregistré par le serveur, puis suivi de l'analyse. */
 export function StartStudy({ documentId, label = 'Commencer l’étude', initialJobId = null }: { documentId: string; label?: string; initialJobId?: string | null }) {
@@ -71,7 +70,7 @@ export function BeginPath({ documentId }: { documentId: string }) {
         router.push(`/app/etude/${documentId}/sequence/1`);
       }}
     >
-      {busy ? 'Ouverture…' : 'Commencer le parcours'}
+      {busy ? 'Ouverture…' : 'Commencer la leçon 1'}
     </button>
   );
 }
@@ -114,8 +113,8 @@ export function SequencePreparing({ documentId, ordre }: { documentId: string; o
   }
   return (
     <div className={styles.panel} role="status" aria-live="polite">
-      <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || `Préparation de la séquence ${ordre}…`}</p>
-      <p className={styles.panelText} style={{ margin: 'var(--s-3) 0 0' }}>Elle est construite à partir des pages de ton cours qui la concernent. Cela prend en général moins d’une minute, et une seule fois pour tous les étudiants de ce cours.</p>
+      <p className={styles.working}><span className={styles.spinner} aria-hidden /> {phase || `Préparation de la leçon ${ordre}…`}</p>
+      <p className={styles.panelText} style={{ margin: 'var(--s-3) 0 0' }}>Elle est construite à partir des pages de ton cours qui la concernent. Cela prend en général moins d’une minute, une seule fois pour tous les étudiants de ce cours.</p>
     </div>
   );
 }

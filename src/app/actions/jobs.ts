@@ -6,14 +6,15 @@ import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
 import { signRefund } from '@/lib/quotaRefund';
-import { headers } from 'next/headers';
 import { after } from 'next/server';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import crypto from 'crypto';
 import { LIMITS } from '@/lib/redaction/compartiments';
 
-export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'etude' | 'examen_pool' | 'redaction_sujets';
+export type AiJobType = 'evaluation' | 'flashcards' | 'redaction' | 'examen_pool' | 'redaction_sujets';
 
-const JOB_TYPES: AiJobType[] = ['evaluation', 'flashcards', 'redaction', 'etude', 'examen_pool', 'redaction_sujets'];
+// L'Étude guidée ne passe plus par ici : actions/etude3.ts (startEtude, prepareSequence) la pilote.
+const JOB_TYPES: AiJobType[] = ['evaluation', 'flashcards', 'redaction', 'examen_pool', 'redaction_sujets'];
 
 /** Types d'exercice pour lesquels on propose des sujets (jamais le commentaire d'arrêt : pas de décision inventée). */
 const SUJET_TYPES = ['Cas pratique', 'Dissertation'];
@@ -29,7 +30,6 @@ const PAYLOAD_FIELDS: Record<AiJobType, string[]> = {
   evaluation: ['documentId', 'coursId', 'type', 'count', 'documentName'],
   flashcards: ['documentId', 'coursId', 'count', 'documentName'],
   redaction: ['redactionId'],
-  etude: ['documentId'],
   examen_pool: ['documentId'],
   redaction_sujets: ['documentId', 'type'],
 };
@@ -74,9 +74,6 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   }
   if (type === 'redaction_sujets' && !SUJET_TYPES.includes(String(payload.type))) {
     return { error: 'Type d’exercice invalide.' };
-  }
-  if (type === 'etude' && !premium) {
-    return { error: "L'import de tes propres cours est réservé aux membres Premium.", premiumRequired: true };
   }
 
   // Rédaction : la copie doit appartenir à l'appelant. Sans ce contrôle, un job pouvait
@@ -141,15 +138,6 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     }
   }
 
-  // Étude : même garde-fou que /api/etude/generate (5 générations par heure).
-  if (type === 'etude') {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recent } = await supabaseAdmin
-      .from('ai_jobs').select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id).eq('type', 'etude').gte('created_at', oneHourAgo);
-    if ((recent || 0) >= 5) return { error: "Limite atteinte : 5 études par heure maximum. Réessayez plus tard." };
-  }
-
   // Quotas. Rédaction : compteur journalier ATOMIQUE (consume_free_quota est générique :
   // utilisateur + fonctionnalité + limite). Avant, on comptait les copies CRÉÉES aujourd'hui :
   // une copie d'hier se faisait corriger sans limite, et deux clics simultanés passaient tous
@@ -209,16 +197,7 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   // réponse (un fetch non attendu pouvait être coupé avec la fonction ; le cron n'étant plus que
   // quotidien sur l'offre Hobby, le job aurait attendu). On n'attend que l'envoi, pas le traitement.
   try {
-    const h = await headers();
-    const proto = h.get('x-forwarded-proto') || 'https';
-    const host = h.get('host');
-    if (host) {
-      after(() => fetch(`${proto}://${host}/api/worker/ai`, {
-        method: 'POST',
-        headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-        signal: AbortSignal.timeout(3000),
-      }).then(() => {}, () => {}));
-    }
+    after(() => pingWorker());
   } catch { /* non bloquant */ }
 
   return { success: true, jobId: job.id };

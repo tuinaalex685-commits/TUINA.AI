@@ -1315,3 +1315,35 @@ Ils remplacent le prompt unique actuel par une **chaîne d'analyse**. Chaque ét
 | E-04 | Validation d'une séquence : bloquer jusqu'à réussite, ou avancer après 3 essais avec la notion marquée « à revoir » ? | **Avancer après 3 essais** |
 | E-05 | Cours déjà générés : les régénérer automatiquement, ou à la demande de l'étudiant ? | **À la demande** (bouton) |
 | E-06 | Autoriser les **correctifs immédiats** du § 43.1 avant la refonte ? | Oui |
+
+---
+
+# PARTIE V — ÉTUDES GUIDÉES v4 : UN VRAI MOTEUR PÉDAGOGIQUE (2026-10-29)
+
+Sources : précis de DJP (447 pages), échanges du responsable avec un tuteur IA (la méthode à reproduire), mission « Transformation du moteur pédagogique », exigence pédagogique prioritaire, complément illustrations et cartes mentales (dessins de l'application, pas d'images IA : choix du responsable).
+
+## 47. Ce qui a changé
+
+| Avant (v3) | Maintenant (v4) |
+|---|---|
+| 30 segments au plus : un précis de 447 pages n'était lu qu'à **22 %** | Plan réel de l'auteur détecté par le code (parties, titres, chapitres, sections), **100 %** du contenu en 40 modules au plus |
+| Une consolidation unique de tout le cours | Un appel de compréhension par module (notions : sens, problème, mécanisme, prérequis, confusions, pages), puis la synthèse |
+| Synthèse ≈ 70 % du cours reformulé | **Introduction pédagogique** : ce que tu vas apprendre, pourquoi, grandes questions, carte générale, branches expliquées « comme au tableau » |
+| 3 à 12 séquences, mur de texte + 2 à 4 activités | Jusqu'à 60 **leçons, une notion chacune**, découvertes étape par étape : situation → comprendre → mots du droit → mécanisme pas à pas → exemples et dessin → ne pas confondre → à retenir → 4 vérifications de difficulté croissante → annonce de la suite |
+| Même « autre explication » à chaque erreur | Remédiation graduée : autre angle, puis décomposition plus simple et prérequis, puis raisonnement attendu (« À revoir ») |
+| Carte mentale SVG figée en fin de parcours | **Carte interactive** (vue d'ensemble + une par module), dépliable, notion → explication → leçons ; dès la découverte du cours et pendant tout le parcours |
+| Pas d'illustration | **Dessins pédagogiques** produits par l'application (personnages, rôles, actions numérotées, comparaisons), seulement quand ils aident ; un au plus par leçon |
+| Ancienne version v2 encore accessible | Supprimée (moteur, routes /api/etude/*, /api/worker/process, job « etude ») ; les données restent en base |
+
+## 48. Robustesse et coûts
+- Contenus communs mutualisés par (empreinte du texte, version) + verrou single-flight + reprise étape par étape.
+- Lectures légères : migration 11 (4 colonnes nullables) pour ne jamais relire le JSON lourd des analyses sur une page ; cache mémoire des contenus prêts (immuables).
+- Leçon suivante préparée en arrière-plan ; leçons générées à la demande.
+- Plafonds : 6 analyses/heure et 4/jour par étudiant ; 40 modules, 60 leçons par cours. Coût estimé d'un précis de 450 pages : ≈ 1 à 1,5 $ une fois pour tous les étudiants, plus ≈ 0,015 $ par leçon générée. **Attention : GEMINI_DAILY_BUDGET_USD vaut 5 $ par défaut.**
+- Sécurité : accès revérifié à chaque action qui peut lancer l'IA ; aucun HTML injecté ; balises neutralisées dans les textes envoyés à l'IA.
+
+## 49. Reste à faire / à décider
+- **Appliquer la migration 11** (puis 08 à 10 si ce n'est pas fait) avant la mise en production.
+- Test pédagogique comparatif réel : `tests/pedagogie/comparer.mts` (3 appels Gemini par passage) — nécessite une clé Gemini locale.
+- Le **catalogue** s'appuie encore sur `etude_cours` (ancienne génération) pour publier un cours : à faire migrer vers un rattachement direct au document (migration à valider).
+- La page **Progression** (lib/etude/mastery.ts) lit encore l'ancienne progression v2.

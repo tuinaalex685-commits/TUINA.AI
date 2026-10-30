@@ -2,6 +2,7 @@ import React from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/viewer';
+import { isPremium } from '@/lib/plan';
 import CoursManager from './CoursManager';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,9 @@ export default async function MatiereDetailsPage({ params }: { params: Promise<{
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const supabase = await createClient();
+  // Même règle que /app/matieres : fonction Premium, vérifiée côté serveur (la page de la
+  // liste affiche le cadenas ; un lien direct ne doit pas le contourner).
+  if (!(await isPremium(supabase, user.email))) redirect('/app/matieres');
 
   const [{ data: matiere }, { data: cours }, { count: looseCount }] = await Promise.all([
     supabase.from('matieres').select('id, titre, description').eq('id', matiereId).eq('user_id', user.id).maybeSingle(),

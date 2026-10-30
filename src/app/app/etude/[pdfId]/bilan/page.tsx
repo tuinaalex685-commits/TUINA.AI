@@ -4,8 +4,10 @@ import { notFound, redirect } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getCurrentUser } from '@/lib/viewer';
-import { accesEtude, getAnalyse, getParcours, notionsARevoir } from '@/lib/etude3/store';
-import { MindMap } from '@/components/etude3/MindMap';
+import { accesEtude, getAnalyse, getCartesModules, getParcours, notionsARevoir, parcoursAncien } from '@/lib/etude3/store';
+import { ACTIVITE_PREFIXE } from '@/lib/etude3/types';
+import { leconsPourCarte, vuesDuCours } from '@/lib/etude3/cartes';
+import CarteInteractive from '@/components/etude3/CarteInteractive';
 import { PrintButton } from '@/components/etude3/StudyClient';
 import styles from '@/components/etude3/etude3.module.css';
 
@@ -26,14 +28,18 @@ export default async function BilanPage({ params }: { params: Promise<{ pdfId: s
   const acces = await accesEtude(user.id, user.email, pdfId);
   if (!acces.ok) redirect('/app/etude');
   const parcours = await getParcours(user.id, pdfId);
-  if (!parcours?.source_hash) redirect(`/app/etude/${pdfId}`);
+  if (!parcours?.source_hash || parcoursAncien(parcours)) redirect(`/app/etude/${pdfId}`);
   if (parcours.statut !== 'termine') redirect(`/app/etude/${pdfId}`);
 
-  const [analyse, revoir, { data: tentatives }] = await Promise.all([
+  const [analyse, modules, revoir, { data: tentatives }] = await Promise.all([
     getAnalyse(parcours.source_hash),
+    getCartesModules(parcours.source_hash),
     notionsARevoir(user.id, pdfId),
-    supabaseAdmin.from('etude_tentatives').select('sequence_ordre, activite_id, numero, verdict').eq('user_id', user.id).eq('document_id', pdfId),
+    // Seulement les réponses du parcours actuel (préfixe de version des activités).
+    supabaseAdmin.from('etude_tentatives').select('sequence_ordre, activite_id, numero, verdict')
+      .eq('user_id', user.id).eq('document_id', pdfId).like('activite_id', `${ACTIVITE_PREFIXE}%`),
   ]);
+  const vues = vuesDuCours(analyse?.carte_mentale ?? null, modules, analyse?.carte?.titre || acces.nom);
 
   // Activités réussies du premier coup / après plusieurs essais.
   const parActivite = new Map<string, { premier: boolean; reussie: boolean }>();
@@ -56,7 +62,7 @@ export default async function BilanPage({ params }: { params: Promise<{ pdfId: s
           <Link href={`/app/etude/${pdfId}`}>{acces.nom}</Link>
         </nav>
         <h1 className={styles.title}>Ton bilan : {analyse?.carte?.titre || acces.nom}</h1>
-        <p className={styles.subtitle}>Tu as terminé toutes les séquences. Voici ce que montrent tes réponses, et la carte du cours pour réviser.</p>
+        <p className={styles.subtitle}>Tu as validé toutes les leçons. Voici ce que montrent tes réponses, et la carte du cours pour réviser.</p>
         <div className={styles.actions} data-print="hide" style={{ marginTop: 'var(--s-5)' }}>
           <Link href={`/app/etude/${pdfId}/synthese`} className={styles.secondary}>Relire la synthèse</Link>
           <PrintButton label="Télécharger le bilan en PDF" />
@@ -64,9 +70,9 @@ export default async function BilanPage({ params }: { params: Promise<{ pdfId: s
       </header>
 
       <ul className={styles.stats}>
-        <li><span className={styles.statValue}>{analyse?.plan?.length ?? 0}</span><span className={styles.statLabel}>séquences terminées</span></li>
-        <li><span className={styles.statValue}>{premier}/{total}</span><span className={styles.statLabel}>activités réussies du premier coup</span></li>
-        <li><span className={styles.statValue}>{reussies}/{total}</span><span className={styles.statLabel}>activités réussies au total</span></li>
+        <li><span className={styles.statValue}>{analyse?.plan?.length ?? 0}</span><span className={styles.statLabel}>leçons validées</span></li>
+        <li><span className={styles.statValue}>{premier}/{total}</span><span className={styles.statLabel}>questions réussies du premier coup</span></li>
+        <li><span className={styles.statValue}>{reussies}/{total}</span><span className={styles.statLabel}>questions réussies au total</span></li>
         <li><span className={styles.statValue}>{revoir.length}</span><span className={styles.statLabel}>notion{revoir.length > 1 ? 's' : ''} à revoir</span></li>
       </ul>
       <p className={styles.notice} style={{ maxWidth: '68ch' }}>
@@ -82,10 +88,10 @@ export default async function BilanPage({ params }: { params: Promise<{ pdfId: s
         </section>
       )}
 
-      {analyse?.carte_mentale && analyse.carte_mentale.noeuds.length > 0 && (
-        <section>
-          <h2 className={styles.sectionTitle}>La carte du cours</h2>
-          <MindMap carte={analyse.carte_mentale} />
+      {vues.length > 0 && (
+        <section data-print="hide">
+          <h2 className={styles.sectionTitle}>La carte du cours, pour réviser</h2>
+          <CarteInteractive vues={vues} lecons={leconsPourCarte(analyse?.plan || [])} pdfId={pdfId} debloquee={analyse?.plan?.length ?? 0} />
         </section>
       )}
 

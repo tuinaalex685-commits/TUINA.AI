@@ -3,21 +3,23 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/viewer';
-import { accesEtude, etatActivites, getAnalyse, getParcours, getSequence } from '@/lib/etude3/store';
+import { accesEtude, etatActivites, getAnalyse, getParcours, getSequence, parcoursAncien } from '@/lib/etude3/store';
+import { ETAPES, versPublique } from '@/lib/etude3/types';
 import { Blocks, Rich } from '@/components/etude3/Blocks';
 import { SequencePreparing } from '@/components/etude3/StudyClient';
 import SequenceRunner, { type EtatInitial } from '@/components/etude3/SequenceRunner';
+import LeconGuidee from '@/components/etude3/LeconGuidee';
 import styles from '@/components/etude3/etude3.module.css';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Séquence | SJP' };
+export const metadata = { title: 'Leçon | SJP' };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Une séquence. Garde SERVEUR : une séquence au-delà de la plus haute séquence débloquée est
- * refusée, même en tapant l'URL (on renvoie vers la séquence autorisée). Le retour en arrière
- * vers une séquence déjà débloquée est libre.
+ * Une leçon. Garde SERVEUR : une leçon au-delà de la plus haute leçon débloquée est refusée,
+ * même en tapant l'URL (on renvoie vers la leçon autorisée). Le retour en arrière vers une leçon
+ * déjà débloquée est libre.
  */
 export default async function SequencePage({ params }: { params: Promise<{ pdfId: string; n: string }> }) {
   const { pdfId, n } = await params;
@@ -29,7 +31,7 @@ export default async function SequencePage({ params }: { params: Promise<{ pdfId
   if (!acces.ok) redirect('/app/etude');
 
   const parcours = await getParcours(user.id, pdfId);
-  if (!parcours?.source_hash) redirect(`/app/etude/${pdfId}`);
+  if (!parcours?.source_hash || parcoursAncien(parcours)) redirect(`/app/etude/${pdfId}`);
   if (!parcours.synthese_vue_at) redirect(`/app/etude/${pdfId}/synthese`);
   if (ordre > parcours.sequence_max) redirect(`/app/etude/${pdfId}/sequence/${parcours.sequence_max}`);
 
@@ -44,19 +46,19 @@ export default async function SequencePage({ params }: { params: Promise<{ pdfId
   const bar = (
     <div className={styles.seqBar}>
       <Link href={`/app/etude/${pdfId}`} className={styles.link}><ChevronLeft size={16} aria-hidden /> Parcours</Link>
-      <div className={styles.seqDots} aria-label={`Séquence ${ordre} sur ${total}`}>
-        {plan.map((p) => (
-          <span key={p.ordre} className={`${styles.seqDot} ${p.ordre === ordre ? styles.seqDotOn : p.ordre < parcours.sequence_max || parcours.statut === 'termine' ? styles.seqDotDone : ''}`} />
-        ))}
-      </div>
-      <Link href={`/app/etude/${pdfId}/synthese`} className={styles.link}>Synthèse</Link>
+      <p className={styles.seqCount}>Leçon {ordre} sur {total}</p>
+      <span className={styles.seqLinks}>
+        <Link href={`/app/etude/${pdfId}/carte`} className={styles.link}>Carte</Link>
+        <Link href={`/app/etude/${pdfId}/synthese`} className={styles.link}>Introduction</Link>
+      </span>
     </div>
   );
 
   const head = (
     <header>
-      <p className={styles.crumbs} style={{ marginBottom: 'var(--s-2)' }}>Séquence {ordre} sur {total}</p>
+      <p className={styles.kicker}>Leçon {ordre}</p>
       <h1 className={styles.title}>{sequence?.titre || item.titre}</h1>
+      <p className={styles.objective}><strong>Ce que tu vas comprendre : </strong><Rich text={sequence?.objectif || item.objectif} /></p>
     </header>
   );
 
@@ -65,7 +67,6 @@ export default async function SequencePage({ params }: { params: Promise<{ pdfId
       <div className={styles.page}>
         {bar}
         {head}
-        <p className={styles.objective}><strong>Objectif : </strong>{item.objectif}</p>
         <SequencePreparing documentId={pdfId} ordre={ordre} />
       </div>
     );
@@ -79,29 +80,70 @@ export default async function SequencePage({ params }: { params: Promise<{ pdfId
       ? { tentatives: e.tentatives, reussie: e.reussie, aRevoir: e.aRevoir, termine: e.termine, dernier: e.retours[e.retours.length - 1]?.retour ?? null }
       : { tentatives: 0, reussie: false, aRevoir: false, termine: false, dernier: null };
   }
+  const dejaRepondu = sequence.activites.some((a) => (etats[a.id]?.tentatives || 0) > 0);
 
+  const verification = (
+    <SequenceRunner documentId={pdfId} ordre={ordre} activites={sequence.activites.map(versPublique)} initial={initial} isLast={ordre >= total} suite={sequence.suite} />
+  );
+
+  const navigation = (
+    <nav className={styles.actions} aria-label="Navigation entre leçons">
+      {ordre > 1 && <Link href={`/app/etude/${pdfId}/sequence/${ordre - 1}`} className={styles.link}><ChevronLeft size={16} aria-hidden /> Leçon {ordre - 1}</Link>}
+      {ordre < parcours.sequence_max && <Link href={`/app/etude/${pdfId}/sequence/${ordre + 1}`} className={styles.link}>Leçon {ordre + 1} <ChevronRight size={16} aria-hidden /></Link>}
+    </nav>
+  );
+
+  // Leçon v4 : découverte guidée, étape par étape.
+  if (sequence.etapes?.length) {
+    const etapes = sequence.etapes.map((e) => {
+      const meta = ETAPES.find((x) => x.cle === e.cle)!;
+      return {
+        cle: e.cle, titre: meta.titre, sousTitre: meta.sousTitre,
+        contenu: (
+          <>
+            <Blocks blocs={e.blocs} />
+            {e.cle === 'retenir' && sequence.savoir_expliquer && (
+              <aside className={styles.explain}>
+                <p className={styles.exampleTitle}>Pour l’expliquer à un camarade</p>
+                <p className={styles.p}><Rich text={sequence.savoir_expliquer} /></p>
+              </aside>
+            )}
+            {e.cle === 'retenir' && sequence.liens.length > 0 && (
+              <div>
+                <p className={styles.p} style={{ fontWeight: 700 }}>Ce que cela relie dans ton cours</p>
+                <ul className={styles.list}>{sequence.liens.map((l, i) => <li key={i}><Rich text={l} /></li>)}</ul>
+              </div>
+            )}
+          </>
+        ),
+      };
+    });
+    return (
+      <div className={styles.page}>
+        {bar}
+        {head}
+        <article className={`${styles.prose} ${styles.lesson}`}>
+          <LeconGuidee
+            cleStockage={`sjp-lecon:${pdfId}:${ordre}`}
+            accroche={sequence.accroche ? { situation: <Rich text={sequence.accroche.situation} />, question: sequence.accroche.question ? <Rich text={sequence.accroche.question} /> : null } : null}
+            etapes={etapes}
+            verification={verification}
+            toutOuvert={dejaRepondu}
+          />
+        </article>
+        {navigation}
+      </div>
+    );
+  }
+
+  // Leçon d'une version antérieure du contenu (lecture simple).
   return (
     <div className={styles.page}>
       {bar}
       {head}
-      <p className={styles.objective}><strong>Objectif : </strong><Rich text={sequence.objectif || item.objectif} /></p>
-
-      <article className={styles.prose}>
-        <Blocks blocs={sequence.blocs} />
-        {sequence.liens.length > 0 && (
-          <section>
-            <h2 className={styles.h3}>Ce que cela relie dans ton cours</h2>
-            <ul className={styles.list} style={{ marginTop: 'var(--s-3)' }}>{sequence.liens.map((l, i) => <li key={i}><Rich text={l} /></li>)}</ul>
-          </section>
-        )}
-      </article>
-
-      <SequenceRunner documentId={pdfId} ordre={ordre} activites={sequence.activites} initial={initial} isLast={ordre >= total} />
-
-      <nav className={styles.actions} aria-label="Navigation entre séquences">
-        {ordre > 1 && <Link href={`/app/etude/${pdfId}/sequence/${ordre - 1}`} className={styles.link}><ChevronLeft size={16} aria-hidden /> Séquence {ordre - 1}</Link>}
-        {ordre < parcours.sequence_max && <Link href={`/app/etude/${pdfId}/sequence/${ordre + 1}`} className={styles.link}>Séquence {ordre + 1} <ChevronRight size={16} aria-hidden /></Link>}
-      </nav>
+      <article className={styles.prose}><Blocks blocs={sequence.blocs} /></article>
+      {verification}
+      {navigation}
     </div>
   );
 }

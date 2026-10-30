@@ -9,6 +9,7 @@ import {
 import { resolveDocumentAccess } from '@/lib/access';
 import { downloadDocumentPdf } from '@/lib/storage';
 import { verifyRefund } from '@/lib/quotaRefund';
+import { pingWorker } from '@/lib/jobs/workerUrl';
 import { isMissingColumn } from '@/lib/plan';
 import { COMPARTIMENT_BY_TYPE, LIMITS, isRapportV2, type RapportV2 } from '@/lib/redaction/compartiments';
 import { processEtudeAnalyse, processEtudeSequence, type EngineDeps } from '@/lib/etude3/engine';
@@ -98,7 +99,10 @@ async function withLeaseHeartbeat<T>(jobId: string, fn: () => Promise<T>, lockHa
 // `mock: true` venu d'un client remplissait sinon les caches partagés avec des données factices.
 // Activation explicite pour les tests de charge/locaux : AI_MOCK_ENABLED=1 hors production.
 const MOCK_ALLOWED = process.env.AI_MOCK_ENABLED === '1' && process.env.VERCEL_ENV !== 'production';
-const isMockJob = (job: any) => MOCK_ALLOWED && job?.payload?.mock === true;
+// AI_MOCK_ALL=1 (environnement de test de charge uniquement) : TOUS les jobs sont simulés, pour
+// tester les vrais parcours (boutons de l'interface) sans aucun appel Gemini. Jamais en production.
+const MOCK_ALL = MOCK_ALLOWED && process.env.AI_MOCK_ALL === '1';
+const isMockJob = (job: any) => MOCK_ALLOWED && (MOCK_ALL || job?.payload?.mock === true);
 
 // Journalise une "génération" simulée à coût 0 → les tests comptent les générations (dédup) sans dépenser.
 async function trackMockGeneration(feature: string, userId: string | undefined, documentId: string | undefined) {
@@ -112,7 +116,8 @@ async function trackMockGeneration(feature: string, userId: string | undefined, 
 // par le heartbeat comme un vrai appel long → exerce réellement lease + verrou.
 async function mockGenerate(job: any, feature: string, documentId: string | undefined, builder: () => any): Promise<any> {
   const p = job.payload || {};
-  const delay = Math.max(0, Number(p.mockDelayMs ?? 800));
+  // AI_MOCK_DELAY_MS : durée simulée d'un appel (réaliste : 8 000 à 30 000 ms pour Gemini 2.5 Flash).
+  const delay = Math.max(0, Number(p.mockDelayMs ?? process.env.AI_MOCK_DELAY_MS ?? 800));
   await withLeaseHeartbeat(job.id, async () => { if (delay) await sleep(delay); });
   const failTimes = Number(p.mockFailTimes || 0);
   if (failTimes > 0 && (job.attempts || 0) <= failTimes) {
@@ -123,22 +128,6 @@ async function mockGenerate(job: any, feature: string, documentId: string | unde
   return builder();
 }
 
-function mockEtudeData() {
-  const theme = (n: number) => ({
-    titre: `Thème simulé ${n}`, ordre: n, explication: `Explication déterministe ${n}.`,
-    question_forme: { question: `Q forme ${n}`, options: ['A', 'B'], bonne_reponse: 0, remediation: 'r' },
-    cas_pratique_fond: { situation: `Cas ${n}`, question: `Q fond ${n}`, reponse_attendue_ou_choix: 'ok' },
-    branches_remediation_forme: [], branches_remediation_fond: []
-  });
-  return {
-    intelligence_pedagogique: { _mock: true, notions_cles: ['n1', 'n2'], pieges: ['p1'] },
-    strategie_pedagogique_sur_mesure: { approche: 'mock' },
-    sections: [1, 2, 3].map((i) => ({
-      titre: `Section simulée ${i}`, synthese: `Synthèse déterministe ${i}.`, ordre: i,
-      questions_cloture_section: [`Cloture ${i}`], themes: [theme(i * 2 - 1), theme(i * 2)]
-    }))
-  };
-}
 function mockEvalData(count: number) {
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1, question: `Question simulée ${i + 1}`, options: ['A', 'B', 'C', 'D'],
@@ -899,253 +888,6 @@ async function processRedactionSujets(job: any, ctx: JobCtx): Promise<any> {
 }
 
 // ---------------------------------------------------------------------------
-// TRAITEMENT : ÉTUDE GUIDÉE (résultat durable dans etude_cours/sections/themes)
-// Dedup cross-utilisateur + single-flight → UN SEUL appel Gemini par contenu identique.
-// Le job pilote la génération ; etude_cours reste la table de résultat lue par la page.
-// ---------------------------------------------------------------------------
-
-// Écriture IDEMPOTENTE des sections : UPSERT par (cours_id, ordre) si la contrainte UNIQUE existe
-// (migration etude_integrity.sql) → un double-traitement concurrent n'écrit pas de doublon (3+3≠6).
-// Fallback delete+insert si la contrainte n'existe pas encore (résilient à l'ordre de déploiement).
-async function writeSectionsIdempotent(targetCoursId: string, rows: any[]): Promise<{ id: string; ordre: number }[]> {
-  const up = await supabaseAdmin.from('etude_sections').upsert(rows, { onConflict: 'cours_id,ordre' }).select('id, ordre');
-  if (!up.error && up.data) return up.data as any;
-  await supabaseAdmin.from('etude_sections').delete().eq('cours_id', targetCoursId);
-  const ins = await supabaseAdmin.from('etude_sections').insert(rows).select('id, ordre');
-  if (ins.error || !ins.data) throw new Error(`Écriture sections: ${ins.error?.message || 'insert vide'}`);
-  return ins.data as any;
-}
-async function writeThemesIdempotent(rows: any[]): Promise<void> {
-  if (!rows.length) return;
-  const up = await supabaseAdmin.from('etude_themes').upsert(rows, { onConflict: 'section_id,ordre' });
-  if (!up.error) return;
-  const ins = await supabaseAdmin.from('etude_themes').insert(rows);
-  if (ins.error && ins.error.code !== '23505') throw new Error(`Écriture thèmes: ${ins.error.message}`);
-}
-
-// Clone le contenu pédagogique d'un cours source vers un cours cible, de façon IDEMPOTENTE (upsert par
-// position). Un clone concurrent du même contenu n'ajoute donc jamais de doublon. Renvoie le nb de sections.
-async function cloneEtudeContent(sourceCoursId: string, targetCoursId: string): Promise<number> {
-  const { data: srcSecs, error: selErr } = await supabaseAdmin.from('etude_sections').select('*').eq('cours_id', sourceCoursId).order('ordre', { ascending: true });
-  if (selErr) throw new Error(`Clone (lecture sections source): ${selErr.message}`);
-  if (!srcSecs || srcSecs.length === 0) throw new Error('Clone impossible : cours source sans section.');
-  const secRows = srcSecs.map((s: any) => ({ cours_id: targetCoursId, titre: s.titre, synthese: s.synthese, ordre: s.ordre, questions_cloture: s.questions_cloture }));
-  const newSecs = await writeSectionsIdempotent(targetCoursId, secRows);
-  const ordreToId = new Map<number, string>();
-  for (const s of newSecs) ordreToId.set(s.ordre, s.id);
-  const themeRows: any[] = [];
-  for (const sec of srcSecs) {
-    const nid = ordreToId.get(sec.ordre);
-    if (!nid) continue;
-    const { data: srcThemes } = await supabaseAdmin.from('etude_themes').select('*').eq('section_id', sec.id).order('ordre', { ascending: true });
-    for (const t of srcThemes || []) themeRows.push({
-      section_id: nid, titre: t.titre, ordre: t.ordre,
-      explication: t.explication, question_forme: t.question_forme, cas_pratique_fond: t.cas_pratique_fond,
-      remediation_forme: t.remediation_forme, remediation_fond: t.remediation_fond
-    });
-  }
-  await writeThemesIdempotent(themeRows);
-  return srcSecs.length;
-}
-
-// CACHE DE GÉNÉRATION PAR CONTENU (clé = hash du texte). Garantit UN SEUL appel Gemini réussi par
-// contenu, MÊME si un leader échoue (503) et libère le verrou : le follower/retry qui devient générateur
-// lit le cache au lieu de relancer Gemini. Résilient : si la table n'existe pas encore, cache ignoré
-// (comportement actuel). Le résultat est écrit AVANT toute étape faillible (sauvegarde/finalize).
-async function getEtudeCache(cacheKey: string): Promise<any | null> {
-  const { data } = await supabaseAdmin.from('etude_generation_cache').select('data').eq('source_hash', cacheKey).maybeSingle();
-  return data?.data || null;
-}
-async function setEtudeCache(cacheKey: string, data: any): Promise<void> {
-  await supabaseAdmin.from('etude_generation_cache').upsert({ source_hash: cacheKey, data }, { onConflict: 'source_hash', ignoreDuplicates: true }).then(() => {}, () => {});
-}
-
-// Existe-t-il un cours DÉJÀ prêt (avec sections) pour ce hash de contenu, autre que le cours courant ?
-async function findReadyEtudeByHash(textHash: string, excludeCoursId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from('etude_cours').select('id').eq('generation_hash', textHash).eq('statut_generation', 'pret')
-    .neq('id', excludeCoursId).limit(1).maybeSingle();
-  if (!data) return null;
-  const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', data.id);
-  return (count || 0) > 0 ? data.id : null;
-}
-
-async function processEtude(job: any, ctx: JobCtx): Promise<any> {
-  const documentId = job.payload?.documentId;
-  if (!documentId) throw new Error('documentId manquant.');
-
-  // 1. Cours de résultat (get-or-create, tolérant à la concurrence via UNIQUE(pdf_id)).
-  let { data: cours } = await supabaseAdmin
-    .from('etude_cours').select('id, statut_generation, generation_hash').eq('pdf_id', documentId).maybeSingle();
-  if (!cours) {
-    const { data: created, error: cErr } = await supabaseAdmin
-      .from('etude_cours').insert({ pdf_id: documentId, statut_generation: 'en_cours' })
-      .select('id, statut_generation, generation_hash').single();
-    if (cErr) {
-      // Race : un autre worker a créé la ligne → on la relit.
-      const { data: existing } = await supabaseAdmin
-        .from('etude_cours').select('id, statut_generation, generation_hash').eq('pdf_id', documentId).maybeSingle();
-      if (!existing) throw new Error(`Création etude_cours impossible: ${cErr.message}`);
-      cours = existing;
-    } else {
-      cours = created;
-    }
-  }
-  const coursId = cours.id;
-
-  // 2. Idempotence : déjà prêt avec du contenu → rien à refaire.
-  if (cours.statut_generation === 'pret') {
-    const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', coursId);
-    if ((count || 0) > 0) return { coursId };
-  }
-
-  // 3. Texte + hash de contenu.
-  const { text } = await getDocumentText(documentId);
-  const textHash = sha256(text);
-
-  // Finalise le cours : garantit des sections AVANT 'pret' (jamais d'écran vide). Seul le GÉNÉRATEUR
-  // enregistre generation_hash — il existe une contrainte UNIQUE(generation_hash) : un seul cours
-  // "canonique" par contenu. Les CLONES finalisent SANS hash. Tolère le 23505 (un twin détient déjà
-  // le hash à cause d'une race de leaders) → finalise quand même en clone. Jamais d'échec de finalize
-  // pour cette raison ; LÈVE seulement sur une vraie erreur d'écriture (le job retentera).
-  const finalize = async (registerHash: boolean) => {
-    const { count } = await supabaseAdmin.from('etude_sections').select('id', { count: 'exact', head: true }).eq('cours_id', coursId);
-    if ((count || 0) === 0) throw new Error('Finalisation refusée : cours sans section (anti écran vide).');
-    const base: Record<string, any> = { statut_generation: 'pret', last_error: null, updated_at: nowIso() };
-    const { error: upErr } = await supabaseAdmin.from('etude_cours')
-      .update(registerHash ? { ...base, generation_hash: textHash } : base).eq('id', coursId);
-    if (upErr) {
-      const dup = upErr.code === '23505' || /duplicate|unique/i.test(upErr.message || '');
-      if (registerHash && dup) {
-        const { error: e2 } = await supabaseAdmin.from('etude_cours').update(base).eq('id', coursId);
-        if (e2) throw new Error(`Finalisation etude_cours: ${e2.message}`);
-      } else {
-        throw new Error(`Finalisation etude_cours: ${upErr.message}`);
-      }
-    }
-    await patchJob(job.id, { result_ref: coursId });
-    return { coursId };
-  };
-
-  // 4. Dedup cross-utilisateur : un cours identique déjà prêt existe → on clone (0 appel Gemini).
-  const readyTwin = await findReadyEtudeByHash(textHash, coursId);
-  if (readyTwin) {
-    await ctx.mark('saving', 85, 'Récupération d’un cours identique…');
-    await cloneEtudeContent(readyTwin, coursId);
-    return await finalize(false);
-  }
-
-  // 5. Single-flight par contenu : un seul leader génère ; les autres attendent puis clonent.
-  const lockKey = `etude:${textHash}`;
-  const isLeader = await acquireContentLock(lockKey);
-  try {
-    if (!isLeader) {
-      // Follower SCALABLE : ne bloque JAMAIS la fonction serverless (clé pour 300→5000 users). Vérifie
-      // une fois si le cours mutualisé est prêt → clone ; sinon se re-programme dans quelques secondes
-      // (le worker le repiochera). Borné par le TTL du verrou : si le leader meurt, le verrou expire et
-      // ce follower deviendra leader au prochain passage → auto-guérison, jamais de blocage.
-      await ctx.mark('generating', 40, 'Génération mutualisée en cours…');
-      // Attente COURTE en fonction (≤18s) : borne le held-time ET le nombre de requeues (~leader/18s),
-      // indépendamment de la migration next_attempt_at. Puis clone si prêt, sinon requeue (libère la fn).
-      const twin = await waitForData(() => findReadyEtudeByHash(textHash, coursId), 18000, 3000);
-      if (twin) {
-        await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
-        await cloneEtudeContent(twin, coursId);
-        return await finalize(false);
-      }
-      return { __requeueMs: 4000 };
-    }
-
-    // 5bis. DOUBLE-CHECKED LOCKING : entre le check dédup (étape 4) et l'acquisition du verrou, un autre
-    //       leader a pu terminer ET libérer le verrou (mesuré : 2e génération 27s après la 1re). Comme on
-    //       ne peut acquérir le verrou qu'APRÈS sa libération par le leader précédent (qui a alors déjà mis
-    //       son cours 'pret'), on RE-VÉRIFIE ici : si un cours identique est prêt, on clone au lieu de
-    //       régénérer. Élimine la double génération à l'échelle sans migration ni appel Gemini superflu.
-    const twinAfterLock = await findReadyEtudeByHash(textHash, coursId);
-    if (twinAfterLock) {
-      await ctx.mark('saving', 85, 'Récupération du cours mutualisé…');
-      await cloneEtudeContent(twinAfterLock, coursId);
-      return await finalize(false);
-    }
-
-    // 6. LEADER : génération Gemini du prompt maître — IDEMPOTENTE via job.result.generated.
-    //    Le résultat est persisté AVANT toute étape faillible (sauvegarde/finalize) : un retry ne relance
-    //    donc JAMAIS Gemini (fin des doubles générations sous retry). Un seul appel Gemini par contenu.
-    const { ENGINE_VERSION, PEDAGOGICAL_MASTER_SCHEMA, getPedagogicalMasterPrompt, PROMPT_VERSION, SCHEMA_VERSION } = await import('@/lib/prompts/pedagogicalEngine');
-    // Clé de cache de contenu (préfixe 'mock:' pour isoler totalement les données de test des vraies).
-    const cacheKey = isMockJob(job) ? `mock:${textHash}` : textHash;
-    let leaderResult = job.result || {};
-    if (!leaderResult.generated) {
-      // Cache PARTAGÉ entre jobs du même contenu : si un générateur précédent a déjà produit ce contenu
-      // (même après un échec post-génération), on le RÉUTILISE au lieu de rappeler Gemini → exactly-once.
-      let gen: any = await getEtudeCache(cacheKey);
-      if (!gen) {
-        await ctx.mark('generating', 40, 'Génération du cours par l’IA…');
-        gen = isMockJob(job)
-          ? await mockGenerate(job, 'worker_master', documentId, mockEtudeData)
-          : await withLeaseHeartbeat(job.id, () => generateStructuredJSON(
-            "Tu es un professeur de droit expert. Génère l'intelligence pédagogique ET le découpage du cours.",
-            getPedagogicalMasterPrompt(text.substring(0, 50000)),
-            PEDAGOGICAL_MASTER_SCHEMA,
-            undefined,
-            { userId: job.user_id, feature: 'worker_master', documentId }
-          ), lockKey);
-        if (!gen || !gen.intelligence_pedagogique || !gen.sections) {
-          throw new Error("Impossible de générer un JSON valide pour le cours.");
-        }
-        await setEtudeCache(cacheKey, gen); // écrit AVANT save/finalize → un follower/retry ne régénère jamais
-      }
-      leaderResult = { ...leaderResult, generated: gen };
-      // Persistance FIABLE du résultat généré : un retry doit TOUJOURS retrouver 'generated' pour ne
-      // JAMAIS relancer Gemini (anti double appel / double coût). On réessaie tant que l'écriture échoue.
-      for (let i = 0; i < 5; i++) {
-        const { error } = await supabaseAdmin.from('ai_jobs').update({ result: leaderResult, updated_at: nowIso() }).eq('id', job.id);
-        if (!error) break;
-        await sleep(300 * (i + 1));
-      }
-    }
-    const generatedData: any = leaderResult.generated;
-
-    // 7. Sauvegarde IDEMPOTENTE (upsert par position → un double-traitement n'écrit pas de doublon).
-    await ctx.mark('saving', 85, 'Enregistrement du cours…');
-    try {
-      const fullIntelligence = {
-        _metadata: { engine_version: ENGINE_VERSION, prompt_version: PROMPT_VERSION, schema_version: SCHEMA_VERSION, generated_at: nowIso() },
-        ...generatedData.intelligence_pedagogique,
-        strategie_pedagogique_sur_mesure: generatedData.strategie_pedagogique_sur_mesure
-      };
-      await supabaseAdmin.from('documents').update({ intelligence_pedagogique: fullIntelligence }).eq('id', documentId);
-    } catch { /* colonne intelligence absente → non bloquant */ }
-
-    const sectionsPayload = generatedData.sections.map((s: any) => ({
-      cours_id: coursId, titre: s.titre, synthese: s.synthese || '', ordre: s.ordre, questions_cloture: s.questions_cloture_section || []
-    }));
-    const insertedSections = await writeSectionsIdempotent(coursId, sectionsPayload);
-
-    const ordreToId = new Map<number, string>();
-    for (const s of insertedSections) ordreToId.set(s.ordre, s.id);
-    const themesPayload: any[] = [];
-    for (const section of generatedData.sections) {
-      const sectionId = ordreToId.get(section.ordre);
-      if (!sectionId) continue;
-      for (const theme of section.themes || []) {
-        themesPayload.push({
-          section_id: sectionId, titre: theme.titre, ordre: theme.ordre,
-          explication: theme.explication || '', question_forme: theme.question_forme || {},
-          cas_pratique_fond: theme.cas_pratique_fond || {},
-          remediation_forme: theme.branches_remediation_forme || [], remediation_fond: theme.branches_remediation_fond || []
-        });
-      }
-    }
-    await writeThemesIdempotent(themesPayload);
-
-    return await finalize(true); // le générateur enregistre le hash canonique (source de dédup)
-  } finally {
-    if (isLeader) await releaseContentLock(lockKey);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // CONTRÔLE D'ACCÈS (défense en profondeur)
 // Le worker lit les contenus avec le service role, qui ignore la RLS. Un job peut avoir été créé
 // par un autre chemin que enqueueAiJob (insertion directe tant que la policy INSERT existait) :
@@ -1201,31 +943,84 @@ async function assertJobAccess(job: any): Promise<void> {
  * ATTENDUE jusqu'à son envoi (1,5 s max) : un fetch non attendu pouvait être perdu quand la
  * fonction serverless se fige après sa réponse, laissant le job « en cours » jusqu'au cron.
  */
-async function chainWorker(workerUrl?: string) {
-  // Lancé depuis la route de suivi, le worker ne connaît pas son URL : on utilise le domaine de
-  // production fourni par Vercel. Sans relais, un job découpé en étapes s'arrêterait dès que
-  // l'étudiant ferme la page.
-  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  const url = workerUrl || (prod ? `https://${prod}/api/worker/ai` : undefined);
-  if (!url) return;
-  await fetch(url, {
-    method: 'POST',
-    headers: { 'x-worker-secret': process.env.CRON_SECRET || '' },
-    signal: AbortSignal.timeout(1500),
-  }).then(() => {}, () => {});
+async function chainWorker() {
+  // Adresse configurée (domaine de production, ou URL du déploiement en préversion) : jamais
+  // l'en-tête Host, qui vient du client alors que l'appel porte CRON_SECRET.
+  await pingWorker('/api/worker/ai', 1500);
 }
 
-export async function runAiWorker(workerUrl?: string): Promise<any> {
-  const now = nowIso();
+/**
+ * Plafond de jobs IA traités en même temps (tous types). Au-delà, le surplus attend dans la file
+ * au lieu de partir en rafale chez Gemini (429 en série, tentatives épuisées). À régler selon le
+ * quota du compte Google (requêtes et tokens par minute) : GEMINI_MAX_INFLIGHT, 0 = sans plafond.
+ */
+const MAX_INFLIGHT = Math.max(0, Number(process.env.GEMINI_MAX_INFLIGHT ?? '12') || 0);
+/** Attente maximale d'un job dû très bientôt (étape suivante, attente d'un autre étudiant, reprise). */
+const WAIT_SOON_MS = 20_000;
 
-  // 1. RÉCLAMATION ATOMIQUE d'un job via la fonction Postgres claim_ai_job (FOR UPDATE SKIP LOCKED) :
+let claimV2Missing = false;
+async function claimJob(now: string) {
+  if (!claimV2Missing) {
+    const r = await supabaseAdmin.rpc('claim_ai_job_v2', { now_ts: now, lease_ts: leaseIso(), p_max_inflight: MAX_INFLIGHT });
+    // Seule l'ABSENCE de la fonction (migration 08 non appliquée) fait basculer sur l'ancienne
+    // réclamation, sans plafond ; une erreur passagère est renvoyée telle quelle.
+    if (!r.error || !['PGRST202', '42883'].includes(String(r.error.code))) return r;
+    claimV2Missing = true;
+    console.warn('[AI Worker] claim_ai_job_v2 absente, repli sur claim_ai_job:', r.error.message);
+  }
+  return supabaseAdmin.rpc('claim_ai_job', { now_ts: now, lease_ts: leaseIso() });
+}
+
+/**
+ * Rien à prendre maintenant : un job en attente devient-il dû dans les prochaines secondes ?
+ * Sans cette attente, le relais s'éteignait quand le job suivant n'était dû que 4 à 20 s plus
+ * tard, et ce job ne repartait qu'au retour de l'étudiant sur sa page (ou au cron quotidien).
+ */
+async function msUntilNextDue(): Promise<number | null> {
+  const { data } = await supabaseAdmin
+    .from('ai_jobs').select('next_attempt_at')
+    .in('status', ['pending', 'queued']).not('next_attempt_at', 'is', null)
+    .order('next_attempt_at', { ascending: true }).limit(1);
+  const at = data?.[0]?.next_attempt_at;
+  if (!at) return null;
+  return Math.max(0, Date.parse(at) - Date.now());
+}
+
+async function fileIaPleine(): Promise<boolean> {
+  if (MAX_INFLIGHT <= 0 || claimV2Missing) return false;
+  const { count } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+    .in('status', IN_FLIGHT).gte('lease_until', nowIso());
+  return (count || 0) >= MAX_INFLIGHT;
+}
+
+export async function runAiWorker(): Promise<any> {
+  let now = nowIso();
+
+  // 1. RÉCLAMATION ATOMIQUE d'un job via la fonction Postgres (FOR UPDATE SKIP LOCKED) :
   //    2 workers ne réclament JAMAIS le même job → ZÉRO double-lease (donc zéro double appel Gemini).
-  //    Fallback (si la fonction n'est pas encore déployée) : ancien "candidat aléatoire + lease conditionnel".
+  //    claim_ai_job_v2 ajoute le plafond de jobs en cours et l'ordre équitable (migration 08).
+  //    Fallback (si aucune fonction n'est déployée) : ancien "candidat aléatoire + lease conditionnel".
   let leased: any = null;
-  const claim = await supabaseAdmin.rpc('claim_ai_job', { now_ts: now, lease_ts: leaseIso() });
+  let claim = await claimJob(now);
   if (!claim.error) {
     leased = Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null);
-    if (!leased) return { message: 'Aucun job en attente' };
+    if (!leased) {
+      // File pleine : les workers en cours relaieront en terminant ; dormir ne servirait à rien.
+      if (await fileIaPleine()) return { message: 'File IA pleine' };
+      // Sinon, un job devient-il dû très bientôt ?
+      const wait = await msUntilNextDue().catch(() => null);
+      if (wait === null || wait > WAIT_SOON_MS) return { message: 'Aucun job en attente' };
+      await new Promise((r) => setTimeout(r, wait + 100));
+      now = nowIso();
+      claim = await claimJob(now);
+      leased = !claim.error ? (Array.isArray(claim.data) ? (claim.data[0] || null) : (claim.data || null)) : null;
+      if (!leased) return { message: 'Aucun job en attente' };
+    }
+  } else if (!claimV2Missing && MAX_INFLIGHT > 0) {
+    // Erreur passagère de la réclamation plafonnée (base lente) : on NE se rabat PAS sur la
+    // réclamation sans plafond, qui lancerait tout le monde chez Gemini au pire moment.
+    console.warn('[AI Worker] réclamation impossible, nouvel essai au prochain relais:', claim.error.message);
+    return { message: 'Réclamation impossible pour le moment' };
   } else {
     // Fallback : pioche aléatoire parmi les 25 plus anciens (répartit la contention) + lease conditionnel.
     const pickRandom = (rows: { id: string }[] | null): { id: string } | null =>
@@ -1265,7 +1060,8 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     else if (leased.type === 'flashcards') result = await processFlashcards(leased, ctx);
     else if (leased.type === 'redaction') result = await processRedaction(leased, ctx);
     else if (leased.type === 'redaction_sujets') result = await processRedactionSujets(leased, ctx);
-    else if (leased.type === 'etude') result = await processEtude(leased, ctx);
+    // Ancienne Étude guidée (v2) retirée : un job resté en file échoue proprement, sans appel IA.
+    else if (leased.type === 'etude') throw new NonRetryableError('L’ancienne version de l’Étude guidée a été retirée. Ouvre ton cours dans Études guidées.');
     else if (leased.type === 'etude3_analyse') result = await processEtudeAnalyse(leased, engineDeps(leased, ctx));
     else if (leased.type === 'etude3_sequence') result = await processEtudeSequence(leased, engineDeps(leased, ctx));
     else if (leased.type === 'examen_pool') result = await processExamenPool(leased, ctx);
@@ -1281,7 +1077,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
         status: 'pending', lease_until: null,
         next_attempt_at: new Date(Date.now() + result.__requeueMs).toISOString()
       });
-      await chainWorker(workerUrl);
+      await chainWorker();
       return { requeued: leased.id, type: leased.type };
     }
 
@@ -1289,7 +1085,7 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       status: 'completed', progress: 100, phase: 'Terminé',
       result, error: null, last_error: null, lease_until: null, next_attempt_at: null
     });
-    await chainWorker(workerUrl);
+    await chainWorker();
     return { success: true, jobId: leased.id, type: leased.type };
   } catch (err: any) {
     const message = err?.message || String(err);
@@ -1303,7 +1099,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
     if (willRetry) {
       // Backoff : transitoire = court et croissant (auto-guérison, l'UI reste en 'pending' donc jamais
       // d'écran d'erreur ni de blocage) ; permanent = bref (l'erreur ne s'auto-guérira pas).
-      const delayMs = transient ? Math.min(90000, 15000 * attempts) : 20000 * attempts;
+      // Aléa ±30 % : des centaines de jobs refusés ensemble (429) ne reviennent pas tous à la même seconde.
+      const base = transient ? Math.min(90000, 15000 * attempts) : 20000 * attempts;
+      const delayMs = Math.round(base * (0.7 + Math.random() * 0.6));
       await patchJob(leased.id, {
         status: 'pending', phase: transient ? 'Reprise imminente…' : 'Nouvelle tentative…',
         last_error: message, lease_until: null,
@@ -1345,15 +1143,9 @@ export async function runAiWorker(workerUrl?: string): Promise<any> {
       }
     }
     console.error(`[AI Worker] Job ${leased.id} (${leased.type}) échec ${transient ? 'TRANSITOIRE' : 'PERMANENT'} tentative ${attempts}/${maxAttempts} → ${willRetry ? 'retry' : 'FAILED'}: ${message}`);
-    await chainWorker(workerUrl);
+    await chainWorker();
     return { error: message, jobId: leased.id, retryable: willRetry };
   }
-}
-
-function workerUrlFrom(req: NextRequest) {
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('host') || 'localhost:3000';
-  return `${protocol}://${host}/api/worker/ai`;
 }
 
 // SÉCURITÉ : le worker ne doit pas être déclenchable par n'importe qui (anti abus/DoS). On exige le secret
@@ -1372,13 +1164,13 @@ const UNAUTHORIZED = NextResponse.json({ error: 'unauthorized' }, { status: 401 
 // Déclenchement immédiat (best-effort, appelé côté serveur après enqueue avec le secret).
 export async function POST(req: NextRequest) {
   if (!workerAuthorized(req)) return UNAUTHORIZED;
-  const result = await runAiWorker(workerUrlFrom(req));
+  const result = await runAiWorker();
   return NextResponse.json(result ?? { message: 'ok' });
 }
 
 // Déclenché par Vercel Cron (toutes les minutes) : traitement serveur GARANTI, jamais lié à un client.
 export async function GET(req: NextRequest) {
   if (!workerAuthorized(req)) return UNAUTHORIZED;
-  const result = await runAiWorker(workerUrlFrom(req));
+  const result = await runAiWorker();
   return NextResponse.json(result ?? { message: 'ok' });
 }

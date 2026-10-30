@@ -7,7 +7,7 @@ import { consumeQuota, refundQuota } from '@/lib/quota';
 import { generateStructuredJSON } from '@/lib/gemini';
 import { enqueueDedup, lastJob } from '@/lib/jobs/enqueue';
 import { CORRECTION_SCHEMA, CORRECTION_SYSTEM, neutralize } from '@/lib/prompts/etude/prompts';
-import { accesEtude, ensureSequenceJob, etatActivites, getAnalyse, getParcours, getSequence, knownHash } from '@/lib/etude3/store';
+import { accesEtude, ensureSequenceJob, etatActivites, getAnalyse, getParcours, getSequence, knownHash, parcoursAncien, passerVersionActuelle } from '@/lib/etude3/store';
 import { ENGINE_VERSION, MAX_TENTATIVES, type Activite, type RetourActivite, type Verdict } from '@/lib/etude3/types';
 
 /**
@@ -19,6 +19,8 @@ import { ENGINE_VERSION, MAX_TENTATIVES, type Activite, type RetourActivite, typ
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_REPONSE = 4000;
 const ANALYSES_PAR_HEURE = 6;
+// Une analyse d'un précis de 450 pages coûte de l'ordre d'un dollar : plafond journalier par étudiant.
+const ANALYSES_PAR_JOUR = 4;
 
 async function currentUser() {
   const supabase = await createClient();
@@ -45,7 +47,16 @@ export async function startEtude(documentId: string) {
     return { error: 'Démarrage impossible pour le moment. Réessaie dans un instant.' };
   }
 
-  const parcours = await getParcours(user.id, documentId);
+  let parcours = await getParcours(user.id, documentId);
+  // Parcours commencé avec l'ancien moteur : l'étudiant a choisi la nouvelle version (E-05).
+  if (parcoursAncien(parcours)) {
+    const { error: e } = await passerVersionActuelle(user.id, documentId);
+    if (e) {
+      console.error('[etude3] passage à la nouvelle version impossible:', e.message);
+      return { error: 'Passage à la nouvelle version impossible pour le moment. Réessaie dans un instant.' };
+    }
+    parcours = await getParcours(user.id, documentId);
+  }
   const hash = parcours?.source_hash || hashConnu;
   if (hash) {
     if (!parcours?.source_hash) await supabaseAdmin.from('etude_parcours').update({ source_hash: hash }).eq('user_id', user.id).eq('document_id', documentId);
@@ -63,11 +74,17 @@ export async function startEtude(documentId: string) {
     return { success: true, status: 'analysing' as const, jobId: enCours.id as string };
   }
   // Garde-fou de coût avant une NOUVELLE analyse : nombre lancé par heure et par étudiant.
-  const since = new Date(Date.now() - 3600_000).toISOString();
-  const { count } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', since);
-  if ((count || 0) >= ANALYSES_PAR_HEURE) {
+  const [{ count: heure }, { count: jour }] = await Promise.all([
+    supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', new Date(Date.now() - 3600_000).toISOString()),
+    supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('type', 'etude3_analyse').gte('created_at', new Date(Date.now() - 86_400_000).toISOString()),
+  ]);
+  if ((heure || 0) >= ANALYSES_PAR_HEURE) {
     return { error: `Tu as lancé ${ANALYSES_PAR_HEURE} analyses dans l’heure. Réessaie un peu plus tard.` };
+  }
+  if ((jour || 0) >= ANALYSES_PAR_JOUR) {
+    return { error: `Tu as lancé ${ANALYSES_PAR_JOUR} analyses de nouveaux cours aujourd’hui. Réessaie demain : les cours déjà analysés restent disponibles.` };
   }
   const res = await enqueueDedup({ userId: user.id, type: 'etude3_analyse', payload: { documentId }, dedupKey });
   if ('error' in res) return { error: res.error };
@@ -82,9 +99,14 @@ export async function markSyntheseVue(documentId: string) {
   if (!user) return { error: 'Non authentifié' };
   const p = await getParcours(user.id, documentId);
   if (!p) return { error: 'Commence d’abord l’étude.' };
-  await supabaseAdmin.from('etude_parcours')
+  // L'accès est revérifié à chaque étape (Premium expiré, cours retiré du catalogue, autre niveau).
+  if (!(await accesEtude(user.id, user.email, documentId)).ok) return { error: 'Accès refusé.' };
+  const { error } = await supabaseAdmin.from('etude_parcours')
     .update({ synthese_vue_at: p.synthese_vue_at ?? new Date().toISOString(), sequence_courante: Math.max(1, p.sequence_courante), updated_at: new Date().toISOString() })
     .eq('user_id', user.id).eq('document_id', documentId);
+  if (error) return { error: 'Enregistrement impossible pour le moment. Réessaie.' };
+  // La leçon 1 se prépare pendant que l'étudiant ouvre la page (une seule fois pour tout le cours).
+  if (p.source_hash && !(await getSequence(p.source_hash, 1))) await ensureSequenceJob(user.id, documentId, p.source_hash, 1).catch(() => {});
   return { success: true };
 }
 
@@ -101,6 +123,11 @@ export async function prepareSequence(documentId: string, ordre: number) {
 
   if (await getSequence(p.source_hash, ordre)) return { success: true, ready: true };
   const res = await ensureSequenceJob(user.id, documentId, p.source_hash, ordre);
+  // La leçon suivante se prépare en arrière-plan pendant que l'étudiant suit celle-ci.
+  const analyse = await getAnalyse(p.source_hash);
+  if (analyse?.plan?.some((x) => x.ordre === ordre + 1) && !(await getSequence(p.source_hash, ordre + 1))) {
+    await ensureSequenceJob(user.id, documentId, p.source_hash, ordre + 1).catch(() => {});
+  }
   if ('error' in res) return { error: res.error };
   return { success: true, ready: false, jobId: res.jobId };
 }
@@ -181,13 +208,19 @@ export async function answerActivity(input: { documentId: string; ordre: number;
 
   const reussi = verdict === 'juste';
   const dernierEssai = !reussi && numero >= MAX_TENTATIVES;
+  // Remédiation graduée, jamais le même texte deux fois :
+  //  1re erreur : un autre angle ou un autre exemple ;
+  //  2e erreur  : la notion décomposée plus simplement, et le prérequis à revoir s'il est en cause ;
+  //  3e erreur  : le raisonnement attendu, la notion passe « À revoir », l'étudiant continue (E-04).
   const retour: RetourActivite = {
     verdict, message, manquants, numero,
-    // 2e tentative et suivantes : une AUTRE manière d'expliquer, pas le même texte.
-    autre_explication: !reussi && numero >= 1 ? activite.autre_explication : undefined,
+    autre_explication: !reussi && numero === 1 ? activite.autre_explication || undefined : undefined,
+    explication_simple: !reussi && numero === 2 ? activite.explication_simple || activite.autre_explication || undefined : undefined,
+    prerequis: !reussi && numero >= 2 ? activite.prerequis || undefined : undefined,
     bonne_reponse: dernierEssai
       ? (activite.type === 'choix' ? `${choixLettre(activite.bonne)}. ${activite.choix[activite.bonne]} — ${activite.explication}` : activite.reponse_modele)
       : undefined,
+    bonne_index: activite.type === 'choix' && (reussi || dernierEssai) ? activite.bonne : undefined,
     aRevoir: dernierEssai,
     termine: reussi || dernierEssai,
   };
@@ -219,6 +252,7 @@ export async function completeSequence(documentId: string, ordre: number) {
   const p = await getParcours(user.id, documentId);
   if (!p?.source_hash) return { error: 'Commence d’abord l’étude.' };
   if (ordre > p.sequence_max) return { error: 'Cette séquence n’est pas encore débloquée.' };
+  if (!(await accesEtude(user.id, user.email, documentId)).ok) return { error: 'Accès refusé.' };
 
   const [sequence, analyse, etats] = await Promise.all([getSequence(p.source_hash, ordre), getAnalyse(p.source_hash), etatActivites(user.id, documentId, ordre)]);
   if (!sequence || !analyse?.plan) return { error: 'Séquence introuvable.' };
