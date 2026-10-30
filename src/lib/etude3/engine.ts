@@ -3,6 +3,7 @@ import { downloadDocumentPdf } from '@/lib/storage';
 import { MODULE_SYSTEM, MODULE_SCHEMA, SYNTHESE_SYSTEM, SYNTHESE_SCHEMA, LECON_SYSTEM, LECON_SCHEMA, neutralize } from '@/lib/prompts/etude/prompts';
 import { extractPages, extraitPages, NonRetryableError } from './extract';
 import { construireModules, repartirLecons, type Module } from './structure';
+import { enqueueDedup } from '@/lib/jobs/enqueue';
 import { normalizeModule, normalizeSequence, normalizeSynthese, planDepuisModules, type AnalyseModule } from './validate';
 import { ENGINE_VERSION, type Couverture, type ModuleCours, type PlanSequence, type Synthese } from './types';
 
@@ -28,21 +29,23 @@ export interface EngineDeps {
   withLeaseHeartbeat: <T>(jobId: string, fn: () => Promise<T>, lockHash?: string) => Promise<T>;
   acquireContentLock: (hash: string) => Promise<boolean>;
   releaseContentLock: (hash: string) => Promise<void>;
-  generate: (system: string, prompt: string, schema: any, tracking: { userId?: string; feature: string; documentId?: string }, temperature?: number, thinkingBudget?: number) => Promise<any>;
+  generate: (system: string, prompt: string, schema: any, tracking: { userId?: string; feature: string; documentId?: string }, temperature?: number, thinkingBudget?: number, maxOutputTokens?: number) => Promise<any>;
 }
 
 const MAX_MODULES = 40;           // un appel d'analyse par module ; un précis de 450 pages tient en 40
 const MAX_LECONS = 60;            // borne de la table etude_sequences (ordre ≤ 60)
-const MODULE_PARALLEL = 3;        // appels simultanés par analyse (limite la pression sur Gemini)
-const MODULE_MAX_CHARS = 90000;   // texte d'un module transmis à l'analyse
+const MODULE_PARALLEL = 6;        // appels simultanés par analyse : un précis de 40 modules en 7 tours
+const MODULE_MAX_CHARS = 60000;   // texte d'un module transmis à l'analyse
 const LECON_MAX_CHARS = 32000;    // pages du cours transmises pour rédiger une leçon
 const SYNTHESE_MAX_CHARS = 110000;
 
 /**
- * Budget de « réflexion » Gemini par étape (tokens facturés au tarif de sortie, et lents).
- * Comprendre un module et rédiger une leçon sont les deux étapes où la qualité se joue.
+ * Budget de « réflexion » Gemini par étape et longueur maximale de réponse. Mesuré en
+ * production : une analyse de module sans borne a duré 3 min puis a échoué (504), et Vercel
+ * coupe une exécution à 300 s. Chaque appel doit rester bien sous la minute.
  */
-const THINK = { module: 1024, synthese: 1024, lecon: 1024 };
+const THINK = { module: 0, synthese: 512, lecon: 512 };
+const MAX_TOKENS = { module: 8192, synthese: 8192, lecon: 12288 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;
@@ -102,6 +105,13 @@ async function enregistrerAvancement(hash: string, av: Avancement) {
   const { error } = await supabaseAdmin.from('etude_analyses').update({ carte: av, updated_at: new Date().toISOString() })
     .eq('source_hash', hash).eq('engine_version', ENGINE_VERSION).neq('statut', 'pret');
   if (error) throw new Error(`Avancement de l’analyse : ${error.message}`);
+}
+
+async function estAuCatalogue(documentId: string): Promise<boolean> {
+  const { data: cours } = await supabaseAdmin.from('etude_cours').select('id').eq('pdf_id', documentId).maybeSingle();
+  if (!cours) return false;
+  const { data } = await supabaseAdmin.from('catalog_courses').select('id').eq('etude_cours_id', cours.id).eq('actif', true).limit(1);
+  return !!data?.length;
 }
 
 /** Le verrou de contenu est prolongé à chaque étape (une analyse de 40 modules dure plus de 5 min). */
@@ -206,7 +216,7 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
           `NOMBRE DE LEÇONS À PRÉVOIR POUR CE MODULE : ${budgets[i]}`,
           `<MODULE pages="${m.pages[0]}-${m.pages[m.pages.length - 1]}">\n${neutralize(extraitPages(pages!, m.pages, MODULE_MAX_CHARS))}\n</MODULE>`,
         ].join('\n\n');
-        return deps.generate(MODULE_SYSTEM, prompt, MODULE_SCHEMA, { userId: job.user_id, feature: 'etude3_module', documentId }, 0.2, THINK.module)
+        return deps.generate(MODULE_SYSTEM, prompt, MODULE_SCHEMA, { userId: job.user_id, feature: 'etude3_module', documentId }, 0.2, THINK.module, MAX_TOKENS.module)
           .then((raw) => normalizeModule(raw, m, budgets[i]));
       })), lock);
       sorties.forEach((s, k) => { if (s.status === 'fulfilled') av.analyses[lot[k]] = s.value; });
@@ -230,7 +240,7 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
       const contexte = neutralize(JSON.stringify({ pages: pages!.length, modules: vue })).slice(0, SYNTHESE_MAX_CHARS);
       const raw = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
         SYNTHESE_SYSTEM, `<CARTE>\n${contexte}\n</CARTE>`, SYNTHESE_SCHEMA,
-        { userId: job.user_id, feature: 'etude3_synthese', documentId }, 0.4, THINK.synthese), lock);
+        { userId: job.user_id, feature: 'etude3_synthese', documentId }, 0.4, THINK.synthese, MAX_TOKENS.synthese), lock);
       av.synthese = normalizeSynthese(raw, modules.map((m) => m.id));
       await enregistrerAvancement(hash, av);
       return await yieldStep();
@@ -255,6 +265,13 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
     }).eq('source_hash', hash).eq('engine_version', ENGINE_VERSION);
     if (error) throw new Error(`Enregistrement de l’analyse : ${error.message}`);
     await linkParcours(documentId, hash);
+    // Cours du catalogue : toutes les leçons sont préparées tout de suite, une seule fois, pour que
+    // les étudiants (gratuits compris) n'attendent jamais et ne déclenchent aucune génération.
+    if (await estAuCatalogue(documentId)) {
+      for (const p of plan) {
+        await enqueueDedup({ userId: job.user_id, type: 'etude3_sequence', payload: { documentId, hash, ordre: p.ordre }, dedupKey: `${ENGINE_VERSION}:${hash}:${p.ordre}` }).catch(() => {});
+      }
+    }
     finished = true;
     return { hash, modules: modules.length, lecons: plan.length, pages: pages!.length };
   } catch (err) {
@@ -325,7 +342,7 @@ export async function processEtudeSequence(job: any, deps: EngineDeps): Promise<
       `<COURS>\n${cours}\n</COURS>`,
     ].filter(Boolean).join('\n\n');
     const raw = await deps.withLeaseHeartbeat(job.id, () => deps.generate(
-      LECON_SYSTEM, prompt, LECON_SCHEMA, { userId: job.user_id, feature: 'etude3_sequence', documentId }, 0.4, THINK.lecon), lock);
+      LECON_SYSTEM, prompt, LECON_SCHEMA, { userId: job.user_id, feature: 'etude3_sequence', documentId }, 0.4, THINK.lecon, MAX_TOKENS.lecon), lock);
     const sequence = normalizeSequence(raw, ordre, pages.length || 9999);
 
     await deps.ctx.mark('saving', 90, 'Enregistrement…');

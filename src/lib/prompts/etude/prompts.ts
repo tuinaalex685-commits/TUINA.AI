@@ -47,10 +47,11 @@ export const MODULE_SYSTEM = `${DIRECTEUR}\n\n${DIRECTEUR_COMPRENDRE}
 
 TA TÂCHE MAINTENANT : on te donne UN module du cours (<MODULE>, numéros de page indiqués par [[page N]]) et sa place dans le plan. Tu ne rédiges rien pour l'étudiant : tu COMPRENDS le module et tu prépares son enseignement.
 1. « titre » : le vrai sujet du module, en français clair (reprends le titre de l'auteur s'il est parlant). « idee_centrale » : l'idée qui le résume, en 1 ou 2 phrases simples.
-2. « notions » : chaque notion importante, avec ton analyse (sens, problème auquel elle répond, fonctionnement, notions liées, prérequis, confusions, définition telle que le cours la donne, pages). Sois complet sur les indispensables, bref sur le complémentaire.
+2. « notions » : les notions importantes (12 au plus), chacune avec : son sens et le problème auquel elle répond (« sens », 1 à 2 phrases), la définition telle que le cours la donne si elle existe (citation courte), les confusions fréquentes, le prérequis éventuel, les pages. Sois BREF : ce sont des notes de travail.
 3. « distinctions », « pieges », « ambiguites » : ce qui sera décisif pour ne pas se tromper.
 4. « lecons » : découpe le module en EXACTEMENT le nombre de leçons demandé, dans l'ordre du cours. Une leçon = UN objectif d'apprentissage clair autour d'une notion principale (ou d'une distinction), avec ses pages. « accroche » = la question concrète ou la petite situation qui ouvrira la leçon. Pas de leçon « fourre-tout ».
-5. « carte » : la carte mentale du module, qui montre les RELATIONS (se divise en, condition de, exception à, s'oppose à, produit, dépend de…), les mécanismes et les oppositions, pas une copie des titres. 6 à 18 nœuds, chacun avec une explication d'une ou deux phrases simples.`;
+5. « carte » : la carte mentale du module, qui montre les RELATIONS (se divise en, condition de, exception à, s'oppose à, produit, dépend de…), les mécanismes et les oppositions, pas une copie des titres. 6 à 12 nœuds, chacun avec une explication d'une phrase courte.
+Distinctions, pièges et ambiguïtés : 5 au plus chacun. Toute ta réponse doit rester courte.`;
 
 export const MODULE_SCHEMA = {
   type: Type.OBJECT,
@@ -65,13 +66,9 @@ export const MODULE_SCHEMA = {
           nom: { type: S },
           niveau: { type: S, enum: ['indispensable', 'importante', 'subtile', 'complementaire'] },
           definition_cours: { type: S, description: 'Définition telle que le cours la donne (citation fidèle ou vide).' },
-          sens: { type: S, description: 'Ce que la notion signifie, en mots simples.' },
-          probleme: { type: S, description: 'Le problème auquel elle répond, pourquoi elle existe.' },
-          fonctionnement: { type: S },
-          liees: strArr,
+          sens: { type: S, description: 'Ce que la notion signifie et le problème auquel elle répond, 1 à 2 phrases.' },
           prerequis: strArr,
           confusions: strArr,
-          exemples: { ...strArr, description: 'Situations concrètes possibles pour la faire comprendre.' },
           pages: intArr,
         },
         required: ['nom', 'niveau', 'sens', 'pages'],
