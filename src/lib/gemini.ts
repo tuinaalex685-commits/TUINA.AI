@@ -227,14 +227,9 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
 
     const rawText = response.text || "";
     console.log(`[IA_RAW] Response length: ${rawText.length}`);
-    
-    const parsedJSON = parseAndValidateJSON(rawText, 'generateStructuredJSON');
-    
     const duration = Date.now() - startTime;
-    console.log(`[IA_PERF] Success | Duration: ${duration}ms`);
-    console.log(`[IA_JSON_PARSED] Sample: ${JSON.stringify(parsedJSON).substring(0, 100)}...`);
-    
-    // -- SaaS TRACKING --
+
+    // -- SaaS TRACKING -- avant toute validation : une réponse inutilisable est facturée quand même.
     if (response.usageMetadata) {
       trackSaaSUsage(
         trackingContext,
@@ -243,7 +238,19 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
         response.usageMetadata.candidatesTokenCount || 0
       );
     }
-    
+
+    // Réponse coupée à la limite de sortie : le JSON est forcément incomplet. On le dit tel quel
+    // (avant : « format illisible », qui masquait la cause — leçon coupée à 12 288 jetons le 31/10/2026).
+    if (response.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      console.error(`[generateStructuredJSON] Réponse coupée à la limite de ${options?.maxOutputTokens ?? 'défaut'} jetons (${rawText.length} caractères).`);
+      throw new AIError(`Réponse de l'IA coupée : limite de ${options?.maxOutputTokens ?? 'sortie'} jetons atteinte.`, "TRUNCATED");
+    }
+
+    const parsedJSON = parseAndValidateJSON(rawText, 'generateStructuredJSON');
+
+    console.log(`[IA_PERF] Success | Duration: ${duration}ms`);
+    console.log(`[IA_JSON_PARSED] Sample: ${JSON.stringify(parsedJSON).substring(0, 100)}...`);
+
     return parsedJSON;
 
   } catch (error: any) {

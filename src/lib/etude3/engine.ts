@@ -45,7 +45,9 @@ const SYNTHESE_MAX_CHARS = 110000;
  * coupe une exécution à 300 s. Chaque appel doit rester bien sous la minute.
  */
 const THINK = { module: 0, synthese: 512, lecon: 512 };
-const MAX_TOKENS = { module: 8192, synthese: 12288, lecon: 12288 };
+// Leçon : 12 288 jetons coupaient la réponse sur un cours réel (7 pages en 2 leçons, JSON tronqué
+// à 46 694 caractères, 31/10/2026). 24 576 ≈ 110 s en flash : sous GEMINI_TIMEOUT_MS (180 s).
+const MAX_TOKENS = { module: 8192, synthese: 12288, lecon: 24576 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;
