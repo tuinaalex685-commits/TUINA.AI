@@ -38,7 +38,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const AUTOSAVE_MS = 1500;
 const POLL_MS = 5000;
 
-export default function CopyWorkspace({ copy, versions, remaining, jobId = null }: { copy: Copy; versions: VersionItem[]; remaining: number; jobId?: string | null }) {
+export default function CopyWorkspace({ copy, versions, jobId = null }: { copy: Copy; versions: VersionItem[]; jobId?: string | null }) {
   const router = useRouter();
   const comp = COMPARTIMENT_BY_TYPE.get(copy.type);
   const editable = copy.statut === 'brouillon' || copy.statut === 'erreur';
@@ -101,7 +101,6 @@ export default function CopyWorkspace({ copy, versions, remaining, jobId = null 
       toast.error(`Ta copie est trop courte pour être corrigée (au moins ${LIMITS.copieMinCorrection} caractères).`);
       return;
     }
-    if (remaining <= 0) { toast.error('Tu as utilisé tes corrections du jour. Reviens demain.'); return; }
     setSubmitting(true);
     if (timer.current) clearTimeout(timer.current);
     if (!(await persist(text))) { setSubmitting(false); toast.error('Enregistrement impossible : vérifie ta connexion.'); return; }
@@ -202,7 +201,7 @@ export default function CopyWorkspace({ copy, versions, remaining, jobId = null 
                     {save === 'error' && <span className={styles.unsaved}>Non enregistré : vérifie ta connexion</span>}
                   </div>
                   <button type="button" className={styles.primary} onClick={submit} disabled={submitting}>
-                    <Send size={17} aria-hidden /> {submitting ? 'Envoi…' : `Rendre ma copie (${remaining} correction${remaining > 1 ? 's' : ''} aujourd’hui)`}
+                    <Send size={17} aria-hidden /> {submitting ? 'Envoi…' : 'Rendre ma copie'}
                   </button>
                 </div>
               )}
