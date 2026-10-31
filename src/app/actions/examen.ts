@@ -1,11 +1,10 @@
 "use server";
 
 import { createClient } from '@/lib/supabase/server';
-import { documentsAvecEtudeV4 } from '@/lib/etude3/examen';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
-import { listCatalogDocuments } from '@/lib/access';
+import { listCatalogDocuments, resolveDocumentAccess } from '@/lib/access';
 import { revalidatePath } from 'next/cache';
 import * as session from '@/lib/examen/session';
 import { getExamAnalyse, getExamHistory, getExamCorrection } from '@/lib/examen/analytics';
@@ -141,16 +140,9 @@ export async function getExamDashboard() {
       })),
   ];
 
-  const ids = docList.map((d: any) => d.id);
-  if (ids.length === 0) return { success: true as const, items: [] };
-
-  // Cours Étude 'pret' (prérequis d'un examen : la banque a besoin du plan de thèmes).
-  const pretPdf = new Set<string>();
-  const { data: cours } = await supabaseAdmin
-    .from('etude_cours').select('pdf_id, statut_generation').in('pdf_id', ids);
-  for (const c of cours || []) if ((c as any).statut_generation === 'pret') pretPdf.add((c as any).pdf_id);
-  // Étude guidée v4 prête (analyse commune du cours) : l'examen est disponible aussi.
-  for (const id of (await documentsAvecEtudeV4(ids)).keys()) pretPdf.add(id);
+  if (docList.length === 0) return { success: true as const, items: [] };
+  // Plus de prérequis « Étude guidée » (lancement, 31/10/2026) : TOUT document est proposé ; sans
+  // plan d'Étude, la banque fixe elle-même ses thèmes lors de sa préparation.
 
   // Banques prêtes (clé = text_hash = source_hash de la banque).
   const hashes = docList.map((d: any) => d.text_hash).filter(Boolean);
@@ -169,8 +161,7 @@ export async function getExamDashboard() {
     arr.push(h); byDoc.set(h.documentId || '', arr);
   }
 
-  const docsPret = docList.filter((d: any) => pretPdf.has(d.id));
-  const items = await Promise.all(docsPret.map(async (d: any) => {
+  const items = await Promise.all(docList.map(async (d: any) => {
     const h = byDoc.get(d.id) || [];
     const notes = h.map((x) => x.note).filter((n) => n !== null);
     // Adaptatif dispo après un 1er examen (diagnostic) tant que le cours n'est pas entièrement maîtrisé.
@@ -201,6 +192,9 @@ export async function getExamResults(documentId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' as const };
+  // L'analyse lit le plan du cours (titres des thèmes) : seulement pour un document accessible,
+  // sinon un identifiant deviné révélait le plan du cours d'un autre étudiant.
+  if (await resolveDocumentAccess(supabaseAdmin, user.id, documentId) === 'denied') return { error: 'Document introuvable.' };
   try {
     const analyse = await getExamAnalyse(supabaseAdmin, user.id, documentId);
     return { success: true as const, analyse };

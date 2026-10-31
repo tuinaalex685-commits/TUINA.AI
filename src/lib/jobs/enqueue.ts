@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { after } from 'next/server';
 import { pingWorker } from '@/lib/jobs/workerUrl';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { ETUDE_GUIDEE_ACTIVE, ETUDE_SUSPENDUE, estJobEtude } from '@/lib/features';
 
 /**
  * Création de jobs IA côté serveur, pour les actions qui ont DÉJÀ vérifié l'accès et les droits
@@ -20,6 +21,9 @@ export async function enqueueDedup(params: {
   payload: Record<string, string | number>;
   dedupKey: string;
 }): Promise<{ jobId: string; reused: boolean } | { error: string }> {
+  // Étude guidée suspendue : passage obligé de TOUTES ses générations (actions étudiant,
+  // publication admin, préparation des leçons, moteur) — aucun job, aucun appel Gemini.
+  if (!ETUDE_GUIDEE_ACTIVE && estJobEtude(params.type)) return { error: ETUDE_SUSPENDUE };
   const content_hash = crypto.createHash('sha256').update(`${params.type}:${params.dedupKey}`).digest('hex');
 
   const { data: running } = await supabaseAdmin

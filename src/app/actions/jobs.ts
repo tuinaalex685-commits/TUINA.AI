@@ -44,14 +44,14 @@ function sanitizePayload(type: AiJobType, raw: Record<string, unknown>): Record<
   return clean;
 }
 
-/** Séries de sujets proposés par jour et par étudiant (la plupart sortent du cache, sans coût). */
-const SUJETS_DAILY_LIMIT = 10;
-
-/** Corrections de Rédaction par jour (tous plans : la Rédaction est déjà réservée au Premium). */
-const REDACTION_DAILY_LIMIT = 3;
-
-/** Jobs flashcards / banque d'examen par heure et par étudiant (anti-robot, pas une limite d'usage). */
+/**
+ * Plafonds HORAIRES anti-robot par étudiant (pas des limites d'usage) : flashcards, banque
+ * d'examen, sujets et corrections de Rédaction. Lancement (31/10/2026) : la Rédaction Premium
+ * n'a plus de quota journalier (3 corrections/jour, 10 séries de sujets/jour supprimés) ;
+ * seul reste ce plafond, qu'aucun étudiant réel n'atteint, contre les scripts et les rafales.
+ */
 const JOBS_SANS_QUOTA_PAR_HEURE = 20;
+const TYPES_PLAFOND_HORAIRE: AiJobType[] = ['flashcards', 'examen_pool', 'redaction', 'redaction_sujets'];
 
 /**
  * Crée un job IA et le renvoie immédiatement (le frontend ne fait qu'observer ensuite).
@@ -120,9 +120,9 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     return { error: 'Document manquant.' };
   }
 
-  // Flashcards et banque d'examen n'ont pas de quota (contenu mutualisé), mais chaque job occupe
-  // le worker et ajoute des lignes : plafond horaire anti-robot, jamais atteint par un usage normal.
-  if (type === 'flashcards' || type === 'examen_pool') {
+  // Pas de quota d'usage, mais chaque job occupe le worker (et Gemini) : plafond horaire
+  // anti-robot, jamais atteint par un usage normal.
+  if (TYPES_PLAFOND_HORAIRE.includes(type)) {
     const { count: heure } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
       .eq('user_id', user.id).eq('type', type).gte('created_at', new Date(Date.now() - 3600_000).toISOString());
     if ((heure || 0) >= JOBS_SANS_QUOTA_PAR_HEURE) {
@@ -131,8 +131,7 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   }
 
   // Sujets de rédaction : mis en cache par contenu, mais la 1re génération coûte un appel IA.
-  // 1) Un job déjà en route pour le même cours et le même type est réutilisé (pas de doublon).
-  // 2) Plafond journalier ATOMIQUE (consume_free_quota) : des appels parallèles ne le dépassent pas.
+  // Un job déjà en route pour le même cours et le même type est réutilisé (pas de doublon).
   if (type === 'redaction_sujets') {
     if (!docId || docId === 'dummy') return { error: 'Cours manquant.' };
     const { data: running } = await supabaseAdmin
@@ -142,36 +141,14 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
       .in('status', ['pending', 'queued', 'processing', 'generating', 'saving'])
       .limit(1);
     if (running?.[0]) return { success: true, jobId: running[0].id as string };
-    const { data, error } = await supabaseAdmin.rpc('consume_free_quota', {
-      p_user_id: user.id, p_feature: 'redaction_sujets', p_limit: SUJETS_DAILY_LIMIT,
-    });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (error || row?.allowed !== true) {
-      return { error: `Tu as demandé ${SUJETS_DAILY_LIMIT} séries de sujets aujourd’hui. Réessaie demain, ou écris ton propre sujet.` };
-    }
   }
 
-  // Quotas. Rédaction : compteur journalier ATOMIQUE (consume_free_quota est générique :
-  // utilisateur + fonctionnalité + limite). Avant, on comptait les copies CRÉÉES aujourd'hui :
-  // une copie d'hier se faisait corriger sans limite, et deux clics simultanés passaient tous
-  // les deux. Évaluations : quota Free (un appel Gemini par contenu/type/nombre).
+  // Quotas. Rédaction : plus de quota journalier (lancement, 31/10/2026) — la copie est verrouillée
+  // « en_cours » par submitRedaction et une seule correction par copie peut tourner à la fois
+  // (contrôlé plus haut), plus le plafond horaire anti-robot. Évaluations : quota Free.
   let refund: (() => Promise<void>) | null = null;
-  let refundFeature: 'redaction' | 'evaluation' | null = null;
-  if (type === 'redaction') {
-    const { data, error } = await supabaseAdmin.rpc('consume_free_quota', {
-      p_user_id: user.id, p_feature: 'redaction', p_limit: REDACTION_DAILY_LIMIT,
-    });
-    if (error) {
-      console.error('[jobs] quota redaction indisponible:', error.message);
-      return { error: "Vérification du quota impossible pour le moment. Réessaie dans un instant." };
-    }
-    const row = Array.isArray(data) ? data[0] : data;
-    if (row?.allowed !== true) {
-      return { error: `Vous avez atteint votre limite de ${REDACTION_DAILY_LIMIT} corrections de Rédaction pour aujourd'hui. Réessayez demain.` };
-    }
-    refund = () => refundQuota(user.id, 'redaction');
-    refundFeature = 'redaction';
-  } else if (type === 'evaluation') {
+  let refundFeature: 'evaluation' | null = null;
+  if (type === 'evaluation') {
     const quota = await consumeQuota(supabase, user.id, user.email, 'evaluation');
     if (!quota.allowed) return { error: quota.error, quotaReached: true };
     if (!quota.unlimited) {

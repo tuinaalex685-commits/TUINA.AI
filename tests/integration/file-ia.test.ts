@@ -81,8 +81,11 @@ test('équité : une étape d’analyse renvoyée en file passe APRÈS une corre
   const [analyse] = await ajouter(1);                       // créée en premier
   await new Promise((r) => setTimeout(r, 1200));
   const [correction] = await ajouter(1);                    // arrivée ensuite
-  // L'étape suivante de l'analyse est replanifiée maintenant (comme yieldStep : now + 50 ms).
-  await db!.from('ai_jobs').update({ next_attempt_at: iso(50) }).eq('id', analyse);
+  // L'étape suivante de l'analyse est replanifiée « maintenant + 50 ms » (comme yieldStep), daté
+  // sur l'horloge de la BASE (création de la correction) : l'horloge du poste de test peut
+  // retarder d'une seconde (mesuré le 31/10/2026) et inversait l'ordre sans défaut du code.
+  const { data: c } = await db!.from('ai_jobs').select('created_at').eq('id', correction).single();
+  await db!.from('ai_jobs').update({ next_attempt_at: new Date(Date.parse(c!.created_at) + 50).toISOString() }).eq('id', analyse);
   await new Promise((r) => setTimeout(r, 300));
   const premier = await claim(5);
   assert.equal(premier?.id, correction, 'la correction ne doit pas attendre derrière toutes les étapes de l’analyse');

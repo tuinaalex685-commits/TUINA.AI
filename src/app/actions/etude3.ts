@@ -9,6 +9,7 @@ import { enqueueDedup, lastJob } from '@/lib/jobs/enqueue';
 import { CORRECTION_SCHEMA, CORRECTION_SYSTEM, neutralize } from '@/lib/prompts/etude/prompts';
 import { accesEtude, ensureSequenceJob, etatActivites, getAnalyse, getParcours, getSequence, knownHash, parcoursAncien, passerVersionActuelle } from '@/lib/etude3/store';
 import { ENGINE_VERSION, MAX_TENTATIVES, type Activite, type RetourActivite, type Verdict } from '@/lib/etude3/types';
+import { ETUDE_GUIDEE_ACTIVE, ETUDE_SUSPENDUE } from '@/lib/features';
 
 /**
  * Études guidées v3 — actions serveur. Toutes les règles de progression sont vérifiées ICI :
@@ -28,6 +29,7 @@ async function currentUser() {
 
 /** « Commencer l'étude » : démarrage ENREGISTRÉ (Q-01), puis analyse si elle n'existe pas encore. */
 export async function startEtude(documentId: string) {
+  if (!ETUDE_GUIDEE_ACTIVE) return { error: ETUDE_SUSPENDUE };
   if (!UUID_RE.test(documentId)) return { error: 'Cours invalide.' };
   const user = await currentUser();
   if (!user) return { error: 'Non authentifié' };
@@ -93,6 +95,7 @@ export async function startEtude(documentId: string) {
 
 /** La synthèse a été lue : on peut ouvrir la séquence 1. */
 export async function markSyntheseVue(documentId: string) {
+  if (!ETUDE_GUIDEE_ACTIVE) return { error: ETUDE_SUSPENDUE };
   if (!UUID_RE.test(documentId)) return { error: 'Cours invalide.' };
   const user = await currentUser();
   if (!user) return { error: 'Non authentifié' };
@@ -113,6 +116,7 @@ export async function markSyntheseVue(documentId: string) {
 
 /** Prépare une séquence (et la suivante en avance). N'ouvre jamais une séquence verrouillée. */
 export async function prepareSequence(documentId: string, ordre: number) {
+  if (!ETUDE_GUIDEE_ACTIVE) return { error: ETUDE_SUSPENDUE };
   if (!UUID_RE.test(documentId) || !Number.isInteger(ordre) || ordre < 1) return { error: 'Requête invalide.' };
   const user = await currentUser();
   if (!user) return { error: 'Non authentifié' };
@@ -149,6 +153,7 @@ function choixLettre(i: number) { return String.fromCharCode(65 + i); }
  *  - après 3 tentatives infructueuses : bonne réponse expliquée, notion « À revoir », on continue.
  */
 export async function answerActivity(input: { documentId: string; ordre: number; activiteId: string; reponse: string; requestId: string }): Promise<{ error: string } | { success: true; retour: RetourActivite }> {
+  if (!ETUDE_GUIDEE_ACTIVE) return { error: ETUDE_SUSPENDUE };
   const { documentId, ordre, activiteId, requestId } = input || ({} as typeof input);
   const reponse = typeof input?.reponse === 'string' ? input.reponse.trim() : '';
   if (!UUID_RE.test(documentId) || !UUID_RE.test(requestId) || !Number.isInteger(ordre) || ordre < 1) return { error: 'Requête invalide.' };
@@ -278,6 +283,7 @@ export async function answerActivity(input: { documentId: string; ordre: number;
 
 /** Termine une séquence si TOUTES ses activités sont terminées ; débloque la suivante. Idempotent. */
 export async function completeSequence(documentId: string, ordre: number) {
+  if (!ETUDE_GUIDEE_ACTIVE) return { error: ETUDE_SUSPENDUE };
   if (!UUID_RE.test(documentId) || !Number.isInteger(ordre) || ordre < 1) return { error: 'Requête invalide.' };
   const user = await currentUser();
   if (!user) return { error: 'Non authentifié' };

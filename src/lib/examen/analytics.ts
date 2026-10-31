@@ -73,6 +73,21 @@ export async function resolveThemeMap(
         theme_titre: t.titre, section_titre: s.section_titre,
       };
     }
+    // Examen sans Étude guidée : les titres des thèmes sont stockés avec les questions de la banque.
+    if (!v4) {
+      const { data: doc } = await db.from('documents').select('text_hash').eq('id', documentId).maybeSingle();
+      const { data: pool } = doc?.text_hash
+        ? await db.from('examen_question_pools').select('questions').eq('source_hash', doc.text_hash).maybeSingle()
+        : { data: null };
+      for (const q of (pool?.questions as any[]) || []) {
+        const k = keyOf(q.section_ordre, q.theme_ordre);
+        if (map[k] || !q.theme_titre) continue;
+        map[k] = {
+          section_ordre: q.section_ordre, theme_ordre: q.theme_ordre, theme_id: `doc-${q.section_ordre}-${q.theme_ordre}`,
+          theme_titre: q.theme_titre, section_titre: q.section_titre || `Partie ${q.section_ordre}`,
+        };
+      }
+    }
     return { pdfId: documentId, coursId: null, map };
   }
   const { data: sections } = await db.from('etude_sections').select('id, ordre, titre').eq('cours_id', cours.id);

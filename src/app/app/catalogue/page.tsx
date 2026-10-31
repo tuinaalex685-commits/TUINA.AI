@@ -8,6 +8,8 @@ import AdSlot from '@/components/ads/AdSlot';
 import { isPremium } from '@/lib/plan';
 import { getCurrentUser } from '@/lib/viewer';
 import { getUserNiveau, catalogVisibleFor } from '@/lib/profile';
+import { CATALOGUE_FREE_ACTIF } from '@/lib/features';
+import BientotDisponible from '@/components/BientotDisponible';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,8 @@ export default async function CataloguePage() {
 
   // Le Catalogue est la vitrine du plan gratuit : un Premium travaille sur ses propres cours.
   if (await isPremium(supabase, user.email)) redirect('/app/dashboard');
+  // Suspendu pour le lancement (lib/features.ts) : données intactes, aucune lecture.
+  if (!CATALOGUE_FREE_ACTIF) return <BientotDisponible section="catalogue" premium={false} />;
 
   const [{ data: entries }, niveau] = await Promise.all([
     supabase
