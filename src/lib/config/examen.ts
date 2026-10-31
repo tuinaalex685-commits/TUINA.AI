@@ -13,21 +13,26 @@
  *   theme_ordre) car les theme_id ne sont PAS partagés entre utilisateurs (clones).
  */
 
-/** Types de questions auto-corrigeables (phase 1 — aucune correction IA). */
-export type ExamenQuestionType = 'qcm' | 'vrai_faux' | 'trous' | 'association' | 'classement';
+/**
+ * Types de questions. Les cinq premiers sont corrigés automatiquement ; « ouverte » (question-réponse
+ * ou petite mise en situation juridique, réponse rédigée) est corrigée par l'IA à la remise, sur les
+ * éléments attendus et non sur les mots (ajout du 31/10/2026).
+ */
+export type ExamenQuestionType = 'qcm' | 'vrai_faux' | 'trous' | 'association' | 'classement' | 'ouverte';
 
 export type ExamenDifficulte = 'facile' | 'moyen' | 'difficile';
 
-export const EXAMEN_TYPES: ExamenQuestionType[] = ['qcm', 'vrai_faux', 'trous', 'association', 'classement'];
+export const EXAMEN_TYPES: ExamenQuestionType[] = ['qcm', 'vrai_faux', 'trous', 'association', 'classement', 'ouverte'];
 export const EXAMEN_DIFFICULTES: ExamenDifficulte[] = ['facile', 'moyen', 'difficile'];
 
 /** Composition cible de la banque par type (total = taille de la banque). */
 export const BANQUE_REPARTITION_TYPES: Record<ExamenQuestionType, number> = {
   qcm: 8,
-  vrai_faux: 6,
-  trous: 5,
-  association: 4,
-  classement: 4,
+  vrai_faux: 5,
+  trous: 4,
+  association: 3,
+  classement: 3,
+  ouverte: 4,
 };
 
 /** Taille cible de la banque (dérivée de la répartition : 27, dans la fourchette validée 24-30). */
@@ -45,7 +50,12 @@ export const BANQUE_REPARTITION_DIFFICULTE: Record<ExamenDifficulte, number> = {
  * serveur écarte les questions malformées une à une ; sous ce seuil, la banque
  * est refusée (erreur permanente du job → jamais d'examen bancal en cache).
  */
-export const BANQUE_MIN_QUESTIONS_VALIDES = 18;
+// 10 depuis le 31/10/2026 : un document court donne MOINS de questions plutôt que des questions
+// fabriquées (l'examen est alors plus court ; l'étudiant en est prévenu sur la page Examen).
+export const BANQUE_MIN_QUESTIONS_VALIDES = 10;
+
+/** Sous ce nombre de questions, la page Examen prévient que le document a donné un examen réduit. */
+export const BANQUE_SEUIL_REDUITE = 20;
 
 // ============================================================================
 // EX.2 : DÉROULÉ D'UN EXAMEN (composition, barème, durée)
@@ -61,6 +71,7 @@ export const POINTS_PAR_TYPE: Record<ExamenQuestionType, number> = {
   trous: 1,
   association: 1.5,
   classement: 1.5,
+  ouverte: 2,
 };
 
 /** Budget temps indicatif par question (secondes) → durée d'examen AUTO-CALCULÉE. */
@@ -70,15 +81,17 @@ export const TEMPS_PAR_TYPE_S: Record<ExamenQuestionType, number> = {
   trous: 60,
   association: 90,
   classement: 90,
+  ouverte: 240,
 };
 
 /** Composition d'un examen STANDARD : nombre de questions par type (total = 15). */
 export const COMPOSITION_STANDARD: Record<ExamenQuestionType, number> = {
-  qcm: 5,
-  vrai_faux: 4,
+  qcm: 4,
+  vrai_faux: 3,
   trous: 3,
   association: 2,
   classement: 1,
+  ouverte: 2,
 };
 
 /** Note maximale d'un examen. */
@@ -108,11 +121,12 @@ export const MAITRISE_EXAMEN_ALPHA = 0.5;
 
 /** Composition d'un examen ADAPTATIF (total = 10) : plus court, ciblé sur les faiblesses. */
 export const COMPOSITION_ADAPTATIF: Record<ExamenQuestionType, number> = {
-  qcm: 4,
+  qcm: 3,
   vrai_faux: 2,
   trous: 2,
   association: 1,
   classement: 1,
+  ouverte: 1,
 };
 
 /** Part des questions d'un examen adaptatif tirées des thèmes SOUS le seuil (le reste = consolidation). */

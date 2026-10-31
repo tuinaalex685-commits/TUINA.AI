@@ -15,8 +15,9 @@
 import crypto from 'crypto';
 import {
   composerStandard, composerAdaptatif, corriger, vueEpuree, dureeSecondes, pointsMax,
-  seedFrom, CompositionItem, PoolQuestion,
+  seedFrom, CompositionItem, PoolQuestion, CLE_CORRECTION_IA,
 } from '@/lib/examen/engine';
+import { corrigerReponsesOuvertes } from '@/lib/examen/correctionIA';
 import { getExamMasteryMap } from '@/lib/examen/analytics';
 import { resolveDocumentAccess } from '@/lib/access';
 import { reponseExamenValide } from '@/lib/examen/reponse';
@@ -183,12 +184,17 @@ async function finalize(deps: SessionDeps, session: any, _force: boolean): Promi
   if (session.status === 'submitted') return finalResult(session);
 
   const pool = await loadPool(deps, session.source_hash);
-  const c = corriger(session.composition as CompositionItem[], pool, session.answers || {});
+  const composition = session.composition as CompositionItem[];
+  // Réponses ouvertes : corrigées par l'IA UNE fois, ici ; le verdict est enregistré avec les
+  // réponses (clé serveur) pour que la correction détaillée l'affiche sans le recalculer.
+  const ia = await corrigerReponsesOuvertes(composition, pool, session.answers || {}, { userId: deps.userId, documentId: session.document_id });
+  const answers = Object.keys(ia).length ? { ...(session.answers || {}), [CLE_CORRECTION_IA]: ia } : (session.answers || {});
+  const c = corriger(composition, pool, answers);
   const submittedAt = deps.now().toISOString();
 
   const { data: updated, error } = await deps.sessionDb.from('examen_sessions')
     .update({
-      status: 'submitted', score: c.note, points_obtenus: c.points, points_max: c.pointsMax,
+      answers, status: 'submitted', score: c.note, points_obtenus: c.points, points_max: c.pointsMax,
       theme_results: c.parTheme, submitted_at: submittedAt, updated_at: submittedAt,
     })
     .eq('id', session.id).eq('user_id', deps.userId).eq('status', 'in_progress')

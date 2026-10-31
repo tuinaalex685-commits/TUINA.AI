@@ -10,8 +10,9 @@
  * Le corrigé (bonne réponse) ne transite JAMAIS par la vue épurée : c'est la
  * garantie anti-triche de la section Examen.
  */
+import type { ExamenQuestionType } from '@/lib/config/examen';
 import {
-  ExamenQuestionType, EXAMEN_TYPES, POINTS_PAR_TYPE, COMPOSITION_STANDARD,
+  EXAMEN_TYPES, POINTS_PAR_TYPE, COMPOSITION_STANDARD,
   COMPOSITION_ADAPTATIF, ADAPTATIF_PART_FAIBLES, MAITRISE_EXAMEN_ALPHA,
   dureeExamenSecondes,
 } from '@/lib/config/examen';
@@ -30,7 +31,16 @@ export interface PoolQuestion {
   reponses_trous?: string[];   // trous
   paires?: { gauche: string; droite: string }[]; // association
   elements_ordonnes?: string[];// classement (ordre CORRECT)
+  reponse_attendue?: string;   // ouverte : réponse modèle
+  elements_attendus?: string[];// ouverte : éléments qu'une bonne réponse doit contenir
 }
+
+/**
+ * Correction IA des questions ouvertes, enregistrée par le SERVEUR dans les réponses de la session
+ * sous cette clé (une position est toujours un entier : l'étudiant ne peut pas l'écrire).
+ */
+export const CLE_CORRECTION_IA = '_ia';
+export type CorrectionIA = Record<string, { ratio: number; retour: string }>;
 
 /** Entrée de composition : référence dans la banque + ordre d'affichage seedé (jamais le corrigé). */
 export interface CompositionItem {
@@ -243,6 +253,10 @@ export interface ResultatQuestion {
   pointsMax: number;
   ratio: number;         // 0..1
   correcte: boolean;     // ratio === 1
+  /** Question ouverte dont la correction IA n'a pas pu être faite : hors barème. */
+  nonCorrigee?: boolean;
+  /** Question ouverte : retour pédagogique de la correction IA. */
+  retour?: string;
 }
 
 /** Correction d'une question (crédit partiel déterministe pour trous/association/classement). */
@@ -284,7 +298,7 @@ function corrigerQuestion(it: CompositionItem, q: PoolQuestion, rep: any): numbe
       return ok / attendu.length;
     }
     default:
-      return 0;
+      return 0; // « ouverte » : corrigée à part (correction IA), voir corriger()
   }
 }
 
@@ -325,6 +339,15 @@ export function formatReponse(it: CompositionItem, q: PoolQuestion, rep: any): {
         bonne: attendu.join('  →  '),
       };
     }
+    case 'ouverte': {
+      const elements = (q.elements_attendus || []).filter(Boolean);
+      return {
+        votre: typeof rep === 'string' && rep.trim() ? rep.trim() : manque,
+        bonne: (q.reponse_attendue || '') + (elements.length ? `
+
+Éléments attendus : ${elements.join(' ; ')}.` : ''),
+      };
+    }
     default:
       return { votre: manque, bonne: '' };
   }
@@ -346,13 +369,27 @@ export function corriger(
   const themeAgg = new Map<string, { section_ordre: number; theme_ordre: number; points: number; pointsMax: number }>();
   let total = 0, totalMax = 0;
 
+  const ia: CorrectionIA = (reponses?.[CLE_CORRECTION_IA] as CorrectionIA) || {};
   composition.forEach((it, position) => {
     const q = pool[it.poolIndex];
-    const ratio = q ? corrigerQuestion(it, q, reponses[String(position)]) : 0;
+    const rep = reponses[String(position)];
+    let ratio = q ? corrigerQuestion(it, q, rep) : 0;
+    let retour: string | undefined;
+    if (it.type === 'ouverte') {
+      const v = ia[String(position)];
+      const repondu = typeof rep === 'string' && rep.trim().length > 0;
+      // Réponse donnée mais pas de correction IA (service indisponible) : HORS barème, jamais un 0.
+      if (repondu && !(v && Number.isFinite(v.ratio))) {
+        parQuestion.push({ position, type: it.type, section_ordre: it.section_ordre, theme_ordre: it.theme_ordre, points: 0, pointsMax: 0, ratio: 0, correcte: false, nonCorrigee: true });
+        return;
+      }
+      ratio = repondu ? Math.max(0, Math.min(1, v!.ratio)) : 0;
+      retour = repondu ? v!.retour : undefined;
+    }
     const pts = Math.round(ratio * it.points * 100) / 100;
     parQuestion.push({
       position, type: it.type, section_ordre: it.section_ordre, theme_ordre: it.theme_ordre,
-      points: pts, pointsMax: it.points, ratio, correcte: ratio === 1,
+      points: pts, pointsMax: it.points, ratio, correcte: ratio === 1, ...(retour ? { retour } : {}),
     });
     total += pts; totalMax += it.points;
     const key = `${it.section_ordre}:${it.theme_ordre}`;

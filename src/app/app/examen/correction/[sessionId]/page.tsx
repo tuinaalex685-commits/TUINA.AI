@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Correction | SJP' };
 
 const TYPE_LABEL: Record<string, string> = {
-  qcm: 'QCM', vrai_faux: 'Vrai / Faux', trous: 'Texte à trous', association: 'Association', classement: 'Classement',
+  qcm: 'QCM', vrai_faux: 'Vrai / Faux', trous: 'Texte à trous', association: 'Association', classement: 'Classement', ouverte: 'Réponse rédigée',
 };
 
 export default async function CorrectionPage({ params }: { params: Promise<{ sessionId: string }> }) {
@@ -44,9 +44,9 @@ export default async function CorrectionPage({ params }: { params: Promise<{ ses
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-standard)' }}>
         {questions.map((q) => {
-          const etat = q.correcte ? 'juste' : q.ratio > 0 ? 'partiel' : 'faux';
-          const color = etat === 'juste' ? '#22c55e' : etat === 'partiel' ? '#f59e0b' : '#ef4444';
-          const label = etat === 'juste' ? '✓ Juste' : etat === 'partiel' ? '≈ Partiel' : '✗ Faux';
+          const etat = q.nonCorrigee ? 'attente' : q.correcte ? 'juste' : q.ratio > 0 ? 'partiel' : 'faux';
+          const color = etat === 'juste' ? '#22c55e' : etat === 'partiel' ? '#f59e0b' : etat === 'attente' ? '#94a3b8' : '#ef4444';
+          const label = etat === 'juste' ? '✓ Juste' : etat === 'partiel' ? '≈ Partiel' : etat === 'attente' ? 'Non corrigée (hors barème)' : '✗ Faux';
           return (
             <Card key={q.position} style={{ borderLeft: `4px solid ${color}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
@@ -54,7 +54,7 @@ export default async function CorrectionPage({ params }: { params: Promise<{ ses
                   Question {q.position + 1} · {TYPE_LABEL[q.type] || q.type} · {q.difficulte}
                 </span>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color, whiteSpace: 'nowrap' }}>
-                  {label} · {q.points}/{q.pointsMax} pt
+                  {label}{q.nonCorrigee ? '' : ` · ${q.points}/${q.pointsMax} pt`}
                 </span>
               </div>
               <p style={{ margin: '0 0 14px', color: 'var(--color-text-main)', fontWeight: 600, whiteSpace: 'pre-wrap' }}>{q.question}</p>
@@ -62,16 +62,21 @@ export default async function CorrectionPage({ params }: { params: Promise<{ ses
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ padding: '10px 12px', borderRadius: 8, background: q.correcte ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.07)', border: `1px solid ${q.correcte ? 'rgba(34,197,94,0.22)' : 'rgba(239,68,68,0.18)'}` }}>
                   <div style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 600 }}>Votre réponse</div>
-                  <div style={{ color: 'var(--color-text-main)', fontSize: 14.5 }}>{q.votre}</div>
+                  <div style={{ color: 'var(--color-text-main)', fontSize: 14.5, whiteSpace: 'pre-wrap' }}>{q.votre}</div>
                 </div>
                 {!q.correcte && (
                   <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.22)' }}>
-                    <div style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 600 }}>Bonne réponse</div>
-                    <div style={{ color: 'var(--color-text-main)', fontSize: 14.5 }}>{q.bonne}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 600 }}>{q.type === 'ouverte' ? 'Réponse attendue' : 'Bonne réponse'}</div>
+                    <div style={{ color: 'var(--color-text-main)', fontSize: 14.5, whiteSpace: 'pre-wrap' }}>{q.bonne}</div>
                   </div>
                 )}
               </div>
 
+              {(q.retour || q.nonCorrigee) && (
+                <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--color-bg-secondary)', color: 'var(--color-text-main)', fontSize: 13.5, lineHeight: 1.55 }}>
+                  <strong>Correction de ta réponse : </strong>{q.retour || 'la correction automatique était indisponible au moment de la remise ; cette question ne compte pas dans ta note.'}
+                </div>
+              )}
               {q.explication && (
                 <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', fontSize: 13.5, lineHeight: 1.55 }}>
                   💡 {q.explication}

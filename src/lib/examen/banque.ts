@@ -69,6 +69,12 @@ export function validateExamenQuestions(raw: any[], structure: ExamenStructure |
       if (paires.length < 3 || paires.length > 6) continue;
       if (new Set(paires.map((p: any) => p.gauche)).size !== paires.length) continue;
       out.push({ ...base, paires });
+    } else if (q.type === 'ouverte') {
+      // Question-réponse ou mise en situation : réponse modèle + 2 à 5 éléments attendus.
+      const reponse = clean(q.reponse_attendue);
+      const elements = Array.isArray(q.elements_attendus) ? q.elements_attendus.map(clean).filter(Boolean).slice(0, 5) : [];
+      if (question.length < 20 || reponse.length < 20 || elements.length < 2) continue;
+      out.push({ ...base, reponse_attendue: reponse.slice(0, 2000), elements_attendus: elements.map((e: string) => e.slice(0, 300)) });
     } else if (q.type === 'classement') {
       const elements = Array.isArray(q.elements_ordonnes) ? q.elements_ordonnes.map(clean).filter(Boolean) : [];
       if (elements.length < 3 || elements.length > 6 || new Set(elements).size !== elements.length) continue;
