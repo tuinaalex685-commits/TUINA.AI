@@ -176,6 +176,10 @@ export interface CorrectionQuestion {
   ratio: number;
   points: number;
   pointsMax: number;
+  /** Question ouverte : retour de la correction IA. */
+  retour?: string;
+  /** Question ouverte non corrigée (IA indisponible) : hors barème. */
+  nonCorrigee?: boolean;
 }
 
 /**
@@ -208,6 +212,7 @@ export async function getExamCorrection(
       votre: fmt.votre, bonne: fmt.bonne, explication: q?.explication || '',
       correcte: res?.correcte || false, ratio: res?.ratio || 0,
       points: res?.points ?? 0, pointsMax: res?.pointsMax ?? it.points,
+      ...(res?.retour ? { retour: res.retour } : {}), ...(res?.nonCorrigee ? { nonCorrigee: true } : {}),
     };
   });
   return { note: s.score === null || s.score === undefined ? null : Number(s.score), documentId: s.document_id, submittedAt: s.submitted_at, questions: items };

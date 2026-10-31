@@ -10,7 +10,7 @@ import { saveExamAnswer, submitExam } from '@/app/actions/examen';
 
 interface VueQuestion {
   position: number;
-  type: 'qcm' | 'vrai_faux' | 'trous' | 'association' | 'classement';
+  type: 'qcm' | 'vrai_faux' | 'trous' | 'association' | 'classement' | 'ouverte';
   difficulte: string;
   question: string;
   options?: string[];
@@ -169,7 +169,30 @@ export default function ExamRunner({ sessionId, initialView }: { sessionId: stri
   );
 }
 
+/**
+ * Réponse rédigée (question-réponse, mise en situation). Le texte reste local et n'est enregistré
+ * que 1,2 s après la dernière frappe et à la sortie du champ : un enregistrement par frappe
+ * aurait fait des centaines d'appels serveur par étudiant.
+ */
+function ReponseRedigee({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (a: any) => void }) {
+  const [texte, setTexte] = useState(value);
+  useEffect(() => {
+    if (texte === value) return;
+    const t = setTimeout(() => onChange(texte), 1200);
+    return () => clearTimeout(t);
+  }, [texte, value, onChange]);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <textarea disabled={disabled} value={texte} maxLength={2000} placeholder="Rédige ta réponse : la règle, son application à la situation, la conséquence."
+        onChange={(e) => setTexte(e.target.value)} onBlur={() => { if (texte !== value) onChange(texte); }}
+        style={{ ...inputStyle, minHeight: 140, resize: 'vertical', lineHeight: 1.55, fontFamily: 'inherit' }} />
+      <span style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--color-text-secondary)' }}>{texte.length} / 2000</span>
+    </div>
+  );
+}
+
 function QuestionInput({ q, value, disabled, onChange }: { q: VueQuestion; value: any; disabled: boolean; onChange: (a: any) => void }) {
+  if (q.type === 'ouverte') return <ReponseRedigee value={typeof value === 'string' ? value : ''} disabled={disabled} onChange={onChange} />;
   if (q.type === 'qcm') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

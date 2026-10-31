@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
 import { useJob } from '@/lib/hooks/useJob';
 import { startExam } from '@/app/actions/examen';
+import { BANQUE_SEUIL_REDUITE } from '@/lib/config/examen';
 import ExamenLoadingScreen from './ExamenLoadingScreen';
 
 interface ExamItem {
@@ -22,6 +23,10 @@ interface ExamItem {
   derniereNote: number | null;
   meilleureNote: number | null;
   canAdaptive: boolean;
+  /** Questions de la banque (null = pas encore préparée) : sous le seuil, examen réduit. */
+  questionCount?: number | null;
+  /** Matière du document (documents personnels). */
+  matiere?: string | null;
 }
 
 export default function ExamenManager({
@@ -46,6 +51,10 @@ export default function ExamenManager({
   const [prepDone, setPrepDone] = useState(false);
   const [failedDoc, setFailedDoc] = useState<string | null>(null);
   const prepDocRef = useRef<string | null>(null);
+  // Choix de la matière (1re étape du parcours Examen) ; « tout » tant qu'il n'a rien choisi.
+  const matieres = [...new Set(initialItems.map((i) => i.matiere).filter((m): m is string => !!m))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const [matiere, setMatiere] = useState('tout');
+  const visibles = matiere === 'tout' ? initialItems : initialItems.filter((i) => (matiere === 'aucune' ? !i.matiere : i.matiere === matiere));
 
   // Observation du job de préparation = source de vérité backend (progression/phase RÉELLES).
   const job = useJob(activeJobId, {
@@ -146,8 +155,20 @@ export default function ExamenManager({
           <Link href="/app/bibliotheque"><Button style={{ padding: '12px 24px' }}>Importer un cours</Button></Link>
         </Card>
       ) : (
+        <>
+        {matieres.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--spacing-standard)', color: 'var(--color-text-secondary)', fontSize: 14, flexWrap: 'wrap' }}>
+            Matière
+            <select value={matiere} onChange={(e) => setMatiere(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-bg-main)', color: 'var(--color-text-main)', fontSize: 14, minWidth: 220 }}>
+              <option value="tout">Toutes mes matières</option>
+              {matieres.map((m) => <option key={m} value={m}>{m}</option>)}
+              {initialItems.some((i) => !i.matiere) && <option value="aucune">Sans matière</option>}
+            </select>
+          </label>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--spacing-standard)' }}>
-          {initialItems.map((raw) => {
+          {visibles.map((raw) => {
             const it = { ...raw, bankReady: raw.bankReady || readyOverride.has(raw.documentId) };
             const busy = busyDoc === it.documentId;
             const failed = failedDoc === it.documentId;
@@ -175,6 +196,11 @@ export default function ExamenManager({
                       ? <>Examens passés : {it.nbExamens} · Dernière note : <strong style={{ color: 'var(--color-text-main)' }}>{it.derniereNote}/20</strong>{it.meilleureNote !== null && <> · Meilleure : {it.meilleureNote}/20</>}</>
                       : 'Aucun examen encore passé.'}
                   </div>
+                  {it.bankReady && typeof it.questionCount === 'number' && it.questionCount < BANQUE_SEUIL_REDUITE && (
+                    <div style={{ marginTop: '8px', fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>
+                      Examen réduit : ton document est court, SJP n’en a tiré que {it.questionCount} questions fiables.
+                    </div>
+                  )}
                   {failed && (
                     <div style={{ marginTop: '10px', fontSize: '12.5px', color: 'var(--color-error)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       ⚠️ La préparation a échoué. Réessaie ci-dessous.
@@ -212,6 +238,7 @@ export default function ExamenManager({
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

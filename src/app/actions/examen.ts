@@ -108,7 +108,7 @@ export async function getExamDashboard() {
   const userId = user.id;
 
   const { data: docs } = await supabaseAdmin
-    .from('documents').select('id, nom, text_hash, date_import').eq('user_id', userId)
+    .from('documents').select('id, nom, text_hash, date_import, matiere_id, cours_id').eq('user_id', userId)
     .order('date_import', { ascending: false });
 
   // Les cours du catalogue s'ajoutent aux documents personnels POUR LES COMPTES FREE.
@@ -144,14 +144,26 @@ export async function getExamDashboard() {
   // Plus de prérequis « Étude guidée » (lancement, 31/10/2026) : TOUT document est proposé ; sans
   // plan d'Étude, la banque fixe elle-même ses thèmes lors de sa préparation.
 
-  // Banques prêtes (clé = text_hash = source_hash de la banque).
+  // Banques prêtes (clé = text_hash = source_hash de la banque) et leur taille (document court).
   const hashes = docList.map((d: any) => d.text_hash).filter(Boolean);
-  const bankSet = new Set<string>();
+  const bankCount = new Map<string, number>();
   if (hashes.length) {
     const { data: pools } = await supabaseAdmin
-      .from('examen_question_pools').select('source_hash').in('source_hash', hashes);
-    for (const p of pools || []) bankSet.add((p as any).source_hash);
+      .from('examen_question_pools').select('source_hash, question_count').in('source_hash', hashes);
+    for (const p of pools || []) bankCount.set((p as any).source_hash, Number((p as any).question_count) || 0);
   }
+
+  // Matière de chaque document personnel (directe, ou via son cours) : filtre de la page Examen.
+  const coursIds = [...new Set((docs || []).map((d: any) => d.cours_id).filter(Boolean))];
+  const { data: coursRows } = coursIds.length
+    ? await supabaseAdmin.from('cours').select('id, matiere_id').in('id', coursIds)
+    : { data: [] as any[] };
+  const matiereDuCours = new Map((coursRows || []).map((c: any) => [c.id, c.matiere_id]));
+  const matiereIds = [...new Set((docs || []).map((d: any) => d.matiere_id || matiereDuCours.get(d.cours_id)).filter(Boolean))];
+  const { data: matieres } = matiereIds.length
+    ? await supabaseAdmin.from('matieres').select('id, titre').in('id', matiereIds).eq('user_id', userId)
+    : { data: [] as any[] };
+  const titreMatiere = new Map((matieres || []).map((m: any) => [m.id, m.titre as string]));
 
   // Historique groupé par document.
   const hist = await getExamHistory(supabaseAdmin, userId);
@@ -177,7 +189,9 @@ export async function getExamDashboard() {
       documentId: d.id, nom: d.nom,
       source: d.source as 'perso' | 'catalogue',
       catalogId: d.catalogId as string | null,
-      bankReady: !!d.text_hash && bankSet.has(d.text_hash),
+      bankReady: !!d.text_hash && bankCount.has(d.text_hash),
+      questionCount: d.text_hash ? bankCount.get(d.text_hash) ?? null : null,
+      matiere: (d.source === 'perso' ? titreMatiere.get(d.matiere_id || matiereDuCours.get(d.cours_id)) : null) ?? null,
       nbExamens: h.length,
       derniereNote: h.length ? h[h.length - 1].note : null,
       meilleureNote: notes.length ? Math.max(...notes) : null,
