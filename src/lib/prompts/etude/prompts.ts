@@ -241,7 +241,11 @@ export const LECON_SCHEMA = {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
-        properties: { cle: { type: S, enum: ['comprendre', 'formuler', 'decomposer', 'illustrer', 'distinguer', 'retenir'] }, blocs: { type: Type.ARRAY, items: BLOC_SCHEMA } },
+        // blocs bornés à 5 (le prompt en demande 1 à 3) : sans borne, Gemini a répété en boucle des
+        // blocs presque vides {type, terme, vrai} jusqu'à la coupure (journal [IA_DIAG] du 31/10/2026,
+        // « Séquence 3, les effets du mariage » : 19 963 jetons, champs en fin type×32, terme×31,
+        // vrai×31). UNE seule borne : des bornes imbriquées partout faisaient refuser le schéma (400).
+        properties: { cle: { type: S, enum: ['comprendre', 'formuler', 'decomposer', 'illustrer', 'distinguer', 'retenir'] }, blocs: { type: Type.ARRAY, maxItems: '5', items: BLOC_SCHEMA } },
         required: ['cle', 'blocs'],
       },
     },
