@@ -243,6 +243,8 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     // (avant : « format illisible », qui masquait la cause — leçon coupée à 12 288 jetons le 31/10/2026).
     if (response.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
       console.error(`[generateStructuredJSON] Réponse coupée à la limite de ${options?.maxOutputTokens ?? 'défaut'} jetons (${rawText.length} caractères).`);
+      // La fin de la réponse montre ce qui a débordé (une liste ou un texte qui se répète).
+      console.error(`[generateStructuredJSON] Fin de la réponse coupée : ${rawText.slice(-1500)}`);
       throw new AIError(`Réponse de l'IA coupée : limite de ${options?.maxOutputTokens ?? 'sortie'} jetons atteinte.`, "TRUNCATED");
     }
 
