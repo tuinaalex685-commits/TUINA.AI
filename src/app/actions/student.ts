@@ -196,9 +196,19 @@ export async function deleteObjectif(id: string) {
 
 // 5. Evaluations
 export async function updateEvaluationScore(evaluationId: string, score: number) {
+  if (!UUID_RE.test(evaluationId) || !Number.isInteger(score) || score < 0) return { error: 'Requête invalide.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('evaluations').update({ score }).eq('id', evaluationId);
-  if (error) return { error: error.message };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Non authentifié' };
+  // La note est le nombre de bonnes réponses : jamais plus que le nombre de questions.
+  const { data: ev } = await supabase.from('evaluations').select('questions').eq('id', evaluationId).eq('user_id', user.id).maybeSingle();
+  if (!ev) return { error: 'Évaluation introuvable.' };
+  if (score > (Array.isArray(ev.questions) ? ev.questions.length : 0)) return { error: 'Requête invalide.' };
+  const { error } = await supabase.from('evaluations').update({ score }).eq('id', evaluationId).eq('user_id', user.id);
+  if (error) {
+    console.error('[evaluations] note non enregistrée:', error.message);
+    return { error: 'Note non enregistrée. Réessaie.' };
+  }
   revalidatePath('/app/evaluations');
   revalidatePath('/app/progression');
   return { success: true };

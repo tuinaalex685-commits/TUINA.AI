@@ -19,6 +19,7 @@ import {
 } from '@/lib/examen/engine';
 import { getExamMasteryMap } from '@/lib/examen/analytics';
 import { resolveDocumentAccess } from '@/lib/access';
+import { reponseExamenValide } from '@/lib/examen/reponse';
 
 export interface SessionDeps {
   poolDb: any;    // service-role : lit examen_question_pools + documents (corrigés jamais exposés)
@@ -112,7 +113,6 @@ export async function startExam(
 }
 
 const isExpired = (deps: SessionDeps, session: any) => deps.now().getTime() >= new Date(session.deadline).getTime();
-
 /** Vue de passage : questions ÉPURÉES (aucun corrigé) + réponses de l'étudiant + temps restant. */
 export async function getExamView(deps: SessionDeps, sessionId: string): Promise<any> {
   let session = await readSession(deps, sessionId);
@@ -146,6 +146,7 @@ export async function saveAnswer(
     await finalize(deps, session, true); // le temps est écoulé → on clôt, la réponse est rejetée
     return { ok: false, reason: 'Temps écoulé.' };
   }
+  if (!reponseExamenValide(position, answer, (session.composition || []).length)) return { ok: false, reason: 'Réponse invalide.' };
 
   const { data, error } = await deps.sessionDb.rpc('examen_save_answer', {
     p_session_id: sessionId, p_user_id: deps.userId, p_position: String(position), p_answer: answer ?? null,

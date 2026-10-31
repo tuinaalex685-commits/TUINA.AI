@@ -174,7 +174,8 @@ export async function etatActivites(userId: string, documentId: string, ordre: n
     e.tentatives = Math.max(e.tentatives, t.numero);
     e.dernier = t.verdict as Verdict;
     if (t.verdict === 'juste') e.reussie = true;
-    e.retours.push({ numero: t.numero, verdict: t.verdict as Verdict, reponse: t.reponse, retour: t.retour });
+    // retour vide = tentative réservée dont la correction est en cours : comptée, pas affichée.
+    if (t.retour) e.retours.push({ numero: t.numero, verdict: t.verdict as Verdict, reponse: t.reponse, retour: t.retour });
   }
   for (const [id, e] of Object.entries(out)) {
     e.aRevoir = aRevoir.has(id);

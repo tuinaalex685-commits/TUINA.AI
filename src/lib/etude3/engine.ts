@@ -267,10 +267,13 @@ export async function processEtudeAnalyse(job: any, deps: EngineDeps): Promise<a
     await linkParcours(documentId, hash);
     // Cours du catalogue : toutes les leçons sont préparées tout de suite, une seule fois, pour que
     // les étudiants (gratuits compris) n'attendent jamais et ne déclenchent aucune génération.
-    if (await estAuCatalogue(documentId)) {
-      for (const p of plan) {
-        await enqueueDedup({ userId: job.user_id, type: 'etude3_sequence', payload: { documentId, hash, ordre: p.ordre }, dedupKey: `${ENGINE_VERSION}:${hash}:${p.ordre}` }).catch(() => {});
-      }
+    // Cours personnel : les leçons 1 et 2 partent dès maintenant, pendant que l'étudiant lit la
+    // synthèse. Avant, la leçon 1 n'était demandée qu'au clic « Commencer la leçon 1 » : l'étudiant
+    // attendait toute la génération (223 s mesurées en ligne le 31/10/2026). Même clé de
+    // déduplication que ensureSequenceJob : le clic rejoint ce job au lieu d'en créer un autre.
+    const aPreparer = (await estAuCatalogue(documentId)) ? plan : plan.filter((p) => p.ordre <= 2);
+    for (const p of aPreparer) {
+      await enqueueDedup({ userId: job.user_id, type: 'etude3_sequence', payload: { documentId, hash, ordre: p.ordre }, dedupKey: `${ENGINE_VERSION}:${hash}:${p.ordre}` }).catch(() => {});
     }
     finished = true;
     return { hash, modules: modules.length, lecons: plan.length, pages: pages!.length };
