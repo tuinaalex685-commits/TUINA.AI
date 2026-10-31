@@ -15,6 +15,13 @@ import { DIRECTEUR, DIRECTEUR_COMPRENDRE, DIRECTEUR_CORRECTION, DIRECTEUR_VISUEL
 const S = Type.STRING;
 const strArr = { type: Type.ARRAY, items: { type: S } };
 const intArr = { type: Type.ARRAY, items: { type: Type.INTEGER } };
+/**
+ * Liste de taille bornée (maxItems, et minItems si fixée). Sans borne, Gemini peut répéter un
+ * élément jusqu'à la limite de sortie : une leçon réelle a été coupée à 12 288 puis à 24 576
+ * jetons (31/10/2026). Les bornes suivent les consignes du prompt, avec une marge.
+ */
+const borne = <T extends object>(liste: T, max: number, min?: number): T =>
+  ({ ...liste, maxItems: String(max), ...(min !== undefined ? { minItems: String(min) } : {}) });
 
 const CARTE_SCHEMA = {
   type: Type.OBJECT,
@@ -156,10 +163,11 @@ const BLOC_SCHEMA = {
     definition: { type: S },
     reformulation: { type: S, description: 'La même idée en français simple.' },
     origine: { type: S, enum: ['cours', 'explication', 'complement'] },
-    pages: intArr,
-    termes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { terme: { type: S }, sens: { type: S } }, required: ['terme', 'sens'] } },
+    pages: borne(intArr, 6),
+    termes: { type: Type.ARRAY, maxItems: '8', items: { type: Type.OBJECT, properties: { terme: { type: S }, sens: { type: S } }, required: ['terme', 'sens'] } },
     acteurs: {
       type: Type.ARRAY,
+      maxItems: '6',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -171,17 +179,17 @@ const BLOC_SCHEMA = {
         required: ['id', 'nom', 'role', 'genre'],
       },
     },
-    relations: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { de: { type: S }, vers: { type: S }, action: { type: S } }, required: ['de', 'vers', 'action'] } },
-    cotes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { titre: { type: S }, situation: { type: S }, consequence: { type: S }, valide: { type: Type.BOOLEAN } }, required: ['titre', 'situation', 'consequence'] } },
-    questions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: S }, reponse: { type: S } }, required: ['question', 'reponse'] } },
+    relations: { type: Type.ARRAY, maxItems: '8', items: { type: Type.OBJECT, properties: { de: { type: S }, vers: { type: S }, action: { type: S } }, required: ['de', 'vers', 'action'] } },
+    cotes: { type: Type.ARRAY, maxItems: '3', items: { type: Type.OBJECT, properties: { titre: { type: S }, situation: { type: S }, consequence: { type: S }, valide: { type: Type.BOOLEAN } }, required: ['titre', 'situation', 'consequence'] } },
+    questions: { type: Type.ARRAY, maxItems: '4', items: { type: Type.OBJECT, properties: { question: { type: S }, reponse: { type: S } }, required: ['question', 'reponse'] } },
     critere: { type: S },
-    colonnes: strArr,
-    lignes: { type: Type.ARRAY, items: strArr },
+    colonnes: borne(strArr, 5),
+    lignes: { type: Type.ARRAY, maxItems: '10', items: borne(strArr, 5) },
     question: { type: S },
-    branches: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { condition: { type: S }, resultat: { type: S } }, required: ['condition', 'resultat'] } },
-    etapes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { nom: { type: S }, detail: { type: S } }, required: ['nom', 'detail'] } },
-    jalons: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { date: { type: S }, evenement: { type: S } }, required: ['date', 'evenement'] } },
-    items: strArr,
+    branches: { type: Type.ARRAY, maxItems: '6', items: { type: Type.OBJECT, properties: { condition: { type: S }, resultat: { type: S } }, required: ['condition', 'resultat'] } },
+    etapes: { type: Type.ARRAY, maxItems: '8', items: { type: Type.OBJECT, properties: { nom: { type: S }, detail: { type: S } }, required: ['nom', 'detail'] } },
+    jalons: { type: Type.ARRAY, maxItems: '10', items: { type: Type.OBJECT, properties: { date: { type: S }, evenement: { type: S } }, required: ['date', 'evenement'] } },
+    items: borne(strArr, 8),
     legende: { type: S, description: 'Ce que la représentation montre et ce que l’étudiant doit en comprendre.' },
   },
   required: ['type'],
@@ -238,15 +246,18 @@ export const LECON_SCHEMA = {
     accroche: { type: Type.OBJECT, properties: { situation: { type: S }, question: { type: S } }, required: ['situation', 'question'] },
     etapes: {
       type: Type.ARRAY,
+      maxItems: '6',
       items: {
         type: Type.OBJECT,
-        properties: { cle: { type: S, enum: ['comprendre', 'formuler', 'decomposer', 'illustrer', 'distinguer', 'retenir'] }, blocs: { type: Type.ARRAY, items: BLOC_SCHEMA } },
+        properties: { cle: { type: S, enum: ['comprendre', 'formuler', 'decomposer', 'illustrer', 'distinguer', 'retenir'] }, blocs: { type: Type.ARRAY, maxItems: '8', items: BLOC_SCHEMA } },
         required: ['cle', 'blocs'],
       },
     },
     savoir_expliquer: { type: S },
     activites: {
       type: Type.ARRAY,
+      minItems: '4',
+      maxItems: '4',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -256,11 +267,12 @@ export const LECON_SCHEMA = {
           consigne: { type: S },
           propositions: {
             type: Type.ARRAY,
+            maxItems: '3',
             items: { type: Type.OBJECT, properties: { texte: { type: S }, juste: { type: Type.BOOLEAN }, pourquoi: { type: S } }, required: ['texte', 'juste', 'pourquoi'] },
           },
           explication: { type: S },
-          attendus: strArr,
-          erreurs_typiques: strArr,
+          attendus: borne(strArr, 4),
+          erreurs_typiques: borne(strArr, 4),
           reponse_modele: { type: S },
           niveau: { type: S, enum: ['comprendre', 'distinguer', 'appliquer', 'examen'] },
           autre_explication: { type: S },
@@ -271,7 +283,7 @@ export const LECON_SCHEMA = {
       },
     },
     suite: { type: S },
-    liens: strArr,
+    liens: borne(strArr, 3),
   },
   required: ['titre', 'objectif', 'accroche', 'etapes', 'savoir_expliquer', 'activites', 'suite', 'liens'],
 };

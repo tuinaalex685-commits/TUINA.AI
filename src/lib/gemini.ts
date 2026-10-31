@@ -143,6 +143,16 @@ async function retryWithBackoff<T>(fn: () => Promise<T>, caller: string, maxRetr
   throw lastError;
 }
 
+/**
+ * Diagnostic SANS contenu d'une réponse JSON défectueuse : les noms de champs les plus fréquents
+ * dans ses 4 000 derniers caractères (ex. « pages×310, texte×12 » = une liste de pages qui boucle).
+ */
+function champsRepetes(texte: string): string {
+  const compte = new Map<string, number>();
+  for (const m of texte.slice(-4000).matchAll(/"([A-Za-z_]{1,30})"\s*:/g)) compte.set(m[1], (compte.get(m[1]) || 0) + 1);
+  return [...compte.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k}×${n}`).join(', ') || 'aucun';
+}
+
 // Nettoyage JSON robuste (pour éviter les erreurs de parsing si l'IA ajoute des backticks)
 function parseAndValidateJSON(rawResponse: string, caller: string): any {
   let cleanedText = rawResponse.trim();
@@ -155,8 +165,8 @@ function parseAndValidateJSON(rawResponse: string, caller: string): any {
   try {
     return JSON.parse(cleanedText);
   } catch (parseError: any) {
-    console.error(`[${caller}] JSON parsing failed:`, parseError);
-    console.error(`[${caller}] Raw response was:`, rawResponse);
+    // Jamais le texte brut : il reprend le cours et les réponses de l'étudiant (données personnelles).
+    console.error(`[${caller}] JSON parsing failed: ${parseError?.message} (${rawResponse.length} caractères ; champs en fin : ${champsRepetes(rawResponse)})`);
     throw new AIError(`L'IA a renvoyé un format illisible. Détail: ${parseError.message}`, "INVALID_JSON");
   }
 }
@@ -180,7 +190,7 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
   }
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
-  console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
+  console.log(`[IA_PROMPT] ${prompt.length} caractères`); // jamais le contenu (cours, réponses d’étudiants)
 
   try {
     await checkGeminiBudget();
@@ -243,13 +253,14 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     // (avant : « format illisible », qui masquait la cause — leçon coupée à 12 288 jetons le 31/10/2026).
     if (response.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
       console.error(`[generateStructuredJSON] Réponse coupée à la limite de ${options?.maxOutputTokens ?? 'défaut'} jetons (${rawText.length} caractères).`);
+      console.error(`[generateStructuredJSON] Champs les plus répétés en fin de réponse : ${champsRepetes(rawText)}`);
       throw new AIError(`Réponse de l'IA coupée : limite de ${options?.maxOutputTokens ?? 'sortie'} jetons atteinte.`, "TRUNCATED");
     }
 
     const parsedJSON = parseAndValidateJSON(rawText, 'generateStructuredJSON');
 
     console.log(`[IA_PERF] Success | Duration: ${duration}ms`);
-    console.log(`[IA_JSON_PARSED] Sample: ${JSON.stringify(parsedJSON).substring(0, 100)}...`);
+    
 
     return parsedJSON;
 
@@ -271,7 +282,7 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
 export async function streamStructuredJSON(systemInstruction: string, prompt: string, schema: any, pdfBase64?: string, signal?: AbortSignal, trackingContext?: GeminiTrackingContext, onComplete?: (fullText: string) => void) {
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: streamStructuredJSON | Model: gemini-2.5-flash`);
-  console.log(`[IA_PROMPT] ${prompt.substring(0, 200)}...`);
+  console.log(`[IA_PROMPT] ${prompt.length} caractères`); // jamais le contenu (cours, réponses d’étudiants)
 
   await checkGeminiBudget();
   const ai = getAIClient();
