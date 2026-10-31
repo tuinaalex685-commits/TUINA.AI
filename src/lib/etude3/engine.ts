@@ -45,9 +45,10 @@ const SYNTHESE_MAX_CHARS = 110000;
  * coupe une exécution à 300 s. Chaque appel doit rester bien sous la minute.
  */
 const THINK = { module: 0, synthese: 512, lecon: 512 };
-// Leçon : 12 288 jetons coupaient la réponse sur un cours réel (7 pages en 2 leçons, JSON tronqué
-// à 46 694 caractères, 31/10/2026). 24 576 ≈ 110 s en flash : sous GEMINI_TIMEOUT_MS (180 s).
-const MAX_TOKENS = { module: 8192, synthese: 12288, lecon: 24576 };
+// Leçon : 20 480 jetons. Coût maximal d'une leçon (tarif flash 31/10/2026 : 2,50 $/M en sortie,
+// réflexion comprise ; 0,30 $/M en entrée) : ≈ 0,057 $. Une leçon normale reste bien en dessous ;
+// au-delà, la réponse est coupée (TRUNCATED) et [IA_DIAG] indique ce qui la remplit.
+const MAX_TOKENS = { module: 8192, synthese: 12288, lecon: 20480 };
 
 const lockKeyAnalyse = (hash: string) => `etude3:${ENGINE_VERSION}:${hash}`;
 const lockKeySequence = (hash: string, ordre: number) => `etude3seq:${ENGINE_VERSION}:${hash}:${ordre}`;

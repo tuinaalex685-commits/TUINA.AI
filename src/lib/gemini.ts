@@ -1,6 +1,17 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { supabaseAdmin } from './supabase/admin';
 import { mockEtude3 } from './etude3/mock';
+import { createHash, randomUUID } from 'crypto';
+
+/**
+ * Journal technique d'un appel Gemini, une ligne JSON préfixée [IA_DIAG] (Vercel). Il permet de
+ * retrouver l'appel qui échoue et de distinguer refus 400, réponse coupée, délai, quota et boucle.
+ * Ne contient JAMAIS : clé, prompt, cours, réponse d'étudiant ni texte généré — seulement des
+ * identifiants internes, des tailles, des durées, des compteurs et des noms de champs.
+ */
+function diagIA(entree: Record<string, unknown>) {
+  console.log(`[IA_DIAG] ${JSON.stringify(entree)}`);
+}
 
 // Interface pour le tracking des coûts et de l'usage
 export interface GeminiTrackingContext {
@@ -191,6 +202,15 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
   const startTime = Date.now();
   console.log(`\n[IA_START] Action: generateStructuredJSON | Model: gemini-2.5-flash`);
   console.log(`[IA_PROMPT] ${prompt.length} caractères`); // jamais le contenu (cours, réponses d’étudiants)
+  // Identifie l'appel sans donnée personnelle : fonction, document (identifiant interne), modèle,
+  // taille et empreinte du schéma RÉELLEMENT transmis, limites demandées.
+  const schemaTexte = JSON.stringify(schema ?? null);
+  const diagBase = {
+    appel: randomUUID().slice(0, 8), fonction: trackingContext?.feature || null, document: trackingContext?.documentId || null,
+    modele: 'gemini-2.5-flash', schemaCaracteres: schemaTexte.length,
+    schemaEmpreinte: createHash('sha256').update(schemaTexte).digest('hex').slice(0, 12),
+    promptCaracteres: prompt.length, maxOutputTokens: options?.maxOutputTokens ?? null, thinkingBudget: options?.thinkingBudget ?? null,
+  };
 
   try {
     await checkGeminiBudget();
@@ -238,6 +258,18 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     const rawText = response.text || "";
     console.log(`[IA_RAW] Response length: ${rawText.length}`);
     const duration = Date.now() - startTime;
+    const usage = response.usageMetadata;
+    const finishReason = response.candidates?.[0]?.finishReason ?? null;
+    // Part de blancs (espaces, retours à la ligne) : une sortie qui « boucle » sur du vide gonfle
+    // les jetons sans contenu ; une vraie leçon trop longue garde une part faible.
+    const blancs = rawText.length ? Math.round((rawText.match(/\s/g)?.length || 0) * 100 / rawText.length) : 0;
+    diagIA({
+      ...diagBase, statut: 'reponse', httpStatus: 200, dureeMs: duration, finishReason,
+      jetonsEntree: usage?.promptTokenCount ?? null, jetonsSortie: usage?.candidatesTokenCount ?? null,
+      jetonsReflexion: usage?.thoughtsTokenCount ?? null, jetonsTotal: usage?.totalTokenCount ?? null,
+      caracteresSortie: rawText.length, pourcentBlancs: blancs,
+      ...(finishReason !== 'STOP' ? { champsEnFin: champsRepetes(rawText), plusLongBlanc: Math.max(0, ...(rawText.match(/\s{20,}/g) || []).map((s) => s.length)) } : {}),
+    });
 
     // -- SaaS TRACKING -- avant toute validation : une réponse inutilisable est facturée quand même.
     if (response.usageMetadata) {
@@ -268,11 +300,18 @@ export async function generateStructuredJSON(systemInstruction: string, prompt: 
     const duration = Date.now() - startTime;
     console.log(`[IA_PERF] Failed | Duration: ${duration}ms`);
     console.error(`[IA_ERROR] ${error.message}`);
-    
+
     if (error instanceof AIError) throw error;
-    
-    // Standardisation des erreurs réseau / timeout
-    throw new AIError(`Erreur lors de la communication avec Gemini: ${error.message}`, "API_ERROR");
+
+    // Erreur de l'API : classée, pour ne plus confondre refus, quota et délai.
+    const status = Number(error?.status || error?.httpStatusCode || (String(error?.message).match(/"code":\s*(\d{3})/)?.[1]) || 0);
+    const msg = String(error?.message || '').toLowerCase();
+    const code = status === 400 ? 'BAD_REQUEST'
+      : status === 429 || /quota|rate limit|exhausted/.test(msg) ? 'QUOTA'
+      : /timeout|deadline|abort|etimedout/.test(msg) || status === 504 ? 'TIMEOUT'
+      : status >= 500 ? 'SERVEUR_IA' : 'API_ERROR';
+    diagIA({ ...diagBase, statut: 'erreur', httpStatus: status || null, code, dureeMs: duration, erreur: String(error?.message || '').slice(0, 200) });
+    throw new AIError(`Erreur lors de la communication avec Gemini: ${error.message}`, code);
   }
 }
 

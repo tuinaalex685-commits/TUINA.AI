@@ -1096,7 +1096,10 @@ export async function runAiWorker(): Promise<any> {
     const transient = !(err instanceof AccessDeniedError) && !(err instanceof NonRetryableError) && isRetryableError(err);
     // Un refus d'accès ne se corrige pas en réessayant : échec immédiat.
     // Refus d'accès ou erreur définitive (PDF scanné…) : réessayer ne changerait rien, et coûterait.
-    const definitive = err instanceof AccessDeniedError || err instanceof NonRetryableError;
+    // Réponse coupée (TRUNCATED) ou requête refusée (400) : la même demande redonne le même
+    // résultat — une 2e tentative doublait la dépense sans chance de succès.
+    const definitive = err instanceof AccessDeniedError || err instanceof NonRetryableError
+      || err?.code === 'TRUNCATED' || err?.code === 'BAD_REQUEST';
     const maxAttempts = definitive ? 1 : transient ? MAX_TRANSIENT_ATTEMPTS : MAX_PERMANENT_ATTEMPTS;
     const willRetry = attempts < maxAttempts;
 
