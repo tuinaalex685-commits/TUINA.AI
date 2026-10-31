@@ -2,6 +2,7 @@ import {
   Home, BookOpenText, Library, Layers, GraduationCap, PenLine,
   FolderOpen, FileText, Target, LineChart, type LucideIcon,
 } from 'lucide-react';
+import { CATALOGUE_FREE_ACTIF, ETUDE_GUIDEE_ACTIVE } from '@/lib/features';
 
 /**
  * Navigation de l'application, regroupée par intention. Trois comportements de visibilité,
@@ -81,9 +82,10 @@ export function visibleItems(items: NavItem[], premium: boolean): NavItem[] {
 
 /** Les 4 destinations de la barre d'onglets mobile (la 5e est « Menu »). */
 export function mobileTabs(premium: boolean): NavItem[] {
+  // Section suspendue (lib/features.ts) : l'onglet mobile mène à ce qui fonctionne déjà.
   const study: NavItem = premium
-    ? { label: 'Étudier', path: '/app/etude', icon: BookOpenText, tone: 'surligneur' }
-    : { label: 'Catalogue', path: '/app/catalogue', icon: Library, tone: 'lagune' };
+    ? (ETUDE_GUIDEE_ACTIVE ? { label: 'Étudier', path: '/app/etude', icon: BookOpenText, tone: 'surligneur' } : { label: 'Rédiger', path: '/app/redaction', icon: PenLine, tone: 'encre' })
+    : (CATALOGUE_FREE_ACTIF ? { label: 'Catalogue', path: '/app/catalogue', icon: Library, tone: 'lagune' } : { label: 'Progrès', path: '/app/progression', icon: LineChart, tone: 'lagune' });
   return [
     { label: 'Accueil', path: '/app/dashboard', icon: Home, tone: 'prusse' },
     study,
