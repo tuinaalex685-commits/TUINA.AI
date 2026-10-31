@@ -139,11 +139,11 @@ export default function ExamenManager({
       {initialItems.length === 0 ? (
         <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 24px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
           <span style={{ fontSize: '48px', marginBottom: '16px' }}>🎓</span>
-          <h3 style={{ color: 'var(--color-text-main)', fontSize: '20px', margin: 0 }}>Aucun cours prêt pour l’examen</h3>
+          <h3 style={{ color: 'var(--color-text-main)', fontSize: '20px', margin: 0 }}>Aucun cours pour l’examen</h3>
           <p style={{ marginTop: '8px', marginBottom: '24px' }}>
-            Termine d’abord l’Étude Guidée d’un cours : l’examen s’appuie sur ses thèmes.
+            Importe le PDF de ton cours : SJP en tire une banque de questions, et tu passes ton examen.
           </p>
-          <Link href="/app/etude"><Button style={{ padding: '12px 24px' }}>Aller à l’Étude Guidée</Button></Link>
+          <Link href="/app/bibliotheque"><Button style={{ padding: '12px 24px' }}>Importer un cours</Button></Link>
         </Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--spacing-standard)' }}>

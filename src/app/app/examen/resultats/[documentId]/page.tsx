@@ -64,12 +64,12 @@ export default async function ResultatsPage({ params }: { params: Promise<{ docu
         <Card style={{ marginBottom: 'var(--spacing-standard)', borderLeft: '4px solid #f59e0b' }}>
           <strong style={{ color: 'var(--color-text-main)' }}>À retravailler en priorité</strong>
           <p style={{ margin: '6px 0 12px', color: 'var(--color-text-secondary)' }}>
-            Ces thèmes sont en dessous du seuil de maîtrise ({SEUIL_MAITRISE}%). Revoyez-les dans l’Étude Guidée avant de repasser un examen.
+            Ces thèmes sont en dessous du seuil de maîtrise ({SEUIL_MAITRISE}%). Relis-les dans ton cours, puis repasse un examen : l’examen adaptatif insiste sur eux.
           </p>
           <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: 'var(--color-text-main)' }}>
             {a.faiblesTestes.map((t) => <li key={`${t.section_ordre}:${t.theme_ordre}`}>{t.theme_titre} <span style={{ color: 'var(--color-text-secondary)' }}>({t.score}%)</span></li>)}
           </ul>
-          <Link href={`/app/etude/${a.pdfId}`}><Button variant="secondary" style={{ padding: '10px 18px' }}>Retravailler dans l’Étude</Button></Link>
+          <Link href="/app/examen"><Button variant="secondary" style={{ padding: '10px 18px' }}>Repasser un examen</Button></Link>
         </Card>
       )}
 
