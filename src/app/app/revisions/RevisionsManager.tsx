@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
 import { Button } from '@/components/ui/Button/Button';
@@ -44,6 +45,33 @@ export default function RevisionsManager({
   const persoSources = documentSources.filter((d) => d.source === 'perso');
   const catalogueSources = documentSources.filter((d) => d.source === 'catalogue');
 
+  /**
+   * Combien de cartes sont prêtes — comptage seul, aucun crédit consommé.
+   *
+   * Les cartes elles-mêmes ne sont plus lues ici : elles arrivent du serveur au
+   * démarrage de la session. C'est ce qui rend le quota incontournable — tant que
+   * le navigateur pouvait lire la table directement, il suffisait de ne jamais
+   * déclarer de session pour réviser sans limite.
+   */
+  const compterCartes = useCallback(async (type: 'cours' | 'document' | null, id: string) => {
+    if (!id || !type) return;
+    setIsLoadingCards(true);
+    try {
+      const { countDueCards } = await import('@/app/actions/revision');
+      const res: any = await countDueCards({ type, id });
+      setDueCount(res?.count ?? 0);
+    } catch (err) {
+      console.error(err);
+      setDueCount(0);
+    } finally {
+      setIsLoadingCards(false);
+    }
+  }, []);
+  const refreshDueCount = useCallback(
+    () => compterCartes(selectedSourceType, selectedSourceId),
+    [compterCartes, selectedSourceType, selectedSourceId],
+  );
+
   // Observation du job async (le frontend n'attend jamais Gemini).
   const [flashcardsJobId, setFlashcardsJobId] = useState<string | null>(null);
   const flashcardsToastRef = React.useRef<string | undefined>(undefined);
@@ -71,50 +99,22 @@ export default function RevisionsManager({
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [selectedSourceId]);
+  }, [selectedSourceId, refreshDueCount]);
 
-  /**
-   * Combien de cartes sont prêtes — comptage seul, aucun crédit consommé.
-   *
-   * Les cartes elles-mêmes ne sont plus lues ici : elles arrivent du serveur au
-   * démarrage de la session. C'est ce qui rend le quota incontournable — tant que
-   * le navigateur pouvait lire la table directement, il suffisait de ne jamais
-   * déclarer de session pour réviser sans limite.
-   */
-  const refreshDueCount = async () => {
-    if (!selectedSourceId || !selectedSourceType) return;
-    setIsLoadingCards(true);
-    try {
-      const { countDueCards } = await import('@/app/actions/revision');
-      const res: any = await countDueCards({ type: selectedSourceType, id: selectedSourceId });
-      setDueCount(res?.count ?? 0);
-    } catch (err) {
-      console.error(err);
-      setDueCount(0);
-    } finally {
-      setIsLoadingCards(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedSourceId) {
-      refreshDueCount();
-    } else {
-      setFlashcards([]);
-      setDueCount(0);
-    }
-  }, [selectedSourceId, selectedSourceType]);
-
+  // Le comptage part du choix de la source (événement), pas d'un effet qui réagirait au changement.
   const handleSourceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (!val) {
       setSelectedSourceType(null);
       setSelectedSourceId('');
+      setFlashcards([]);
+      setDueCount(0);
       return;
     }
     const [type, id] = val.split('|');
     setSelectedSourceType(type as 'cours' | 'document');
     setSelectedSourceId(id);
+    compterCartes(type as 'cours' | 'document', id);
   };
 
   const handleGenerateFlashcards = async () => {
@@ -352,9 +352,9 @@ export default function RevisionsManager({
                   <p style={{ margin: '4px 0 12px', color: 'var(--color-text-secondary)', fontSize: '14px' }}>
                     Tes crédits reviennent demain — ou passe au Premium pour réviser sans limite.
                   </p>
-                  <a href="/#pricing" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+                  <Link href="/#pricing" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
                     Passer au Premium — 2 500 FCFA/mois
-                  </a>
+                  </Link>
                 </div>
               ) : (
                 <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>

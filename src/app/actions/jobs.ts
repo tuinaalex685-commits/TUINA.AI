@@ -50,6 +50,9 @@ const SUJETS_DAILY_LIMIT = 10;
 /** Corrections de Rédaction par jour (tous plans : la Rédaction est déjà réservée au Premium). */
 const REDACTION_DAILY_LIMIT = 3;
 
+/** Jobs flashcards / banque d'examen par heure et par étudiant (anti-robot, pas une limite d'usage). */
+const JOBS_SANS_QUOTA_PAR_HEURE = 20;
+
 /**
  * Crée un job IA et le renvoie immédiatement (le frontend ne fait qu'observer ensuite).
  * Ne bloque JAMAIS sur Gemini. Déclenche le worker en best-effort ; le cron garantit le traitement.
@@ -115,6 +118,16 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     if (!cours || !matiere) return { error: "Cours introuvable ou accès refusé." };
   } else if (type !== 'redaction') {
     return { error: 'Document manquant.' };
+  }
+
+  // Flashcards et banque d'examen n'ont pas de quota (contenu mutualisé), mais chaque job occupe
+  // le worker et ajoute des lignes : plafond horaire anti-robot, jamais atteint par un usage normal.
+  if (type === 'flashcards' || type === 'examen_pool') {
+    const { count: heure } = await supabaseAdmin.from('ai_jobs').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('type', type).gte('created_at', new Date(Date.now() - 3600_000).toISOString());
+    if ((heure || 0) >= JOBS_SANS_QUOTA_PAR_HEURE) {
+      return { error: 'Tu as lancé beaucoup de générations en une heure. Patiente quelques minutes avant de recommencer.' };
+    }
   }
 
   // Sujets de rédaction : mis en cache par contenu, mais la 1re génération coûte un appel IA.

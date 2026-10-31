@@ -19,9 +19,9 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
   // L'abonnement Realtime a été supprimé pour économiser les WebSockets (Scalabilité SaaS).
   // La synchronisation se fait désormais via router.refresh() (RSC) après chaque action (Génération/Validation).
 
-  useEffect(() => {
-    setQuizList(initialQuiz);
-  }, [initialQuiz]);
+  // Resynchronisée pendant le rendu quand router.refresh() renvoie une nouvelle liste.
+  const [quizServeur, setQuizServeur] = useState(initialQuiz);
+  if (quizServeur !== initialQuiz) { setQuizServeur(initialQuiz); setQuizList(initialQuiz); }
 
   // --- GÉNÉRATION D'ÉVALUATION ---
   const [selectedDocumentId, setSelectedDocumentId] = useState('');
@@ -48,11 +48,8 @@ export default function EvaluationsManager({ initialQuiz, documentList }: { init
 
   // Cleanup on unmount to prevent memory leaks in Vercel
   useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
+    const ref = abortControllerRef;
+    return () => { ref.current?.abort(); };
   }, []);
 
   const handleGenerate = async () => {

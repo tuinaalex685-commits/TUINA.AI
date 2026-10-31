@@ -67,6 +67,40 @@ test('code d’un autre étudiant, ou code bloqué : refusé', { skip }, async (
   assert.equal(await activer(email('x'), bloque), 'invalid');
 });
 
+test('au nom d’un autre : un étudiant connecté ne peut appeler ni l’activation ni la recherche de codes', { skip }, async () => {
+  const PUB = process.env.TEST_SUPABASE_ANON_KEY || '';
+  const em = email('pirate');
+  const { data: u, error } = await db!.auth.admin.createUser({ email: em, password: 'Pirate-Test-2026', email_confirm: true });
+  assert.ifError(error);
+  try {
+    const c = createClient(URL_, PUB, { auth: { persistSession: false } });
+    assert.ifError((await c.auth.signInWithPassword({ email: em, password: 'Pirate-Test-2026' })).error);
+    const code = await nouveauCode();
+    // Tente d'activer un code pour l'adresse d'une victime, directement via l'API publique.
+    const r1 = await c.rpc('activate_access_code', { p_email: email('victime'), p_code: code, p_days: 30 });
+    assert.ok(r1.error, 'activation directe refusée');
+    const r2 = await c.rpc('find_access_code', { p_code: code });
+    assert.ok(r2.error, 'recherche de codes refusée');
+    const anon = createClient(URL_, PUB, { auth: { persistSession: false } });
+    assert.ok((await anon.rpc('activate_access_code', { p_email: email('victime'), p_code: code })).error, 'anonyme refusé');
+    const { data: still } = await db!.from('access_codes').select('email').eq('code', code).single();
+    assert.equal(still?.email, null, 'le code est resté vierge');
+  } finally { await db!.auth.admin.deleteUser(u!.user.id); }
+});
+
+test('durée : 30 jours appliqués (règle de l’application) ; durée absurde refusée', { skip }, async () => {
+  const code = await nouveauCode();
+  const avant = Date.now();
+  const { data, error } = await db!.rpc('activate_access_code', { p_email: email('duree'), p_code: code, p_days: 30 });
+  assert.ifError(error);
+  const jours = (Date.parse((data as any).expires_at) - avant) / 86400000;
+  assert.ok(jours > 29.99 && jours < 30.01, `${jours} jours`);
+  for (const bad of [0, -5, 400]) {
+    const r = await db!.rpc('activate_access_code', { p_email: email('absurde'), p_code: await nouveauCode(), p_days: bad });
+    assert.ok(r.error, `durée ${bad} refusée`);
+  }
+});
+
 test('déjà Premium : un nouveau code n’est pas gaspillé', { skip }, async () => {
   await nouveauCode({ email: email('premium'), expires_at: new Date(Date.now() + 86400000).toISOString() });
   const neuf = await nouveauCode();

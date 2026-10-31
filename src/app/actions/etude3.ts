@@ -181,6 +181,11 @@ export async function answerActivity(input: { documentId: string; ordre: number;
   let verdict: Verdict;
   let message: string;
   let manquants: string[] = [];
+  // Tentative réservée AVANT la correction IA : des envois parallèles (identifiants de requête
+  // différents) se heurtent à l'unicité (activité, numéro) et ne déclenchent qu'UN appel Gemini.
+  let reservee = false;
+  const tentative = { user_id: user.id, document_id: documentId, sequence_ordre: ordre, activite_id: activiteId, numero, reponse: reponse.slice(0, MAX_REPONSE), request_id: requestId };
+  const libererReservation = () => supabaseAdmin.from('etude_tentatives').delete().eq('user_id', user.id).eq('request_id', requestId).is('retour', null);
   if (activite.type === 'choix') {
     const idx = Number(reponse);
     if (!Number.isInteger(idx) || idx < 0 || idx >= activite.choix.length) return { error: 'Choix invalide.' };
@@ -204,9 +209,15 @@ export async function answerActivity(input: { documentId: string; ordre: number;
     return { success: true, retour: retourComparaison };
   } else {
     // Réponse ouverte : correction IA courte, sous quota (Free : quota journalier ; Premium : illimité).
+    const { error: eRes } = await supabaseAdmin.from('etude_tentatives').insert({ ...tentative, verdict: 'faux', retour: null });
+    if (eRes) return { error: eRes.code === '23505' ? 'Ta réponse est déjà en cours de correction. Patiente un instant.' : 'Ta réponse n’a pas pu être enregistrée. Réessaie.' };
+    reservee = true;
     const supabase = await createClient();
     const quota = await consumeQuota(supabase, user.id, user.email, 'cas_pratique');
-    if (!quota.allowed) return { error: quota.error || 'Limite de corrections atteinte pour aujourd’hui.' };
+    if (!quota.allowed) {
+      await libererReservation();
+      return { error: quota.error || 'Limite de corrections atteinte pour aujourd’hui.' };
+    }
     try {
       const prompt = [
         `CONSIGNE : ${activite.consigne}`,
@@ -222,6 +233,7 @@ export async function answerActivity(input: { documentId: string; ordre: number;
     } catch (err) {
       // Panne technique : crédit rendu, AUCUNE tentative comptée.
       if (!quota.unlimited) await refundQuota(user.id, 'cas_pratique');
+      await libererReservation();
       console.error('[etude3] correction indisponible:', err instanceof Error ? err.message : err);
       return { error: 'La correction est momentanément indisponible. Ta tentative n’a pas été comptée : réessaie.' };
     }
@@ -246,10 +258,9 @@ export async function answerActivity(input: { documentId: string; ordre: number;
     termine: reussi || dernierEssai,
   };
 
-  const { error } = await supabaseAdmin.from('etude_tentatives').insert({
-    user_id: user.id, document_id: documentId, sequence_ordre: ordre, activite_id: activiteId,
-    numero, reponse: reponse.slice(0, MAX_REPONSE), verdict, retour, request_id: requestId,
-  });
+  const { error } = reservee
+    ? await supabaseAdmin.from('etude_tentatives').update({ verdict, retour }).eq('user_id', user.id).eq('request_id', requestId)
+    : await supabaseAdmin.from('etude_tentatives').insert({ ...tentative, verdict, retour });
   if (error) {
     if (error.code === '23505') return { error: 'Ta réponse a déjà été enregistrée (double envoi). Recharge la page.' };
     console.error('[etude3] tentative non enregistrée:', error.message);
