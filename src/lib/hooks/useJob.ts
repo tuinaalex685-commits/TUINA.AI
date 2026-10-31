@@ -25,19 +25,22 @@ interface UseJobOptions {
  */
 export function useJob(jobId: string | null, opts: UseJobOptions = {}) {
   const { onDone, onError, intervalMs = 2500 } = opts;
-  const [status, setStatus] = useState<JobStatus | null>(null);
+  const [status, setStatus] = useState<JobStatus | null>(jobId ? 'pending' : null);
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<string | null>(null);
   const cbRef = useRef({ onDone, onError });
-  cbRef.current = { onDone, onError };
+  useEffect(() => { cbRef.current = { onDone, onError }; });
+
+  // Nouveau job (ou plus de job) : état remis à zéro pendant le rendu, pas dans l'effet.
+  const [suivi, setSuivi] = useState(jobId);
+  if (suivi !== jobId) { setSuivi(jobId); setStatus(jobId ? 'pending' : null); setProgress(0); setPhase(null); }
 
   useEffect(() => {
-    if (!jobId) { setStatus(null); setProgress(0); setPhase(null); return; }
+    if (!jobId) return;
 
     let stopped = false;
     let timer: any;
     const startedAt = Date.now();
-    setStatus('pending');
 
     // Rythme adaptatif : réactif au début (les traitements courts finissent vite), plus espacé
     // ensuite (une analyse longue n'a pas besoin d'une lecture toutes les 2,5 s), et en pause

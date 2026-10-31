@@ -17,7 +17,7 @@ import { NonRetryableError } from '@/lib/etude3/extract';
 import { mockEtude3 } from '@/lib/etude3/mock';
 import { structureExamenV4 } from '@/lib/etude3/examen';
 import crypto from 'crypto';
-// @ts-ignore
+// @ts-expect-error pdf-parse ne fournit pas de types
 import pdfParse from 'pdf-parse';
 
 export const maxDuration = 300;

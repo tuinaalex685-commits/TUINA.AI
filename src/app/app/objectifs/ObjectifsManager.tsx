@@ -31,9 +31,9 @@ export default function ObjectifsManager({ initialObjectifs }: { initialObjectif
     }
   );
 
-  useEffect(() => {
-    setObjectifs(initialObjectifs);
-  }, [initialObjectifs]);
+  // Resynchronisée pendant le rendu quand router.refresh() renvoie une nouvelle liste.
+  const [objectifsServeur, setObjectifsServeur] = useState(initialObjectifs);
+  if (objectifsServeur !== initialObjectifs) { setObjectifsServeur(initialObjectifs); setObjectifs(initialObjectifs); }
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [titre, setTitre] = useState('');
