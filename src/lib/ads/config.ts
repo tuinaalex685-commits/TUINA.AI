@@ -23,6 +23,13 @@ export type AdPlacement = 'dashboard' | 'catalogue';
 const env = (name: string): string => (process.env[name] ?? '').trim();
 
 /**
+ * Publicité COUPÉE pour tous les comptes, gratuits compris (décision du responsable, 31/10/2026).
+ * Le popunder captait les clics des étudiants. Pour la rétablir un jour : remettre la lecture de
+ * NEXT_PUBLIC_ADSTERRA_ENABLED ici ; le reste du dispositif est intact.
+ */
+const PUBLICITE_ACTIVE = false;
+
+/**
  * Clé d'unité publicitaire par emplacement.
  *
  * Ces valeurs se récupèrent dans ton panneau Adsterra, sur chaque unité créée.
@@ -51,7 +58,7 @@ export interface AdUnitConfig {
  * passes à un autre format, il n'y a rien à recompiler.
  */
 export function getAdUnit(placement: AdPlacement): AdUnitConfig | null {
-  if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
+  if (!PUBLICITE_ACTIVE) return null;
 
   const key = env(PLACEMENT_ENV[placement]);
   const scriptUrl = env('NEXT_PUBLIC_ADSTERRA_SCRIPT_URL');
@@ -79,7 +86,7 @@ export function isAdsConfigured(placement: AdPlacement): boolean {
  * reste exactement celle d'aujourd'hui.
  */
 export function getHighImpactScript(): string | null {
-  if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
+  if (!PUBLICITE_ACTIVE) return null;
   return env('NEXT_PUBLIC_ADSTERRA_HIGH_IMPACT_URL') || null;
 }
 
@@ -93,7 +100,7 @@ export function getHighImpactScript(): string | null {
  * cela fait suspendre un compte publisher — revenus non versés compris.
  */
 export function getPopunderScript(): string | null {
-  if (env('NEXT_PUBLIC_ADSTERRA_ENABLED') !== 'true') return null;
+  if (!PUBLICITE_ACTIVE) return null;
   return env('NEXT_PUBLIC_ADSTERRA_POPUNDER_URL') || null;
 }
 

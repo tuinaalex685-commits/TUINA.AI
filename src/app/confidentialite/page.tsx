@@ -37,8 +37,8 @@ export default function ConfidentialitePage() {
         <li><strong>Vercel</strong> : hébergement du site.</li>
         <li><strong>Google (Gemini)</strong> : le texte de tes cours et tes réponses rédigées lui sont transmis pour produire les explications et les corrections.</li>
         <li><strong>Google</strong> : connexion avec un compte Google, si tu la choisis.</li>
-        <li><strong>Adsterra</strong> : affichage de publicités dans la version gratuite uniquement ; cette régie peut utiliser des cookies.</li>
       </ul>
+      <p>SJP n’affiche aucune publicité : aucune régie publicitaire ne reçoit tes données.</p>
 
       <h2>Combien de temps nous les gardons</h2>
       <p>Tes données sont conservées tant que ton compte existe. Si tu supprimes un document, son fichier est supprimé de notre stockage. Sur demande, nous supprimons ton compte et les données qui y sont liées.</p>
