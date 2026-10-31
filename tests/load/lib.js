@@ -4,6 +4,7 @@ import http from 'k6/http';
 import encoding from 'k6/encoding';
 import { check, fail, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import exec from 'k6/execution';
 
 export const BASE = (__ENV.BASE_URL || '').replace(/\/+$/, '');
 export const SB_URL = (__ENV.SUPABASE_URL || '').replace(/\/+$/, '');
@@ -54,9 +55,26 @@ const REF = SB_URL.replace(/^https?:\/\//, '').split('.')[0];
 const COOKIE = `sb-${REF}-auth-token`;
 const CHUNK = 3180;
 
+/**
+ * IP propre à chaque utilisateur virtuel. En production, chaque étudiant arrive avec sa propre
+ * IP ; sans cela, tout le test partirait de l'IP de la machine de test et ne mesurerait que la
+ * limite Supabase « par IP » (déjà mesurée à part : 30 inscriptions / 5 min). Plage publique
+ * fictive (les IP privées sont ignorées par Supabase, constaté le 28/10/2026).
+ */
+export function ipVU() {
+  const v = exec.vu.idInTest || 0;
+  return `41.${100 + ((v >> 16) & 63)}.${(v >> 8) & 255}.${(v & 255) + 1}`;
+}
+
+// Outil de test seulement : connexion directe avec IP transmise (clé secrète DE TEST obligatoire
+// pour que Supabase accepte sb-forwarded-for). Sans elle, connexion simple depuis l'IP de la machine.
+const HARNESS_SECRET = __ENV.HARNESS_SECRET || '';
+
 export function connexionDirecte(email, password) {
+  const headers = { apikey: HARNESS_SECRET || SB_KEY, 'Content-Type': 'application/json' };
+  if (HARNESS_SECRET) headers['sb-forwarded-for'] = ipVU();
   const res = http.post(`${SB_URL}/auth/v1/token?grant_type=password`, JSON.stringify({ email, password }), {
-    headers: { apikey: SB_KEY, 'Content-Type': 'application/json' }, tags: { name: 'supabase_token' },
+    headers, tags: { name: 'supabase_token' },
   });
   if (res.status !== 200) return null;
   const s = res.json();
@@ -72,11 +90,17 @@ export function cookiesDeSession(session) {
   return out;
 }
 
+// Une session par utilisateur virtuel, gardée tant qu'elle est valide (un étudiant ne se
+// reconnecte pas à chaque page). Le renouvellement est fait par le proxy de l'application.
+let sessionVU = null;
 export function ouvrirSession(email, password) {
+  const maintenant = Math.floor(Date.now() / 1000);
+  if (sessionVU && sessionVU.email === email && sessionVU.s.expires_at - 60 > maintenant) return sessionVU.s;
   const s = connexionDirecte(email, password);
   if (!s) return null;
   const jar = http.cookieJar();
   for (const [k, v] of Object.entries(cookiesDeSession(s))) jar.set(BASE, k, v, { path: '/' });
+  sessionVU = { email, s };
   return s;
 }
 
@@ -84,7 +108,7 @@ export function ouvrirSession(email, password) {
 // Pages et actions serveur
 // ---------------------------------------------------------------------------------------------
 export function page(path, name) {
-  const res = http.get(`${BASE}${path}`, { tags: { name: name || path }, redirects: 5 });
+  const res = http.get(`${BASE}${path}`, { headers: { 'x-real-ip': ipVU() }, tags: { name: name || path }, redirects: 5 });
   m.page.add(res.timings.duration, { page: name || path });
   check(res, { [`page ${name || path} OK`]: (r) => r.status === 200 });
   return res;
@@ -102,7 +126,7 @@ export function action(nom, pagePath, args) {
   const id = IDS[nom];
   if (!id) fail(`Action ${nom} absente de actions.json : relancer action-ids.mjs sur ce déploiement.`);
   const res = http.post(`${BASE}${pagePath}`, JSON.stringify(args), {
-    headers: { 'Next-Action': id, Accept: 'text/x-component', 'Content-Type': 'text/plain;charset=UTF-8' },
+    headers: { 'Next-Action': id, Accept: 'text/x-component', 'Content-Type': 'text/plain;charset=UTF-8', 'x-real-ip': ipVU() },
     tags: { name: `action_${nom}` }, redirects: 0,
   });
   let valeur = null;
@@ -122,7 +146,7 @@ export function attendreJob(jobId, debut, maxSecondes = 900) {
   for (;;) {
     const age = (Date.now() - debut) / 1000;
     if (age > maxSecondes) { m.jobsTropLongs.add(1); return 'trop_long'; }
-    const r = http.get(`${BASE}/api/jobs/${jobId}`, { tags: { name: 'api_jobs_suivi' } });
+    const r = http.get(`${BASE}/api/jobs/${jobId}`, { headers: { 'x-real-ip': ipVU() }, tags: { name: 'api_jobs_suivi' } });
     if (r.status === 200) {
       const j = r.json();
       if (j.status === 'completed' || j.status === 'done') { m.attenteIA.add(Date.now() - debut); return 'ok'; }

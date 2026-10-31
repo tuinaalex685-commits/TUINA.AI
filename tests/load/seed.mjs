@@ -72,7 +72,14 @@ async function compte(prefixe, i) {
 }
 async function docPour(userId, nom, bytes) {
   const path = `${userId}/${nom}.pdf`;
-  const up = await db.storage.from('documents').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+  // Le Storage de l'instance gratuite n'a que quelques connexions : on réessaie avec attente
+  // croissante (même comportement que celui recommandé pour l'import côté étudiant).
+  let up;
+  for (let essai = 1; essai <= 6; essai++) {
+    up = await db.storage.from('documents').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+    if (!up.error || !/too many connections/i.test(up.error.message)) break;
+    await new Promise((r) => setTimeout(r, 500 * 2 ** essai + Math.random() * 300));
+  }
   if (up.error) throw new Error(`stockage : ${up.error.message}`);
   const url = db.storage.from('documents').getPublicUrl(path).data.publicUrl;
   const { data, error } = await db.from('documents')
@@ -82,7 +89,9 @@ async function docPour(userId, nom, bytes) {
   return data.id;
 }
 const code = () => 'CHARGE-' + randomBytes(6).toString('hex').toUpperCase();
-async function parLots(n, f, lot = 20) {
+// Lots de 5 : à 20 en parallèle, le Storage Supabase (instance gratuite) a répondu « Too many
+// connections issued to the database » — limite MESURÉE le 28/10/2026, consignée au registre.
+async function parLots(n, f, lot = Number(process.env.SEED_PARALLELE || 5)) {
   const out = [];
   for (let i = 0; i < n; i += lot) {
     out.push(...await Promise.all(Array.from({ length: Math.min(lot, n - i) }, (_, k) => f(i + k))));
