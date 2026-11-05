@@ -8,6 +8,7 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button/Button';
 import { Input } from '@/components/ui/Input/Input';
 import { signUpFree } from '@/app/actions/auth';
+import { BoutonGoogle } from '@/components/auth/BoutonGoogle';
 import { NIVEAUX, SOURCES, isNiveau } from '@/lib/profileShared';
 import styles from './signup.module.css';
 
@@ -201,6 +202,7 @@ export default function SignupFlow() {
                 {loading ? 'Création du compte…' : 'Créer mon compte'}
               </Button>
             </form>
+            <BoutonGoogle niveau={niveau} />
           </motion.section>
         )}
       </AnimatePresence>
