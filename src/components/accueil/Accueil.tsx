@@ -8,7 +8,7 @@ import s from './accueil.module.css';
  * l'Étude guidée et le Catalogue sont annoncés « bientôt disponibles » (lib/features.ts).
  */
 type Props = {
-  limits: { examen: number; revision: number };
+  limits: { examen: number; revision: number; redaction: number; pdf: number };
   whatsappUrl: string;
   prixPremium: string;
 };
@@ -267,7 +267,9 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <h3 className={s.h3}>Gratuit</h3>
               <p className={s.prix}>0 <span>FCFA</span></p>
               <ul className={s.points}>
+                <li>Import de {limits.pdf} PDF de tes cours</li>
                 <li>Examens : {limits.examen} par jour</li>
+                <li>Rédaction : {limits.redaction} corrections par jour</li>
                 <li>Séances de révision : {limits.revision} par jour</li>
                 <li>Suivi de ta progression</li>
                 <li className={s.pointBientot}>Catalogue des cours de ton année : bientôt</li>
@@ -278,9 +280,9 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <h3 className={s.h3}>Premium</h3>
               <p className={s.prix}>{prixPremium} <span>FCFA / 30 jours</span></p>
               <ul className={s.points}>
-                <li>Import de tes PDF, bibliothèque et matières</li>
+                <li>Import de PDF sans limite, bibliothèque et matières</li>
                 <li>Examens illimités tirés de tes documents</li>
-                <li>Rédaction : cas pratique, dissertation, commentaire</li>
+                <li>Rédaction sans limite : cas pratique, dissertation, commentaire</li>
                 <li>Révisions sans limite</li>
                 <li>Objectifs et progression détaillée</li>
               </ul>

@@ -28,7 +28,13 @@ export const FREE_LIMITS = {
   /** Évaluations générées par jour. Un appel Gemini par (contenu, type, nombre de questions),
    *  mis en cache ensuite ; la limite empêche un compte d'enchaîner les générations. */
   evaluation: 3,
+  /** Corrections de Rédaction par jour (comptes gratuits, lancement 05/11/2026) : un appel Gemini
+   *  par copie, quel que soit le cours. Premium : illimité. */
+  redaction: 3,
 } as const;
+
+/** PDF importés au TOTAL par un compte gratuit (Mes documents et Mes matières confondus). */
+export const FREE_MAX_DOCUMENTS = 3;
 
 export type FreeFeature = keyof typeof FREE_LIMITS;
 
@@ -38,6 +44,7 @@ const FEATURE_LABEL: Record<FreeFeature, string> = {
   revision: 'révisions',
   cas_pratique: 'corrections de cas pratique',
   evaluation: 'évaluations',
+  redaction: 'corrections de rédaction',
 };
 
 export interface QuotaResult {

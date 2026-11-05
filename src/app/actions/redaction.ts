@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isPremium, isMissingColumn } from '@/lib/plan';
+import { isMissingColumn } from '@/lib/plan';
 import { resolveDocumentAccess } from '@/lib/access';
 import { COMPARTIMENT_BY_SLUG, LIMITS, type CompartimentSlug } from '@/lib/redaction/compartiments';
 
@@ -21,13 +21,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const clean = (v: unknown, max: number) =>
   typeof v === 'string' ? v.replace(/\r\n/g, '\n').trim().slice(0, max) : '';
 
+/**
+ * Étudiant connecté. La Rédaction est ouverte aux comptes gratuits depuis le 05/11/2026 : la
+ * limite (3 corrections par jour) est appliquée là où l'IA est appelée, dans enqueueAiJob.
+ */
 async function premiumUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' as const };
-  if (!(await isPremium(supabase, user.email))) {
-    return { error: 'La Rédaction est réservée aux membres Premium.' as const, premiumRequired: true };
-  }
   return { supabase, user };
 }
 

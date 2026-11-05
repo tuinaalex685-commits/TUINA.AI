@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isPremium } from '@/lib/plan';
 import { revalidatePath } from 'next/cache';
 import { removeOwnedFiles } from '@/lib/storage';
+import { FREE_MAX_DOCUMENTS } from '@/lib/quota';
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
@@ -27,16 +28,22 @@ export async function registerDocument(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Non authentifié' };
 
-  // Importer ses propres cours = Premium (même règle que /api/etude/generate).
-  if (!(await isPremium(supabase, user.email))) {
-    return { error: "L'import de tes propres cours est réservé aux membres Premium." };
-  }
-
   const path = String(input.path || '');
   const folder = `${user.id}/`;
   if (!path.startsWith(folder) || path.includes('..') || !path.toLowerCase().endsWith('.pdf')) {
     return { error: 'Fichier refusé.' };
   }
+
+  // Import ouvert aux comptes gratuits depuis le 05/11/2026 : 3 PDF au TOTAL (Premium : illimité).
+  // Vérifié APRÈS le contrôle du dossier : le fichier refusé, déjà déposé, est supprimé, et ce ne
+  // peut être que celui de l'appelant.
+  const premium = await isPremium(supabase, user.email);
+  const refusLimite = async () => {
+    await supabaseAdmin.storage.from('documents').remove([path]).catch(() => {});
+    return { error: `La version gratuite permet ${FREE_MAX_DOCUMENTS} PDF au maximum. Supprime un document pour en importer un autre, ou passe au Premium pour en importer sans limite.`, limiteAtteinte: true };
+  };
+  const nbDocuments = async () => (await supabaseAdmin.from('documents').select('id', { count: 'exact', head: true }).eq('user_id', user.id)).count || 0;
+  if (!premium && (await nbDocuments()) >= FREE_MAX_DOCUMENTS) return refusLimite();
 
   // Le fichier existe-t-il vraiment, et quelle est sa taille réelle (pas celle annoncée) ?
   const fileName = path.slice(folder.length);
@@ -90,10 +97,18 @@ export async function registerDocument(input: {
     .select('id')
     .single();
 
+  // Refus du déclencheur SQL limite_pdf_gratuit (migration 12) : même message que le contrôle applicatif.
+  if (error?.message?.includes('LIMITE_PDF_GRATUIT')) return refusLimite();
   if (error || !doc) {
     console.error('[documents] enregistrement impossible:', error?.message);
     await supabaseAdmin.storage.from('documents').remove([path]).catch(() => {});
     return { error: "Enregistrement du document impossible. Réessaie." };
+  }
+  // Deux imports simultanés ont pu passer le contrôle ci-dessus : recompte APRÈS l'insertion ;
+  // au-delà de la limite, ce document est retiré (ligne et fichier).
+  if (!premium && (await nbDocuments()) > FREE_MAX_DOCUMENTS) {
+    await supabaseAdmin.from('documents').delete().eq('id', doc.id).eq('user_id', user.id);
+    return refusLimite();
   }
   return { success: true, documentId: doc.id };
 }
