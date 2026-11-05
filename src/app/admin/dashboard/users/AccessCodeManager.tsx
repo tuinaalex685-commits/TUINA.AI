@@ -12,6 +12,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [customCode, setCustomCode] = useState('');
+  const [reserveManuel, setReserveManuel] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
@@ -26,7 +27,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
       return;
     }
 
-    const res = await createAccessCode(customCode);
+    const res = await createAccessCode(customCode, reserveManuel);
     if (res.error) setMessage(res.error);
     else {
       setMessage("Code ajouté avec succès !");
@@ -104,6 +105,14 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
           {loading ? 'Création...' : 'Ajouter le code'}
         </Button>
       </form>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, color: 'var(--color-text-secondary)', maxWidth: 560, marginTop: -8 }}>
+        <input type="checkbox" checked={reserveManuel} onChange={(e) => setReserveManuel(e.target.checked)} style={{ marginTop: 3 }} />
+        <span>
+          <strong style={{ color: 'var(--color-text-main)' }}>Réservé à un envoi WhatsApp.</strong>{' '}
+          Coche si tu donnes ce code toi-même : il ne sera jamais attribué à un paiement en ligne.
+          Sans la case, il sert de stock pour les paiements en ligne.
+        </span>
+      </label>
 
       {message && <p style={{ color: 'var(--color-primary)', margin: 0, fontSize: '14px' }}>{message}</p>}
 
@@ -123,7 +132,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
             {initialCodes.map(code => (
               <tr key={code.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 'var(--spacing-standard) 0', fontWeight: 500 }}>
-                  {code.email ? code.email : <span style={{color: 'var(--color-text-secondary)', fontStyle: 'italic'}}>Libre (Non assigné)</span>}
+                  {code.email ? code.email : <span style={{color: 'var(--color-text-secondary)', fontStyle: 'italic'}}>{code.reserve_manuel ? 'Libre · réservé WhatsApp' : 'Libre · vente en ligne'}</span>}
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0' }}>
                   <code style={{ background: 'var(--color-bg-secondary)', padding: '4px 8px', borderRadius: '4px', color: 'var(--color-primary)' }}>

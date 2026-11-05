@@ -49,6 +49,11 @@ export async function recheckPremiumOrder(id: string): Promise<{ success?: boole
     const order = await getOrder(id);
     if (!order) return { error: 'Commande introuvable' };
 
+    if (order.status === 'needs_review' && /bloqué|sans date/i.test(order.review_reason ?? '')) {
+      // Compte bloqué / code historique : la décision est humaine. Relancer l'attribution après une
+      // réactivation manuelle ajouterait 30 jours de plus (deux périodes pour un seul paiement).
+      return { error: 'Cas à régler à la main : réactive (ou non) le code dans « Codes d’accès », puis clique sur « Marquer comme traité ».' };
+    }
     if (order.status === 'needs_review' && order.transaction_id) {
       const payment = await verifyPayment(order.transaction_id);
       const decision = decidePayment(payment, { amount: Number(order.amount), currency: order.currency });

@@ -1,19 +1,19 @@
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isValidWebhookSignature } from '@/lib/saspayCore';
-import { logOrderEvent, syncOpenOrders, syncOrder, type PremiumOrder } from '@/lib/premiumPayment';
+import { findOrderForTransaction, logOrderEvent, syncOrder } from '@/lib/premiumPayment';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 /**
  * WEBHOOK SASPAY — simple SIGNAL, jamais une preuve.
  *
  * 1. Authenticité : signature HMAC-SHA256 sur le corps BRUT + horodatage de moins de 5 minutes.
- * 2. Le contenu n'est pas cru sur parole : on revérifie chaque commande ouverte auprès de l'API
- *    SasPay (statut de session puis verify du paiement). C'est cette vérification serveur, et elle
- *    seule, qui peut attribuer un code (fulfill_premium_order, idempotente).
+ * 2. Le contenu n'est pas cru sur parole : la commande liée à la transaction est retrouvée par les
+ *    sessions PAYÉES de SasPay (1 à 3 appels), puis revérifiée (statut + verify). C'est cette
+ *    vérification serveur, et elle seule, qui peut attribuer un code (fulfill_premium_order).
  * 3. Toute notification valide est journalisée, même sans commande reconnue (ex. un paiement fait
  *    via l'ancien lien fixe) : la preuve n'est jamais perdue.
+ * Seul transaction.success déclenche un travail : la réponse part bien avant les 15 s de SasPay.
  */
 export async function POST(request: Request) {
   const secret = process.env.SASPAY_WEBHOOK_SECRET;
@@ -39,11 +39,11 @@ export async function POST(request: Request) {
   }
   const event = String(payload?.event || request.headers.get('x-webhook-event') || '');
   const data = payload?.data ?? {};
-  const txId = typeof data.id === 'string' ? data.id : null;
+  const txId = typeof data.id === 'string' && data.id.length <= 100 ? data.id : null;
 
   if (event === 'webhook.test') return Response.json({ received: true });
 
-  await logOrderEvent(null, `webhook_${event || 'inconnu'}`, {
+  await logOrderEvent(null, `webhook_${event || 'inconnu'}`.slice(0, 60), {
     transaction_id: txId,
     reference: data.reference ?? null,
     status: data.status ?? null,
@@ -52,13 +52,16 @@ export async function POST(request: Request) {
     currency: data.currency ?? null,
   });
 
-  if (event.startsWith('transaction.')) {
-    // Commande déjà liée à cette transaction ? Sinon, revérification des commandes ouvertes.
-    const { data: linked } = txId
-      ? await supabaseAdmin.from('premium_orders').select('*').eq('transaction_id', txId).maybeSingle()
-      : { data: null };
-    if (linked) await syncOrder(linked as PremiumOrder, { force: true });
-    else await syncOpenOrders();
+  if (event === 'transaction.success' && txId) {
+    try {
+      const order = await findOrderForTransaction(txId);
+      if (order) await syncOrder(order, { force: true });
+      else await logOrderEvent(null, 'paiement_sans_commande', { transaction_id: txId, reference: data.reference ?? null });
+    } catch (e) {
+      // SasPay momentanément indisponible : 503 → SasPay renverra la notification (+30 s, +5 min…).
+      console.error('[webhook saspay] traitement reporté:', (e as Error).message);
+      return new Response('réessayer plus tard', { status: 503 });
+    }
   }
   return Response.json({ received: true });
 }

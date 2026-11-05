@@ -54,6 +54,16 @@ create index if not exists idx_premium_orders_review  on public.premium_orders (
 alter table public.premium_orders enable row level security;  -- aucune policy : service role uniquement
 alter table public.premium_orders add column if not exists last_checked_at timestamptz;  -- ré-exécution sur une ancienne version
 
+-- Une seule commande « créée » (session ouverte, pas encore payée) par étudiant : deux onglets ou
+-- un double appui simultanés ne créent jamais deux sessions de paiement.
+create unique index if not exists uq_premium_orders_one_created
+  on public.premium_orders (user_id) where status = 'created';
+
+-- Codes réservés à un envoi MANUEL (WhatsApp) : jamais attribués par un paiement en ligne, pour
+-- qu'un code déjà envoyé à un étudiant ne soit pas donné entre-temps à un acheteur en ligne.
+-- Par défaut false : les codes vierges existants restent disponibles pour la vente en ligne.
+alter table public.access_codes add column if not exists reserve_manuel boolean not null default false;
+
 -- Historique append-only : chaque étape et chaque notification reçue, même sans commande reconnue.
 create table if not exists public.premium_order_events (
   id          uuid primary key default gen_random_uuid(),
@@ -168,7 +178,7 @@ begin
     else
       -- 2) Nouvel étudiant (ou ancien code supprimé/purgé) : un code vierge créé par l'administrateur.
       select * into v_code from public.access_codes
-       where email is null and status = 'active'
+       where email is null and status = 'active' and not reserve_manuel
        order by created_at nulls last, id
        limit 1
        for update skip locked;
@@ -208,12 +218,92 @@ $$;
 revoke all on function public.fulfill_premium_order(uuid, text, text, numeric, text, int) from public, anon, authenticated;
 grant execute on function public.fulfill_premium_order(uuid, text, text, numeric, text, int) to service_role;
 
--- Vérification (lecture seule) : 3 lignes à true.
+-- -------------------------------------------------------------------------------------
+-- activate_access_code (migration 09) : UNE seule modification — un compte BLOQUÉ par
+-- l'administrateur ne peut plus contourner le blocage en saisissant un autre code vierge
+-- (avant : l'ancien code bloqué était archivé et le nouveau activé). Tout le reste est identique.
+-- -------------------------------------------------------------------------------------
+create or replace function public.activate_access_code(p_email text, p_code text, p_days int default 30)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  v_email text := lower(trim(p_email));
+  v_norm  text := upper(regexp_replace(coalesce(p_code, ''), '\s', '', 'g'));
+  v_new   public.access_codes%rowtype;
+  v_old   public.access_codes%rowtype;
+  v_n     int;
+  v_exp   timestamptz := now() + make_interval(days => p_days);
+begin
+  if p_days is null or p_days < 1 or p_days > 366 then
+    raise exception 'durée d''abonnement invalide : %', p_days;
+  end if;
+  if v_email = '' or length(v_norm) < 4 then
+    return jsonb_build_object('status', 'invalid');
+  end if;
+
+  select count(*) into v_n from public.access_codes where upper(regexp_replace(code, '\s', '', 'g')) = v_norm;
+  if v_n <> 1 then
+    return jsonb_build_object('status', 'invalid');
+  end if;
+  select * into v_new from public.access_codes
+   where upper(regexp_replace(code, '\s', '', 'g')) = v_norm
+   for update;
+
+  if v_new.status::text <> 'active' then
+    return jsonb_build_object('status', 'invalid');
+  end if;
+
+  if v_new.email is not null then
+    if lower(trim(v_new.email)) <> v_email then
+      return jsonb_build_object('status', 'invalid');
+    end if;
+    if v_new.expires_at is null or v_new.expires_at > now() then
+      return jsonb_build_object('status', 'already_active', 'expires_at', v_new.expires_at);
+    end if;
+    return jsonb_build_object('status', 'expired');
+  end if;
+
+  select * into v_old from public.access_codes
+   where lower(trim(email)) = v_email and id <> v_new.id
+   for update;
+  if found then
+    if v_old.status::text = 'blocked' then
+      return jsonb_build_object('status', 'blocked');           -- NOUVEAU : blocage administratif respecté
+    end if;
+    if v_old.status::text = 'active' and (v_old.expires_at is null or v_old.expires_at > now()) then
+      return jsonb_build_object('status', 'already_active', 'expires_at', v_old.expires_at);
+    end if;
+    insert into public.access_code_history (code_id, code, email, status, expires_at, replaced_by)
+    values (v_old.id, v_old.code, v_old.email, v_old.status::text, v_old.expires_at, v_new.id);
+    update public.access_codes set email = null, status = 'blocked' where id = v_old.id;
+  end if;
+
+  update public.access_codes set email = v_email, expires_at = v_exp
+   where id = v_new.id and email is null;
+  return jsonb_build_object('status', 'ok', 'expires_at', v_exp);
+exception
+  when unique_violation then
+    return jsonb_build_object('status', 'already_active');
+end;
+$$;
+
+revoke all on function public.activate_access_code(text, text, int) from public, anon, authenticated;
+grant execute on function public.activate_access_code(text, text, int) to service_role;
+
+-- Vérification (lecture seule) : 5 lignes à true.
 select 'premium_orders' as objet, exists(select 1 from pg_class where relname = 'premium_orders') as ok
 union all select 'premium_order_events', exists(select 1 from pg_class where relname = 'premium_order_events')
-union all select 'fulfill_premium_order', exists(select 1 from pg_proc where proname = 'fulfill_premium_order');
+union all select 'fulfill_premium_order', exists(select 1 from pg_proc where proname = 'fulfill_premium_order')
+union all select 'access_codes.reserve_manuel', exists(select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'access_codes' and column_name = 'reserve_manuel')
+union all select 'une commande créée par étudiant', exists(select 1 from pg_class where relname = 'uq_premium_orders_one_created');
 
--- ROLLBACK (aucune donnée existante n'est touchée par cette migration) :
+-- ROLLBACK (aucune donnée existante n'est modifiée par cette migration) :
 --   drop function if exists public.fulfill_premium_order(uuid, text, text, numeric, text, int);
 --   drop table if exists public.premium_order_events;
 --   drop table if exists public.premium_orders;
+--   alter table public.access_codes drop column if exists reserve_manuel;
+--   puis réappliquer la fonction activate_access_code de la migration 09.

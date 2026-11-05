@@ -19,6 +19,15 @@ function apiKey(): string {
   return key;
 }
 
+/**
+ * 429 (300 requêtes/minute pour tout le compte) : pause de 60 s des vérifications automatiques
+ * dans cette instance serveur. La création d'une session reste tentée (action de l'étudiant).
+ */
+let pausedUntil = 0;
+export function isSaspayPaused(): boolean {
+  return Date.now() < pausedUntil;
+}
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -37,6 +46,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new SaspayError('SasPay injoignable', 503, 'network');
   }
   const json: any = await res.json().catch(() => null);
+  if (res.status === 429) pausedUntil = Date.now() + 60_000;
   if (!res.ok || json?.success === false) {
     // Jamais de corps complet dans les journaux : seulement le code et le message.
     const msg = json?.error?.message || json?.message || `HTTP ${res.status}`;
@@ -77,6 +87,24 @@ export interface CheckoutStatus {
 /** Revérifie l'état réel côté gateway avant de répondre (documentation SasPay). */
 export function getCheckoutStatus(sessionId: string): Promise<CheckoutStatus> {
   return call<CheckoutStatus>(`/checkout-sessions/${encodeURIComponent(sessionId)}/status/`);
+}
+
+/** Annule une session non payée (ex. commande impossible à enregistrer chez SJP). */
+export function cancelCheckoutSession(sessionId: string): Promise<unknown> {
+  return call(`/checkout-sessions/${encodeURIComponent(sessionId)}/cancel/`, { method: 'POST' });
+}
+
+export interface CheckoutSessionListItem {
+  id: string;
+  status: string;
+  transaction: string | { id?: string } | null;
+}
+
+/** Sessions du compte, filtrées par statut (pagination par numéro de page, 100 max). */
+export function listCheckoutSessions(q: { status: 'PAID' | 'PENDING'; page: number; page_size: number }) {
+  const qs = new URLSearchParams({ status: q.status, page: String(q.page), page_size: String(q.page_size) });
+  return call<{ results: CheckoutSessionListItem[]; next: string | null }>(`/checkout-sessions/?${qs}`)
+    .then((r) => ({ results: Array.isArray(r?.results) ? r.results : [], next: r?.next ?? null }));
 }
 
 /** Seule source acceptée pour livrer : statut SUCCESS revérifié côté gateway. */

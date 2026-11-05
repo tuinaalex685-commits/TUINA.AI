@@ -34,7 +34,12 @@ async function requireAdmin() {
   return user;
 }
 
-export async function createAccessCode(customCode: string) {
+/**
+ * `reserveManuel` : code destiné à un envoi manuel (WhatsApp). Il n'est jamais attribué par un
+ * paiement en ligne (fulfill_premium_order, migration 13), donc ne peut pas être « pris » par un
+ * acheteur entre l'envoi et la saisie par l'étudiant.
+ */
+export async function createAccessCode(customCode: string, reserveManuel = false) {
   try {
     await requireAdmin(); // Vérification de sécurité obligatoire
     
@@ -52,7 +57,9 @@ export async function createAccessCode(customCode: string) {
     const { data, error } = await supabaseAdmin
       .from('access_codes')
       .insert([
-        { code, status: 'active', email: null }
+        reserveManuel === true
+          ? { code, status: 'active', email: null, reserve_manuel: true }
+          : { code, status: 'active', email: null }
       ])
       .select()
       .single();

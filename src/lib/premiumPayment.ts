@@ -8,9 +8,9 @@
  */
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { exactEmailPattern, normalizeEmail } from '@/lib/email';
-import { PREMIUM_DURATION_DAYS } from '@/lib/plan';
+import { PREMIUM_DURATION_DAYS, isCodeCurrentlyActive } from '@/lib/plan';
 import { PREMIUM_CURRENCY, PREMIUM_PRICE_XOF } from '@/lib/premiumOffer';
-import { getCheckoutStatus, verifyPayment, SaspayError } from '@/lib/saspay';
+import { getCheckoutStatus, verifyPayment, listCheckoutSessions, SaspayError, isSaspayPaused } from '@/lib/saspay';
 import { decidePayment, parseAmount } from '@/lib/saspayCore';
 
 export type OrderStatus = 'created' | 'pending' | 'fulfilled' | 'failed' | 'expired' | 'needs_review' | 'resolved';
@@ -35,8 +35,10 @@ export interface PremiumOrder {
   updated_at: string;
 }
 
-/** Statuts encore à revérifier auprès de SasPay (un paiement échoué peut être retenté sur la même page). */
+/** Statuts revérifiés automatiquement (un paiement échoué peut être retenté sur la même page SasPay). */
 const SYNCABLE: OrderStatus[] = ['created', 'pending', 'failed'];
+/** Revérification forcée (webhook signé, admin) : une commande classée abandonnée peut encore être payée. */
+const SYNCABLE_FORCED: OrderStatus[] = [...SYNCABLE, 'expired'];
 /** Au-delà, une session non payée n'est plus suivie (la session SasPay expire bien avant). */
 const SYNC_WINDOW_MS = 48 * 60 * 60 * 1000;
 
@@ -54,7 +56,7 @@ export type PremiumSituation =
   | { kind: 'legacy' }                                        // code historique sans date : Premium sans fin
   | { kind: 'active'; until: string; code: string }           // Premium en cours : renouvellement anticipé possible
   | { kind: 'renewal'; expiredOn: string | null; code: string } // ancien étudiant : code expiré ou désactivé
-  | { kind: 'first'; stock: number };                         // nouvel étudiant
+  | { kind: 'first'; stock: number };                         // nouvel étudiant (stock : 1 = disponible, 0 = épuisé)
 
 export async function getPremiumSituation(email: string): Promise<PremiumSituation> {
   const pattern = exactEmailPattern(email);
@@ -68,28 +70,33 @@ export async function getPremiumSituation(email: string): Promise<PremiumSituati
   const c = codes?.[0];
   if (c) {
     if (c.status === 'blocked') return { kind: 'blocked' };
-    if (c.status === 'active' && !c.expires_at) return { kind: 'legacy' };
-    if (c.status === 'active' && new Date(c.expires_at).getTime() > Date.now()) {
-      return { kind: 'active', until: c.expires_at, code: c.code };
+    // Même règle que tout le reste de l'application (src/lib/accessCode.ts).
+    if (isCodeCurrentlyActive(c)) {
+      return c.expires_at ? { kind: 'active', until: c.expires_at, code: c.code } : { kind: 'legacy' };
     }
     return { kind: 'renewal', expiredOn: c.expires_at, code: c.code };
   }
-  const { count } = await supabaseAdmin
+  let res = await supabaseAdmin
     .from('access_codes').select('id', { count: 'exact', head: true })
-    .is('email', null).eq('status', 'active');
+    .is('email', null).eq('status', 'active').eq('reserve_manuel', false);
+  if (res.error) {
+    // Colonne reserve_manuel absente (migration 13 partielle) : même règle sans le filtre.
+    res = await supabaseAdmin.from('access_codes').select('id', { count: 'exact', head: true })
+      .is('email', null).eq('status', 'active');
+  }
   // Disponible / indisponible seulement : le nombre exact de codes ne quitte pas le serveur.
-  return { kind: 'first', stock: (count ?? 0) > 0 ? 1 : 0 };
+  return { kind: 'first', stock: (res.count ?? 0) > 0 ? 1 : 0 };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Revérification d'une commande auprès de SasPay → attribution éventuelle (idempotente).
 // ---------------------------------------------------------------------------------------------
-async function setStatus(order: PremiumOrder, status: OrderStatus, extra: Record<string, unknown> = {}) {
+async function setStatus(order: PremiumOrder, status: OrderStatus, from: OrderStatus[], extra: Record<string, unknown> = {}) {
   if (order.status === status && Object.keys(extra).length === 0) return;
-  // Garde : on ne fait jamais régresser une commande attribuée ou en intervention.
+  // Garde : on ne fait jamais régresser une commande attribuée, clôturée ou en intervention.
   await supabaseAdmin.from('premium_orders')
     .update({ status, updated_at: new Date().toISOString(), ...extra })
-    .eq('id', order.id).in('status', SYNCABLE);
+    .eq('id', order.id).in('status', from);
   await logOrderEvent(order.id, `statut_${status}`, extra);
 }
 
@@ -125,7 +132,9 @@ async function claimCheck(orderId: string): Promise<boolean> {
  * étudiant, et un webhook ne doit jamais être ignoré parce qu'un onglet a vérifié juste avant.
  */
 export async function syncOrder(order: PremiumOrder, opts: { force?: boolean } = {}): Promise<PremiumOrder> {
-  if (!SYNCABLE.includes(order.status) || !order.checkout_session_id) return order;
+  const allowed = opts.force ? SYNCABLE_FORCED : SYNCABLE;
+  if (!allowed.includes(order.status) || !order.checkout_session_id) return order;
+  if (isSaspayPaused()) return order; // SasPay a répondu 429 : on espace les appels
   if (!opts.force && !(await claimCheck(order.id))) return order; // vérifiée il y a moins de 5 s
   const tooOld = Date.now() - new Date(order.created_at).getTime() > SYNC_WINDOW_MS;
 
@@ -133,9 +142,9 @@ export async function syncOrder(order: PremiumOrder, opts: { force?: boolean } =
   try {
     st = await getCheckoutStatus(order.checkout_session_id);
   } catch (e) {
-    if (e instanceof SaspayError && e.status === 404) await setStatus(order, 'expired', { review_reason: 'Session introuvable chez SasPay' });
-    else console.error('[premium] statut de session indisponible:', (e as Error).message);
-    return (await getOrder(order.id)) ?? order;
+    // Jamais de conclusion sur une erreur (404 passager compris) : on réessaiera plus tard.
+    console.error('[premium] statut de session indisponible:', (e as Error).message);
+    return order;
   }
   if (st.id && st.id !== order.checkout_session_id) return order; // réponse incohérente : on ne touche à rien
 
@@ -162,31 +171,61 @@ export async function syncOrder(order: PremiumOrder, opts: { force?: boolean } =
       if (error) console.error('[premium] attribution:', error.message);
       else await logOrderEvent(order.id, 'verification_serveur', { decision, resultat: (data as any)?.status ?? null });
     } else if (decision === 'failed') {
-      await setStatus(order, 'failed');
+      await setStatus(order, 'failed', allowed);
     } else if (order.status === 'created') {
-      await setStatus(order, 'pending');
+      await setStatus(order, 'pending', allowed);
     }
   } else if (sessionStatus === 'EXPIRED' || sessionStatus === 'CANCELLED' || (tooOld && order.status !== 'failed')) {
-    // Abandon constaté APRÈS une dernière vérification chez SasPay : jamais sur la seule ancienneté.
-    await setStatus(order, 'expired');
+    // Abandon constaté APRÈS une vérification chez SasPay : jamais sur la seule ancienneté.
+    await setStatus(order, 'expired', allowed);
   }
   return (await getOrder(order.id)) ?? order;
 }
 
-/** Commandes ouvertes récentes, du plus récent au plus ancien (webhook et vérifications admin). */
-export async function syncOpenOrders(limit = 30): Promise<number> {
+/**
+ * Webhook transaction.success : retrouve LA commande payée par cette transaction, sans balayer
+ * toutes les commandes (1 à 3 appels SasPay au lieu de dizaines). Les sessions PAYÉES récentes de
+ * SasPay sont confrontées à nos sessions ; seule une session créée par SJP pour une commande est
+ * retenue. Renvoie null si la transaction ne vient pas de ce parcours (ex. ancien lien fixe).
+ */
+export async function findOrderForTransaction(transactionId: string): Promise<PremiumOrder | null> {
+  const { data: linked } = await supabaseAdmin.from('premium_orders').select('*')
+    .eq('transaction_id', transactionId).maybeSingle();
+  if (linked) return linked as PremiumOrder;
+
+  for (let page = 1; page <= 3; page++) {
+    // Une erreur SasPay remonte : le webhook répond 503 et SasPay le renverra plus tard.
+    const res = await listCheckoutSessions({ status: 'PAID', page, page_size: 50 });
+    const match = res.results.find((s) => {
+      const tx = typeof s.transaction === 'string' ? s.transaction : s.transaction?.id;
+      return tx === transactionId;
+    });
+    if (match) {
+      const { data } = await supabaseAdmin.from('premium_orders').select('*')
+        .eq('checkout_session_id', match.id).maybeSingle();
+      return (data as PremiumOrder) ?? null;
+    }
+    if (!res.next) break;
+  }
+  return null;
+}
+
+/** Revérification groupée (bouton admin) : commandes ouvertes des dernières 48 h. */
+export async function syncOpenOrders(limit = 60): Promise<number> {
   const since = new Date(Date.now() - SYNC_WINDOW_MS).toISOString();
   const { data } = await supabaseAdmin.from('premium_orders').select('*')
-    .in('status', SYNCABLE).gte('created_at', since)
+    .in('status', ['created', 'pending']).gte('created_at', since)
     .order('created_at', { ascending: false }).limit(limit);
   const orders = (data as PremiumOrder[]) ?? [];
-  // 5 à la fois : SasPay limite à 300 requêtes/minute par compte.
-  for (let i = 0; i < orders.length; i += 5) {
+  let done = 0;
+  // 5 à la fois, arrêt immédiat si SasPay demande d'espacer les appels (429).
+  for (let i = 0; i < orders.length && !isSaspayPaused(); i += 5) {
     await Promise.all(orders.slice(i, i + 5).map((o) => syncOrder(o, { force: true }).catch((e) => {
       console.error('[premium] synchronisation:', (e as Error).message);
     })));
+    done += Math.min(5, orders.length - i);
   }
-  return orders.length;
+  return done;
 }
 
 /** Dernière commande de l'étudiant (pour l'afficher et la revérifier à chaque visite). */
@@ -198,4 +237,4 @@ export async function latestOrderFor(userId: string): Promise<PremiumOrder | nul
 
 export const ORDER_AMOUNT = PREMIUM_PRICE_XOF;
 export const ORDER_CURRENCY = PREMIUM_CURRENCY;
-export { normalizeEmail };
+export { normalizeEmail, SaspayError };

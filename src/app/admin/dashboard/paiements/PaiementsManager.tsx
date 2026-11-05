@@ -109,7 +109,7 @@ export default function PaiementsManager({ orders }: { orders: AdminOrderRow[] }
                   </p>
                 )}
                 {o.review_reason && <p className={styles.reason}>{o.review_reason}</p>}
-                {['created', 'pending', 'failed', 'needs_review'].includes(o.status) && (
+                {['created', 'pending', 'failed', 'expired', 'needs_review'].includes(o.status) && (
                   <div className={styles.actions}>
                     <button type="button" className={styles.btn} onClick={() => recheck(o.id)} disabled={busy !== null}>
                       {busy === o.id ? 'Vérification…' : o.status === 'needs_review' ? 'Réessayer l’attribution' : 'Revérifier'}

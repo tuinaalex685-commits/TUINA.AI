@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeEmail } from '@/lib/email';
 import { appBaseUrl } from '@/lib/jobs/workerUrl';
-import { createCheckoutSession } from '@/lib/saspay';
+import { createCheckoutSession, cancelCheckoutSession } from '@/lib/saspay';
 import { formatAmount, isSaspayCheckoutUrl } from '@/lib/saspayCore';
 import {
   getPremiumSituation, getOrder, syncOrder, logOrderEvent, latestOrderFor,
@@ -14,10 +14,10 @@ import {
 
 /** Démarrages de paiement par jour et par compte (anti-abus : chaque démarrage crée une session SasPay). */
 const CHECKOUTS_PER_DAY = 10;
-/** Une session non payée reste réutilisable pendant ce délai (double clic, retour arrière). */
-const REUSE_MS = 20 * 60 * 1000;
 /** Durée de validité de la page de paiement SasPay. */
 const SESSION_TTL_MS = 60 * 60 * 1000;
+/** Une session non payée est réutilisée tant qu'elle reste valable (double clic, retour arrière). */
+const REUSE_MS = SESSION_TTL_MS - 3 * 60 * 1000;
 
 async function currentUser() {
   const supabase = await createClient();
@@ -56,11 +56,24 @@ export async function startPremiumCheckout(): Promise<StartResult> {
     return { error: 'Les accès Premium sont temporairement indisponibles.', reason: 'no_stock' };
   }
 
-  // Session encore ouverte et récente : on la réutilise (pas de seconde commande sur un double clic).
+  // Session encore ouverte et valable : on la réutilise (pas de seconde commande, pas de double paiement).
   const last = await latestOrderFor(user.id);
-  if (last && ['created', 'pending'].includes(last.status) && last.checkout_url
-      && Date.now() - new Date(last.created_at).getTime() < REUSE_MS && isSaspayCheckoutUrl(last.checkout_url)) {
-    return { url: last.checkout_url };
+  if (last && ['created', 'pending'].includes(last.status)) {
+    if (Date.now() - new Date(last.created_at).getTime() < REUSE_MS && isSaspayCheckoutUrl(last.checkout_url)) {
+      return { url: last.checkout_url };
+    }
+    // Session périmée : dernière vérification chez SasPay (un paiement tardif est attribué),
+    // puis clôture, ce qui libère la place pour une nouvelle commande.
+    const synced = await syncOrder(last, { force: true });
+    if (synced.status === 'created' || synced.status === 'pending') {
+      await supabaseAdmin.from('premium_orders')
+        .update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('id', last.id).in('status', ['created', 'pending']);
+      await logOrderEvent(last.id, 'statut_expired', { raison: 'session périmée, nouvelle commande demandée' });
+    }
+    if (synced.status === 'fulfilled') {
+      return { error: 'Ton paiement précédent vient d’être confirmé : ton accès Premium est actif.', reason: 'unavailable' };
+    }
   }
 
   const { data: attempt, error: attemptErr } = await supabaseAdmin.rpc('consume_free_quota', {
@@ -79,11 +92,16 @@ export async function startPremiumCheckout(): Promise<StartResult> {
   const { data: order, error: orderErr } = await supabaseAdmin.from('premium_orders')
     .insert({ user_id: user.id, email: user.email, kind, amount: ORDER_AMOUNT, currency: ORDER_CURRENCY })
     .select('*').single();
+  if (orderErr?.code === '23505') {
+    // Une autre demande simultanée (2e onglet, double appui) vient d'ouvrir le paiement.
+    return { error: 'Ton paiement est déjà en cours d’ouverture. Réessaie dans quelques secondes.', reason: 'unavailable' };
+  }
   if (orderErr || !order) {
     console.error('[paiement] création de commande:', orderErr?.message);
     return { error: 'Le paiement est momentanément indisponible. Réessaie dans un instant.', reason: 'unavailable' };
   }
 
+  let sessionId: string | null = null;
   try {
     const session = await createCheckoutSession({
       amount: formatAmount(ORDER_AMOUNT),
@@ -96,14 +114,20 @@ export async function startPremiumCheckout(): Promise<StartResult> {
       expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
       country: 'BF',
     });
+    sessionId = session?.id ?? null;
     if (!session?.id || !isSaspayCheckoutUrl(session.checkout_url)) throw new Error('réponse SasPay incomplète ou adresse inattendue');
-    await supabaseAdmin.from('premium_orders')
+    // Le lien commande ↔ session DOIT être enregistré avant d'envoyer l'étudiant payer :
+    // sans lui, un paiement ne pourrait jamais être rattaché à son compte.
+    const { data: saved, error: saveErr } = await supabaseAdmin.from('premium_orders')
       .update({ checkout_session_id: session.id, checkout_url: session.checkout_url, updated_at: new Date().toISOString() })
-      .eq('id', order.id);
+      .eq('id', order.id).select('id').maybeSingle();
+    if (saveErr || !saved) throw new Error(`session non enregistrée : ${saveErr?.message ?? 'commande introuvable'}`);
     await logOrderEvent(order.id, 'commande_creee', { kind, session_id: session.id });
     return { url: session.checkout_url };
   } catch (e) {
     console.error('[paiement] création de session SasPay:', (e as Error).message);
+    // Session créée mais inutilisable : annulée chez SasPay pour que personne ne puisse la payer.
+    if (sessionId) await cancelCheckoutSession(sessionId).catch((err) => console.error('[paiement] annulation:', (err as Error).message));
     await supabaseAdmin.from('premium_orders')
       .update({ status: 'expired', review_reason: 'Session SasPay non créée', updated_at: new Date().toISOString() })
       .eq('id', order.id);
