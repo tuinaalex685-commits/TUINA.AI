@@ -73,7 +73,7 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <Link href="/inscription" className={s.btnPrincipal}>Commencer gratuitement</Link>
               <a href="#en-action" className={s.btnSecondaire}>Découvrir la plateforme</a>
             </div>
-            <p className={s.rassure}>Inscription gratuite en une minute, sans carte bancaire.</p>
+            <p className={s.rassure}>Inscription gratuite en une minute, avec ton email ou ton compte Google.</p>
           </div>
 
           <div className={s.composition} aria-label="Aperçu de l’application SJP">
