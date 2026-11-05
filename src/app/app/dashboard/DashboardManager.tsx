@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import OnboardingGuide from '@/components/onboarding/OnboardingGuide';
 import { markOnboardingSeen } from '@/app/actions/onboarding';
 import { formatDate } from '@/lib/format';
+import { whatsappUrl } from '@/lib/premiumOffer';
 
 export interface ResumeItem { title: string; href: string; finished: boolean }
 export interface ExamItem { id: string; title: string; score: number | null; date: string | null; documentId: string | null }
@@ -29,7 +30,7 @@ function todayLabel(): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const RENEW_URL = `https://wa.me/22657138126?text=${encodeURIComponent('Bonjour, je souhaite renouveler mon abonnement SJP Premium (2 500 FCFA pour 30 jours).')}`;
+const RENEW_URL = whatsappUrl("Bonjour, j'ai besoin d'aide pour renouveler mon abonnement SJP Premium.");
 
 export default function DashboardManager({ premium, resume, dueCount, stats, exams, objectifs, onboardingSeen = true, expiredOn = null }: Props) {
   const router = useRouter();
@@ -67,8 +68,8 @@ export default function DashboardManager({ premium, resume, dueCount, stats, exa
             <p className={styles.expiredText}>Tu es repassé en version gratuite. Tes documents, ta progression et ton historique sont conservés.</p>
           </div>
           <div className={styles.expiredActions}>
-            <a href={RENEW_URL} target="_blank" rel="noopener noreferrer" className={styles.expiredCta}>Renouveler sur WhatsApp</a>
-            <Link href="/app/compte" className={styles.expiredLink}>J’ai un nouveau code</Link>
+            <Link href="/app/premium" className={styles.expiredCta}>Réactiver mon abonnement</Link>
+            <a href={RENEW_URL} target="_blank" rel="noopener noreferrer" className={styles.expiredLink}>Aide sur WhatsApp</a>
           </div>
         </section>
       )}
