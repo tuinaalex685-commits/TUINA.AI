@@ -152,6 +152,7 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <h3 className={s.h3}>Bibliothèque et matières</h3>
               <p>Importe tes cours en PDF, range-les par matière et retrouve chaque séquence en deux secondes, sur ton téléphone comme sur ordinateur.</p>
               <ul className={s.points}><li>Import de PDF, lecture intégrée</li><li>Matières et cours organisés</li><li>Documents privés : toi seul y as accès</li></ul>
+              <p className={s.formule}><b>Gratuit</b> : ta bibliothèque pour importer tes cours, jusqu’à {limits.pdf} PDF. <b>Premium</b> : PDF sans limite et rangement par matière.</p>
             </div>
             <div className={s.maquette}>
               <p className={s.mqTitre}>Mes documents</p>
@@ -166,6 +167,7 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <h3 className={s.h3}>Rédaction juridique</h3>
               <p>Entraîne-toi sur les trois exercices de l’examen. SJP te propose des sujets tirés de ton cours, puis corrige ta copie : droit, raisonnement, méthode et formulation.</p>
               <ul className={s.points}><li>Cas pratique</li><li>Dissertation</li><li>Commentaire d’arrêt</li></ul>
+              <p className={s.formule}><b>Gratuit</b> : {limits.redaction} corrections par jour. <b>Premium</b> : corrections sans limite.</p>
             </div>
             <div className={s.maquette}>
               <div className={s.onglets} aria-hidden><span data-actif>Cas pratiques</span><span>Dissertations</span><span>Commentaires d’arrêt</span></div>
@@ -267,9 +269,9 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               <h3 className={s.h3}>Gratuit</h3>
               <p className={s.prix}>0 <span>FCFA</span></p>
               <ul className={s.points}>
-                <li>Import de {limits.pdf} PDF de tes cours</li>
-                <li>Examens : {limits.examen} par jour</li>
+                <li>Bibliothèque : importe tes cours, jusqu’à {limits.pdf} PDF</li>
                 <li>Rédaction : {limits.redaction} corrections par jour</li>
+                <li>Examens : {limits.examen} par jour</li>
                 <li>Séances de révision : {limits.revision} par jour</li>
                 <li>Suivi de ta progression</li>
                 <li className={s.pointBientot}>Catalogue des cours de ton année : bientôt</li>
@@ -300,6 +302,7 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               ['SJP remplace-t-il mon cours ?', 'Non. SJP travaille à partir des cours que tu importes : il t’aide à les organiser, à t’entraîner et à mesurer tes progrès. Ton professeur reste ta référence.'],
               ['Les questions d’examen sont-elles fiables ?', 'Elles sont construites à partir de ton document, chacune avec sa réponse justifiée par le cours. SJP n’invente ni article ni jurisprudence absents de ton document.'],
               ['Mes documents sont-ils privés ?', 'Oui. Les PDF que tu importes ne sont lisibles que par ton compte.'],
+              ['Que comprend la version gratuite ?', `Ta bibliothèque pour importer tes cours (${limits.pdf} PDF au maximum), la Rédaction avec ${limits.redaction} corrections par jour, ${limits.examen} examens et ${limits.revision} séances de révision par jour, et le suivi de ta progression. Le Premium lève toutes ces limites et ajoute le rangement par matière et les objectifs.`],
               ['Comment passer au Premium ?', `Écris-nous sur WhatsApp, règle ${prixPremium} FCFA par Mobile Money, puis saisis le code reçu dans « Mon compte ». Ton Premium dure 30 jours.`],
               ['Pour quels étudiants ?', 'Les étudiants en sciences juridiques et politiques de L1 et L2, au Burkina Faso et dans les universités d’Afrique francophone.'],
               ['Et l’Étude guidée ?', 'Elle revient bientôt. Tout ce que tu y as déjà commencé est conservé.'],
