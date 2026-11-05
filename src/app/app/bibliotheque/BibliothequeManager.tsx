@@ -28,7 +28,7 @@ function formatSize(bytes: number | null): string {
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`;
 }
 
-export default function BibliothequeManager({ initialDocuments }: { initialDocuments: Doc[] }) {
+export default function BibliothequeManager({ initialDocuments, limite = null }: { initialDocuments: Doc[]; limite?: number | null }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [docs, removeDoc] = useOptimistic(initialDocuments, (state, id: string) => state.filter((d) => d.id !== id));
@@ -36,6 +36,7 @@ export default function BibliothequeManager({ initialDocuments }: { initialDocum
   const [importOpen, setImportOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const limiteAtteinte = limite !== null && docs.length >= limite;
 
   // Un clic ailleurs referme le menu « ⋯ ».
   useEffect(() => {
@@ -71,9 +72,12 @@ export default function BibliothequeManager({ initialDocuments }: { initialDocum
       <header className={styles.head}>
         <div>
           <h1 className={styles.title}>Mes documents</h1>
-          <p className={styles.lead}>Tes cours en PDF. Lis-les ici, ou lance l’étude guidée pour les travailler.</p>
+          <p className={styles.lead}>Tes cours en PDF. Lis-les ici, puis passe un examen ou une rédaction à partir de ton cours.</p>
+          {limite !== null && (
+            <p className={styles.lead}>{docs.length} / {limite} PDF · version gratuite{limiteAtteinte ? ' : supprime un document pour en importer un autre.' : ''}</p>
+          )}
         </div>
-        {docs.length > 0 && (
+        {docs.length > 0 && !limiteAtteinte && (
           <Button onClick={() => setImportOpen(true)} className={styles.importBtn}>
             <Plus size={18} aria-hidden /> Importer un PDF
           </Button>
@@ -84,8 +88,8 @@ export default function BibliothequeManager({ initialDocuments }: { initialDocum
         <section className={styles.empty}>
           <h2 className={styles.emptyTitle}>Importe ton premier cours</h2>
           <p className={styles.emptyText}>
-            Polycopié, notes de cours, fiche de TD : dépose le PDF. SJP en tirera une étude guidée, des cartes de
-            révision et des examens.
+            Polycopié, notes de cours, fiche de TD : dépose le PDF. SJP en tirera des examens, des sujets de rédaction et des cartes de
+            révision.
           </p>
           <DocumentUploader onUploadComplete={afterImport} />
         </section>

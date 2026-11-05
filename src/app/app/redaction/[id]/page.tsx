@@ -2,8 +2,9 @@ import React from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isPremium } from '@/lib/plan';
 import { getCurrentUser } from '@/lib/viewer';
+import { isPremium } from '@/lib/plan';
+import { FREE_LIMITS } from '@/lib/quota';
 import CopyWorkspace, { type VersionItem } from './CopyWorkspace';
 
 export const dynamic = 'force-dynamic';
@@ -22,13 +23,16 @@ export default async function CopyPage({ params }: { params: Promise<{ id: strin
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const supabase = await createClient();
-  if (!(await isPremium(supabase, user.email))) redirect('/app/redaction');
 
-  // Plus de compteur journalier de corrections (lancement, 31/10/2026) : rien à lire ici.
-  const [{ data: red }, { data: versions }] = await Promise.all([
+  // Corrections restantes aujourd'hui : comptes gratuits seulement (3 par jour), Premium = illimité.
+  const jour = new Date().toISOString().slice(0, 10);
+  const [{ data: red }, { data: versions }, premium, { data: usage }] = await Promise.all([
     supabase.from('redactions').select('*').eq('id', id).eq('user_id', user.id).maybeSingle(),
     supabase.from('redaction_versions').select('*').eq('redaction_id', id).order('date_soumission', { ascending: false }).limit(30),
+    isPremium(supabase, user.email),
+    supabase.from('free_daily_usage').select('count').eq('user_id', user.id).eq('jour', jour).eq('feature', 'redaction').maybeSingle(),
   ]);
+  const restantes = premium ? null : Math.max(0, FREE_LIMITS.redaction - Number(usage?.count || 0));
   if (!red) notFound();
 
   // Correction en cours : l'écran suit ce job (et relance le worker s'il s'est arrêté).
@@ -72,6 +76,7 @@ export default async function CopyPage({ params }: { params: Promise<{ id: strin
         lastError: red.last_error ?? null,
       }}
       versions={items}
+      restantes={restantes}
       jobId={jobId}
     />
   );

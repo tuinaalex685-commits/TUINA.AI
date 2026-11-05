@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { isPremium } from '@/lib/plan';
 import { consumeQuota, refundQuota } from '@/lib/quota';
 import { resolveDocumentAccess } from '@/lib/access';
 import { signRefund } from '@/lib/quotaRefund';
@@ -67,14 +66,9 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
   if (!JOB_TYPES.includes(type)) return { error: 'Type de traitement inconnu.' };
 
   const payload = sanitizePayload(type, rawPayload || {});
-  const premium = await isPremium(supabase, user.email);
 
-  // Rédaction et Étude d'un document personnel = Premium, vérifié ici côté serveur. Avant,
-  // l'Étude n'était contrôlée que dans /api/etude/generate : passer par cette action
-  // contournait le Premium et la limite horaire.
-  if ((type === 'redaction' || type === 'redaction_sujets') && !premium) {
-    return { error: "La Rédaction est réservée aux membres Premium." };
-  }
+  // La Rédaction est ouverte aux comptes gratuits depuis le 05/11/2026 : 3 corrections par jour
+  // (quota atomique plus bas), illimitée en Premium.
   if (type === 'redaction_sujets' && !SUJET_TYPES.includes(String(payload.type))) {
     return { error: 'Type d’exercice invalide.' };
   }
@@ -143,17 +137,18 @@ export async function enqueueAiJob(type: AiJobType, rawPayload: Record<string, u
     if (running?.[0]) return { success: true, jobId: running[0].id as string };
   }
 
-  // Quotas. Rédaction : plus de quota journalier (lancement, 31/10/2026) — la copie est verrouillée
-  // « en_cours » par submitRedaction et une seule correction par copie peut tourner à la fois
-  // (contrôlé plus haut), plus le plafond horaire anti-robot. Évaluations : quota Free.
+  // Quotas (compteur journalier ATOMIQUE pour les comptes gratuits ; Premium : jamais touché).
+  // Rédaction gratuite : 3 corrections par jour, tous cours confondus (05/11/2026) ; en Premium,
+  // sans limite — restent la copie verrouillée « en_cours », une correction à la fois par copie
+  // et le plafond horaire anti-robot. Évaluations : quota Free. Crédit rendu si le job échoue.
   let refund: (() => Promise<void>) | null = null;
-  let refundFeature: 'evaluation' | null = null;
-  if (type === 'evaluation') {
-    const quota = await consumeQuota(supabase, user.id, user.email, 'evaluation');
+  let refundFeature: 'evaluation' | 'redaction' | null = null;
+  if (type === 'evaluation' || type === 'redaction') {
+    const quota = await consumeQuota(supabase, user.id, user.email, type);
     if (!quota.allowed) return { error: quota.error, quotaReached: true };
     if (!quota.unlimited) {
-      refund = () => refundQuota(user.id, 'evaluation');
-      refundFeature = 'evaluation';
+      refund = () => refundQuota(user.id, type);
+      refundFeature = type;
     }
   }
 

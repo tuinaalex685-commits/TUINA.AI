@@ -62,14 +62,14 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Études guidées', path: '/app/etude', icon: BookOpenText, tone: 'surligneur', hiddenForFree: true },
       { label: 'Révisions', path: '/app/revisions', icon: Layers, tone: 'sauge' },
       { label: 'Examens', path: '/app/examen', icon: GraduationCap, tone: 'garance' },
-      { label: 'Rédaction', path: '/app/redaction', icon: PenLine, tone: 'encre', premiumOnly: true },
+      { label: 'Rédaction', path: '/app/redaction', icon: PenLine, tone: 'encre' },
     ],
   },
   {
     title: 'Organiser',
     items: [
       { label: 'Mes matières', path: '/app/matieres', icon: FolderOpen, tone: 'ocre', premiumOnly: true },
-      { label: 'Mes documents', path: '/app/bibliotheque', icon: FileText, tone: 'prusse', premiumOnly: true },
+      { label: 'Mes documents', path: '/app/bibliotheque', icon: FileText, tone: 'prusse' },
       { label: 'Objectifs', path: '/app/objectifs', icon: Target, tone: 'prune', premiumOnly: true },
       { label: 'Progression', path: '/app/progression', icon: LineChart, tone: 'lagune' },
     ],

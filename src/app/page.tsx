@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Accueil from '@/components/accueil/Accueil';
-import { FREE_LIMITS } from '@/lib/quota';
+import { FREE_LIMITS, FREE_MAX_DOCUMENTS } from '@/lib/quota';
 
 const DESCRIPTION =
   'SJP accompagne les étudiants en droit : bibliothèque de cours, examens tirés de tes PDF, rédaction juridique corrigée, révisions et suivi de progression. Pour la L1 et la L2, au Burkina Faso et en Afrique francophone.';
@@ -30,7 +30,7 @@ const WHATSAPP_MESSAGE = `Bonjour, je souhaite passer à SJP Premium (${PRIX_PRE
 export default function Home() {
   return (
     <Accueil
-      limits={{ examen: FREE_LIMITS.examen, revision: FREE_LIMITS.revision }}
+      limits={{ examen: FREE_LIMITS.examen, revision: FREE_LIMITS.revision, redaction: FREE_LIMITS.redaction, pdf: FREE_MAX_DOCUMENTS }}
       whatsappUrl={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`}
       prixPremium={PRIX_PREMIUM}
     />

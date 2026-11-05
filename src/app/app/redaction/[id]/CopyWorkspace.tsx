@@ -38,7 +38,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const AUTOSAVE_MS = 1500;
 const POLL_MS = 5000;
 
-export default function CopyWorkspace({ copy, versions, jobId = null }: { copy: Copy; versions: VersionItem[]; jobId?: string | null }) {
+export default function CopyWorkspace({ copy, versions, restantes = null, jobId = null }: { copy: Copy; versions: VersionItem[]; restantes?: number | null; jobId?: string | null }) {
   const router = useRouter();
   const comp = COMPARTIMENT_BY_TYPE.get(copy.type);
   const editable = copy.statut === 'brouillon' || copy.statut === 'erreur';
@@ -101,6 +101,8 @@ export default function CopyWorkspace({ copy, versions, jobId = null }: { copy: 
       toast.error(`Ta copie est trop courte pour être corrigée (au moins ${LIMITS.copieMinCorrection} caractères).`);
       return;
     }
+    // Compte gratuit : 3 corrections par jour (le serveur l'applique aussi).
+    if (restantes === 0) { toast.error('Tu as utilisé tes 3 corrections gratuites du jour. Reviens demain, ou passe au Premium pour corriger sans limite.'); return; }
     setSubmitting(true);
     if (timer.current) clearTimeout(timer.current);
     if (!(await persist(text))) { setSubmitting(false); toast.error('Enregistrement impossible : vérifie ta connexion.'); return; }
@@ -201,7 +203,7 @@ export default function CopyWorkspace({ copy, versions, jobId = null }: { copy: 
                     {save === 'error' && <span className={styles.unsaved}>Non enregistré : vérifie ta connexion</span>}
                   </div>
                   <button type="button" className={styles.primary} onClick={submit} disabled={submitting}>
-                    <Send size={17} aria-hidden /> {submitting ? 'Envoi…' : 'Rendre ma copie'}
+                    <Send size={17} aria-hidden /> {submitting ? 'Envoi…' : restantes === null ? 'Rendre ma copie' : `Rendre ma copie (${restantes} correction${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''} aujourd’hui)`}
                   </button>
                 </div>
               )}
