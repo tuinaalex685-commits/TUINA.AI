@@ -3,12 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, KeyRound, Library, ArrowLeftRight } from 'lucide-react';
+import { LayoutDashboard, KeyRound, Library, ArrowLeftRight, CreditCard } from 'lucide-react';
 import styles from './admin.module.css';
 
 const ITEMS = [
   { href: '/admin/dashboard', label: 'Vue d’ensemble', icon: LayoutDashboard, exact: true },
   { href: '/admin/dashboard/users', label: 'Codes d’accès', icon: KeyRound },
+  { href: '/admin/dashboard/paiements', label: 'Paiements', icon: CreditCard },
   { href: '/admin/dashboard/catalogue', label: 'Catalogue', icon: Library },
 ];
 

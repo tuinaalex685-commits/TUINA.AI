@@ -124,7 +124,7 @@ export function Sidebar({ className, isAdmin = false, premium = false }: Sidebar
         <div className={styles.upgrade}>
           <p className={styles.upgradeTitle}>Version gratuite</p>
           <p className={styles.upgradeText}>Importe tes propres cours et débloque la Rédaction.</p>
-          <Link href="/#pricing" className={styles.upgradeCta}>Passer au Premium · 2 500 FCFA/mois</Link>
+          <Link href="/app/premium" className={styles.upgradeCta}>Découvrir Premium · 2 500 FCFA/mois</Link>
           <Link href="/app/compte" className={styles.codeLink}>J’ai un code d’accès</Link>
         </div>
       )}

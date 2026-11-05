@@ -15,13 +15,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [versPremium, setVersPremium] = useState(false);
   const router = useRouter();
 
   // Retour d'un lien (Google, mot de passe oublié) refusé : message clair.
+  // « suite=premium » : venu du bouton « Passer au Premium » de l'accueil → retour sur l'offre.
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      const e = new URLSearchParams(window.location.search).get('erreur');
-      if (e === 'lien') setMessage('Ce lien a expiré ou a déjà servi. Recommence.');
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('erreur') === 'lien') setMessage('Ce lien a expiré ou a déjà servi. Recommence.');
+      if (params.get('suite') === 'premium') setVersPremium(true);
     });
     return () => cancelAnimationFrame(id);
   }, []);
@@ -43,7 +46,7 @@ export default function LoginPage() {
         // Ancien compte : le mot de passe est encore le code d'accès → mot de passe personnel.
         router.push('/app/compte?motdepasse=1');
       } else {
-        router.push('/app/dashboard');
+        router.push(versPremium ? '/app/premium' : '/app/dashboard');
       }
     }
   };
@@ -51,7 +54,11 @@ export default function LoginPage() {
   return (
     <AuthShell>
       <h1 className={styles.title}>Content de te revoir</h1>
-      <p className={styles.lead}>Connecte-toi pour reprendre là où tu t’es arrêté.</p>
+      <p className={styles.lead}>
+        {versPremium
+          ? <>Connecte-toi pour passer au Premium. Pas encore de compte ? <Link href="/inscription" style={{ color: 'var(--action)', fontWeight: 600, textDecoration: 'underline' }}>Crée-le gratuitement</Link>, puis choisis Premium depuis ton tableau de bord.</>
+          : 'Connecte-toi pour reprendre là où tu t’es arrêté.'}
+      </p>
 
       <form className={styles.form} onSubmit={handleLogin}>
         <Input
@@ -85,7 +92,7 @@ export default function LoginPage() {
         <p className={styles.hint} style={{ textAlign: 'right', margin: 0 }}><Link href="/mot-de-passe-oublie">Mot de passe oublié ?</Link></p>
       </form>
 
-      <BoutonGoogle />
+      <BoutonGoogle versPremium={versPremium} />
 
       <p className={styles.switch}>
         Pas encore de compte ? <Link href="/inscription">Créer un compte gratuit</Link>

@@ -186,7 +186,8 @@ export async function activateAccessCode(rawCode: string) {
   }
 
   const invalid = { error: "Ce code n'est pas valide. Vérifie-le ou contacte l'administrateur." };
-  const expired = { error: "Ton abonnement Premium a expiré. Contacte l'administrateur pour le renouveler." };
+  const expired = { error: "Ton abonnement Premium a expiré. Réactive-le depuis la page Premium, ou contacte l'administrateur." };
+  const blocked = { error: "Ton accès Premium a été suspendu par l'administrateur. Contacte-le sur WhatsApp." };
 
   // Activation ATOMIQUE en base (migration 09) : verrous, renouvellement après expiration,
   // casse et espaces ignorés, archive de l'ancien code. Une seule transaction.
@@ -196,6 +197,7 @@ export async function activateAccessCode(rawCode: string) {
     if (status === 'ok') { revalidatePath('/app', 'layout'); return { success: true }; }
     if (status === 'already_active') { revalidatePath('/app', 'layout'); return { success: true, alreadyActive: true }; }
     if (status === 'expired') return expired;
+    if (status === 'blocked') return blocked; // migration 13 : le blocage administratif est respecté
     return invalid;
   }
   if (!['PGRST202', '42883'].includes(String(rpcErr.code))) {

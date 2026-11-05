@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card/Card';
@@ -107,11 +108,18 @@ export default function CompteManager({ email, premium, premiumUntil, askPasswor
           <p style={{ margin: 0, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
             Tu es en <strong style={{ color: 'var(--color-text-main)' }}>Premium</strong>
             {until ? <> jusqu’au <strong style={{ color: 'var(--color-text-main)' }}>{until}</strong>.</> : '.'}
+            {' '}<Link href="/app/premium" style={{ color: 'var(--action)', fontWeight: 600 }}>Prolonger mon abonnement</Link>
           </p>
         ) : (
           <>
-            <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-              Tu utilises la version gratuite. Saisis le code d’accès reçu après ton paiement pour passer en Premium pendant un mois.
+            <p style={{ margin: '0 0 12px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+              Tu utilises la version gratuite.
+            </p>
+            <Link href="/app/premium" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 48, marginBottom: 16, borderRadius: 10, background: 'var(--action)', color: '#fff', fontWeight: 700, textDecoration: 'none' }}>
+              Découvrir Premium · payer en ligne
+            </Link>
+            <p style={{ margin: '0 0 12px', color: 'var(--color-text-secondary)', lineHeight: 1.6, fontSize: 14 }}>
+              Tu as reçu un code d’accès de l’administrateur ? Saisis-le ici.
             </p>
             <form onSubmit={handleActivate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Input

@@ -44,7 +44,7 @@ export default async function FreeQuotaPanel() {
             Tes compteurs se remettent à zéro chaque jour.
           </p>
         </div>
-        <Link href="/#pricing" className={styles.cta}>
+        <Link href="/app/premium" className={styles.cta}>
           Passer au Premium
           <span className={styles.prix}>2 500 FCFA/mois</span>
         </Link>

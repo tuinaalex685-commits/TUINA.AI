@@ -43,7 +43,7 @@ export default function PremiumLock({
         </ul>
       )}
 
-      <Link href="/#pricing" className={styles.cta}>
+      <Link href="/app/premium" className={styles.cta}>
         Passer au Premium — 2 500 FCFA/mois
       </Link>
 

@@ -10,15 +10,16 @@ import styles from './auth.module.css';
  * l'adresse email par le code d'accès, il entre donc directement en Premium, sans ressaisir de
  * code. Google ne donne jamais le Premium : une adresse sans code reste un compte gratuit.
  */
-export function BoutonGoogle({ niveau }: { niveau?: string | null } = {}) {
+export function BoutonGoogle({ niveau, versPremium = false }: { niveau?: string | null; versPremium?: boolean } = {}) {
   const [erreur, setErreur] = useState('');
   const google = async () => {
     setErreur('');
     // Inscription : l'année choisie suit le passage par Google (enregistrée si le compte n'en a pas).
     const suite = niveau ? `&niveau=${encodeURIComponent(niveau)}` : '';
+    const destination = versPremium ? '/app/premium' : '/app/dashboard'; // liste blanche dans /auth/callback
     const { error } = await supabaseNavigateur.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/app/dashboard${suite}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${destination}${suite}` },
     });
     if (error) setErreur('La connexion Google est momentanément indisponible. Réessaie, ou utilise ton adresse email.');
   };

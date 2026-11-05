@@ -12,6 +12,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [customCode, setCustomCode] = useState('');
+  const [reserveManuel, setReserveManuel] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
@@ -26,7 +27,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
       return;
     }
 
-    const res = await createAccessCode(customCode);
+    const res = await createAccessCode(customCode, reserveManuel);
     if (res.error) setMessage(res.error);
     else {
       setMessage("Code ajouté avec succès !");
@@ -48,6 +49,19 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     setActiveActionId(`${id}-status`);
     startTransition(async () => {
       await updateAccessCodeStatus(id, newStatus as any);
+      router.refresh();
+      setActiveActionId(null);
+    });
+  };
+
+  // BLOCAGE (fraude, décision particulière) : différent de « Désactiver ». Un code désactivé est
+  // réactivé automatiquement si l'étudiant paie ; un code BLOQUÉ ne l'est jamais (migration 13) :
+  // le paiement est conservé et la commande attend une décision dans « Paiements ».
+  const handleBlock = (id: string, userEmail: string | null) => {
+    if (!confirm(`Bloquer ${userEmail || 'ce code'} ?\n\nL'étudiant repasse en gratuit et ne pourra PAS se réactiver en payant en ligne. Pour lever le blocage : « Réactiver (1 mois) ».`)) return;
+    setActiveActionId(`${id}-block`);
+    startTransition(async () => {
+      await updateAccessCodeStatus(id, 'blocked');
       router.refresh();
       setActiveActionId(null);
     });
@@ -91,6 +105,14 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
           {loading ? 'Création...' : 'Ajouter le code'}
         </Button>
       </form>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, color: 'var(--color-text-secondary)', maxWidth: 560, marginTop: -8 }}>
+        <input type="checkbox" checked={reserveManuel} onChange={(e) => setReserveManuel(e.target.checked)} style={{ marginTop: 3 }} />
+        <span>
+          <strong style={{ color: 'var(--color-text-main)' }}>Réservé à un envoi WhatsApp.</strong>{' '}
+          Coche si tu donnes ce code toi-même : il ne sera jamais attribué à un paiement en ligne.
+          Sans la case, il sert de stock pour les paiements en ligne.
+        </span>
+      </label>
 
       {message && <p style={{ color: 'var(--color-primary)', margin: 0, fontSize: '14px' }}>{message}</p>}
 
@@ -110,7 +132,7 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
             {initialCodes.map(code => (
               <tr key={code.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 'var(--spacing-standard) 0', fontWeight: 500 }}>
-                  {code.email ? code.email : <span style={{color: 'var(--color-text-secondary)', fontStyle: 'italic'}}>Libre (Non assigné)</span>}
+                  {code.email ? code.email : <span style={{color: 'var(--color-text-secondary)', fontStyle: 'italic'}}>{code.reserve_manuel ? 'Libre · réservé WhatsApp' : 'Libre · vente en ligne'}</span>}
                 </td>
                 <td style={{ padding: 'var(--spacing-standard) 0' }}>
                   <code style={{ background: 'var(--color-bg-secondary)', padding: '4px 8px', borderRadius: '4px', color: 'var(--color-primary)' }}>
@@ -138,6 +160,17 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                     >
                       {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : isLive(code) ? 'Désactiver' : code.email ? 'Réactiver (1 mois)' : 'Activer'}
                     </Button>
+                    {code.email && code.status !== 'blocked' && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleBlock(code.id, code.email)}
+                        disabled={isPending && activeActionId === `${code.id}-block`}
+                        title="Fraude ou décision particulière : empêche la réactivation par paiement en ligne"
+                        style={{ padding: '6px 12px', fontSize: '12px', color: '#9A5B00', borderColor: '#F1D9A8' }}
+                      >
+                        {isPending && activeActionId === `${code.id}-block` ? 'Blocage...' : 'Bloquer'}
+                      </Button>
+                    )}
                     <Button
                       variant="secondary"
                       onClick={() => handleDelete(code.id, code.email)}
