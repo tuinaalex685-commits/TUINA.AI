@@ -313,3 +313,5 @@
   .piedIn { grid-template-columns: 1fr auto; padding: 48px 28px; }
   .piedIn nav { grid-template-columns: repeat(2, auto); column-gap: 40px; }
 }
+.formule { margin: 18px 0 0; padding: 12px 14px; border-left: 3px solid #A9BCE6; background: #F3F6FD; border-radius: 0 10px 10px 0; font-size: 15px; color: var(--texte-2); }
+.formule b { color: var(--encre); }
