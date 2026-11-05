@@ -53,6 +53,19 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
     });
   };
 
+  // BLOCAGE (fraude, décision particulière) : différent de « Désactiver ». Un code désactivé est
+  // réactivé automatiquement si l'étudiant paie ; un code BLOQUÉ ne l'est jamais (migration 13) :
+  // le paiement est conservé et la commande attend une décision dans « Paiements ».
+  const handleBlock = (id: string, userEmail: string | null) => {
+    if (!confirm(`Bloquer ${userEmail || 'ce code'} ?\n\nL'étudiant repasse en gratuit et ne pourra PAS se réactiver en payant en ligne. Pour lever le blocage : « Réactiver (1 mois) ».`)) return;
+    setActiveActionId(`${id}-block`);
+    startTransition(async () => {
+      await updateAccessCodeStatus(id, 'blocked');
+      router.refresh();
+      setActiveActionId(null);
+    });
+  };
+
   const handleDelete = (id: string, userEmail: string | null) => {
     if (confirm("Supprimer ce code ?\n\nLe compte de l’étudiant est conservé : il repasse simplement en version gratuite.")) {
       setActiveActionId(`${id}-delete`);
@@ -138,6 +151,17 @@ export default function AccessCodeManager({ initialCodes }: { initialCodes: any[
                     >
                       {isPending && activeActionId === `${code.id}-status` ? 'En cours...' : isLive(code) ? 'Désactiver' : code.email ? 'Réactiver (1 mois)' : 'Activer'}
                     </Button>
+                    {code.email && code.status !== 'blocked' && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleBlock(code.id, code.email)}
+                        disabled={isPending && activeActionId === `${code.id}-block`}
+                        title="Fraude ou décision particulière : empêche la réactivation par paiement en ligne"
+                        style={{ padding: '6px 12px', fontSize: '12px', color: '#9A5B00', borderColor: '#F1D9A8' }}
+                      >
+                        {isPending && activeActionId === `${code.id}-block` ? 'Blocage...' : 'Bloquer'}
+                      </Button>
+                    )}
                     <Button
                       variant="secondary"
                       onClick={() => handleDelete(code.id, code.email)}
