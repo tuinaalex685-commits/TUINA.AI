@@ -288,8 +288,11 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
                 <li>Révisions sans limite</li>
                 <li>Objectifs et progression détaillée</li>
               </ul>
-              <a href={whatsappUrl} className={s.btnClair} target="_blank" rel="noopener noreferrer">Passer au Premium sur WhatsApp</a>
-              <p className={s.paiement}>Paiement par Mobile Money. Tu reçois un code d’accès à saisir dans « Mon compte ».</p>
+              <Link href="/app/premium" className={s.btnClair}>Passer au Premium</Link>
+              <p className={s.paiement}>
+                Paiement en ligne sécurisé par Orange Money, Moov Money ou carte. Ton accès s’active dès la confirmation.
+                Une question ? <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>Écris-nous sur WhatsApp</a>.
+              </p>
             </div>
           </div>
         </section>
@@ -303,7 +306,7 @@ export default function Accueil({ limits, whatsappUrl, prixPremium }: Props) {
               ['Les questions d’examen sont-elles fiables ?', 'Elles sont construites à partir de ton document, chacune avec sa réponse justifiée par le cours. SJP n’invente ni article ni jurisprudence absents de ton document.'],
               ['Mes documents sont-ils privés ?', 'Oui. Les PDF que tu importes ne sont lisibles que par ton compte.'],
               ['Que comprend la version gratuite ?', `Ta bibliothèque pour importer tes cours (${limits.pdf} PDF au maximum), la Rédaction avec ${limits.redaction} corrections par jour, ${limits.examen} examens et ${limits.revision} séances de révision par jour, et le suivi de ta progression. Le Premium lève toutes ces limites et ajoute le rangement par matière et les objectifs.`],
-              ['Comment passer au Premium ?', `Écris-nous sur WhatsApp, règle ${prixPremium} FCFA par Mobile Money, puis saisis le code reçu dans « Mon compte ». Ton Premium dure 30 jours.`],
+              ['Comment passer au Premium ?', `Connecte-toi, ouvre l’offre Premium et paie ${prixPremium} FCFA en ligne (Orange Money, Moov Money ou carte). Dès que le paiement est confirmé, ton Premium s’active pour 30 jours et ton code d’accès s’affiche. Pour renouveler, un clic sur « Réactiver mon abonnement » réactive ton même code.`],
               ['Pour quels étudiants ?', 'Les étudiants en sciences juridiques et politiques de L1 et L2, au Burkina Faso et dans les universités d’Afrique francophone.'],
               ['Et l’Étude guidée ?', 'Elle revient bientôt. Tout ce que tu y as déjà commencé est conservé.'],
             ].map(([q, r]) => (

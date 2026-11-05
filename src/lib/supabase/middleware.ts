@@ -37,6 +37,8 @@ export async function updateSession(request: NextRequest) {
   if (!user && (request.nextUrl.pathname.startsWith('/app') || request.nextUrl.pathname.startsWith('/admin'))) {
     if (!isLogoutRoute) {
       const url = request.nextUrl.clone()
+      // Seule suite reconnue : l'offre Premium (bouton de la page d'accueil). Pas de destination libre.
+      url.search = request.nextUrl.pathname === '/app/premium' ? '?suite=premium' : ''
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }

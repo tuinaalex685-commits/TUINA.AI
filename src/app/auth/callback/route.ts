@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * d'accès (isPremium), donc un Premium entre directement en Premium et une adresse sans code reste
  * un compte gratuit. Avant, un compte Premium était déconnecté ici.
  */
-const DESTINATIONS = new Set(['/app/dashboard', '/reinitialiser', '/app/catalogue']);
+const DESTINATIONS = new Set(['/app/dashboard', '/reinitialiser', '/app/catalogue', '/app/premium']);
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;

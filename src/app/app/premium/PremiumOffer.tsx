@@ -9,13 +9,13 @@ import { PREMIUM_PRICE_LABEL, whatsappUrl } from '@/lib/premiumOffer';
 import type { PremiumSituation } from '@/lib/premiumPayment';
 import styles from './premium.module.css';
 
+// Même liste que l'offre de la page d'accueil (components/accueil/Accueil.tsx).
 const BENEFITS = [
-  'Tes propres cours en PDF, analysés pour toi',
-  'Révisions et examens sans limite quotidienne',
-  'Examens adaptatifs, centrés sur tes points faibles',
-  'Rédaction corrigée de tes copies',
-  'Matières, objectifs et lecteur PDF intégré',
-  'Sans publicité',
+  'Import de PDF sans limite, bibliothèque et matières',
+  'Examens illimités tirés de tes documents',
+  'Rédaction sans limite : cas pratique, dissertation, commentaire',
+  'Révisions sans limite',
+  'Objectifs et progression détaillée',
 ];
 
 const HELP_MESSAGE = "Bonjour, j'ai besoin d'aide pour mon abonnement SJP Premium.";
