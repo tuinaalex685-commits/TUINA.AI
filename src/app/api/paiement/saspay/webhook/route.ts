@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const { data: linked } = txId
       ? await supabaseAdmin.from('premium_orders').select('*').eq('transaction_id', txId).maybeSingle()
       : { data: null };
-    if (linked) await syncOrder(linked as PremiumOrder);
+    if (linked) await syncOrder(linked as PremiumOrder, { force: true });
     else await syncOpenOrders();
   }
   return Response.json({ received: true });

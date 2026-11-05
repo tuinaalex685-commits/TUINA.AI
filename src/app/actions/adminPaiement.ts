@@ -64,7 +64,7 @@ export async function recheckPremiumOrder(id: string): Promise<{ success?: boole
       if (error) return { error: error.message };
       await logOrderEvent(order.id, 'relance_admin', { admin: admin.id, resultat: (data as any)?.status ?? null });
     } else {
-      await syncOrder(order);
+      await syncOrder(order, { force: true });
     }
     revalidatePath('/admin/dashboard/paiements');
     return { success: true, status: (await getOrder(id))?.status };

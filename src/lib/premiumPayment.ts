@@ -77,7 +77,8 @@ export async function getPremiumSituation(email: string): Promise<PremiumSituati
   const { count } = await supabaseAdmin
     .from('access_codes').select('id', { count: 'exact', head: true })
     .is('email', null).eq('status', 'active');
-  return { kind: 'first', stock: count ?? 0 };
+  // Disponible / indisponible seulement : le nombre exact de codes ne quitte pas le serveur.
+  return { kind: 'first', stock: (count ?? 0) > 0 ? 1 : 0 };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -97,12 +98,36 @@ export async function getOrder(id: string): Promise<PremiumOrder | null> {
   return (data as PremiumOrder) ?? null;
 }
 
-export async function syncOrder(order: PremiumOrder): Promise<PremiumOrder> {
-  if (!SYNCABLE.includes(order.status) || !order.checkout_session_id) return order;
-  if (Date.now() - new Date(order.created_at).getTime() > SYNC_WINDOW_MS) {
-    if (order.status !== 'failed') await setStatus(order, 'expired');
-    return (await getOrder(order.id)) ?? order;
+/** Intervalle minimal entre deux interrogations de SasPay pour une même commande. */
+const CHECK_INTERVAL_MS = 5000;
+
+/**
+ * Réserve le droit d'interroger SasPay pour cette commande (mise à jour CONDITIONNELLE, atomique) :
+ * une seule vérification toutes les 5 s, quel que soit le nombre d'onglets, d'appels en boucle
+ * ou de notifications simultanées. Protège le quota SasPay commun à tous les étudiants.
+ */
+async function claimCheck(orderId: string): Promise<boolean> {
+  const limit = new Date(Date.now() - CHECK_INTERVAL_MS).toISOString();
+  const { data, error } = await supabaseAdmin.from('premium_orders')
+    .update({ last_checked_at: new Date().toISOString() })
+    .eq('id', orderId)
+    .or(`last_checked_at.is.null,last_checked_at.lt.${limit}`)
+    .select('id').maybeSingle();
+  if (error) {
+    console.error('[premium] réservation de vérification:', error.message);
+    return false;
   }
+  return !!data;
+}
+
+/**
+ * `force` : webhook SIGNÉ ou action admin. Ils ne peuvent pas être déclenchés en boucle par un
+ * étudiant, et un webhook ne doit jamais être ignoré parce qu'un onglet a vérifié juste avant.
+ */
+export async function syncOrder(order: PremiumOrder, opts: { force?: boolean } = {}): Promise<PremiumOrder> {
+  if (!SYNCABLE.includes(order.status) || !order.checkout_session_id) return order;
+  if (!opts.force && !(await claimCheck(order.id))) return order; // vérifiée il y a moins de 5 s
+  const tooOld = Date.now() - new Date(order.created_at).getTime() > SYNC_WINDOW_MS;
 
   let st;
   try {
@@ -141,7 +166,8 @@ export async function syncOrder(order: PremiumOrder): Promise<PremiumOrder> {
     } else if (order.status === 'created') {
       await setStatus(order, 'pending');
     }
-  } else if (sessionStatus === 'EXPIRED' || sessionStatus === 'CANCELLED') {
+  } else if (sessionStatus === 'EXPIRED' || sessionStatus === 'CANCELLED' || (tooOld && order.status !== 'failed')) {
+    // Abandon constaté APRÈS une dernière vérification chez SasPay : jamais sur la seule ancienneté.
     await setStatus(order, 'expired');
   }
   return (await getOrder(order.id)) ?? order;
@@ -156,7 +182,7 @@ export async function syncOpenOrders(limit = 30): Promise<number> {
   const orders = (data as PremiumOrder[]) ?? [];
   // 5 à la fois : SasPay limite à 300 requêtes/minute par compte.
   for (let i = 0; i < orders.length; i += 5) {
-    await Promise.all(orders.slice(i, i + 5).map((o) => syncOrder(o).catch((e) => {
+    await Promise.all(orders.slice(i, i + 5).map((o) => syncOrder(o, { force: true }).catch((e) => {
       console.error('[premium] synchronisation:', (e as Error).message);
     })));
   }

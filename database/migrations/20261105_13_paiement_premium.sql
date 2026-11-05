@@ -39,6 +39,9 @@ create table if not exists public.premium_orders (
   code_action           text check (code_action in ('assigned', 'reactivated', 'extended')),
   premium_until         timestamptz,
   review_reason         text,
+  -- Dernière interrogation de SasPay : limite les vérifications à 1 toutes les 5 s par commande
+  -- (SasPay plafonne à 300 requêtes/minute pour TOUT le compte marchand).
+  last_checked_at       timestamptz,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   paid_at               timestamptz,
@@ -49,6 +52,7 @@ create index if not exists idx_premium_orders_user    on public.premium_orders (
 create index if not exists idx_premium_orders_open    on public.premium_orders (created_at desc) where status in ('created', 'pending');
 create index if not exists idx_premium_orders_review  on public.premium_orders (created_at desc) where status = 'needs_review';
 alter table public.premium_orders enable row level security;  -- aucune policy : service role uniquement
+alter table public.premium_orders add column if not exists last_checked_at timestamptz;  -- ré-exécution sur une ancienne version
 
 -- Historique append-only : chaque étape et chaque notification reçue, même sans commande reconnue.
 create table if not exists public.premium_order_events (

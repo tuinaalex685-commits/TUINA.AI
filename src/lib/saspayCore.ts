@@ -25,6 +25,20 @@ export function isValidWebhookSignature(
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+/**
+ * Adresse de paiement renvoyée par SasPay : HTTPS sur un domaine saspay.me uniquement
+ * (checkout.saspay.me aujourd'hui). Le navigateur n'est jamais redirigé ailleurs.
+ */
+export function isSaspayCheckoutUrl(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && (u.hostname === 'saspay.me' || u.hostname.endsWith('.saspay.me')) && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
 /** Montant décimal SasPay (« "2500.00" ») → nombre, ou null si illisible. */
 export function parseAmount(v: unknown): number | null {
   if (typeof v !== 'string' && typeof v !== 'number') return null;

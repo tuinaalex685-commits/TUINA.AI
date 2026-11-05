@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { isValidWebhookSignature, decidePayment, formatAmount, parseAmount } from '../../src/lib/saspayCore.ts';
+import { isValidWebhookSignature, decidePayment, formatAmount, parseAmount, isSaspayCheckoutUrl } from '../../src/lib/saspayCore.ts';
 
 const SECRET = 'a'.repeat(64);
 const sign = (ts: string, body: string, secret = SECRET) =>
@@ -66,4 +66,15 @@ test('montants : chaîne décimale envoyée, lecture tolérante', () => {
   assert.equal(formatAmount(2500), '2500.00');
   assert.equal(parseAmount('2500.00'), 2500);
   assert.equal(parseAmount(null), null);
+});
+
+test('redirection : uniquement vers une page HTTPS de SasPay', () => {
+  assert.equal(isSaspayCheckoutUrl('https://checkout.saspay.me/abc'), true);
+  assert.equal(isSaspayCheckoutUrl('https://pay.saspay.me/checkout/x=='), true);
+  assert.equal(isSaspayCheckoutUrl('http://checkout.saspay.me/abc'), false);
+  assert.equal(isSaspayCheckoutUrl('https://saspay.me.pirate.com/abc'), false);
+  assert.equal(isSaspayCheckoutUrl('https://evilsaspay.me/abc'), false);
+  assert.equal(isSaspayCheckoutUrl('https://user:pw@checkout.saspay.me/abc'), false);
+  assert.equal(isSaspayCheckoutUrl('javascript:alert(1)'), false);
+  assert.equal(isSaspayCheckoutUrl(null), false);
 });

@@ -11,8 +11,8 @@ import { whatsappUrl } from '@/lib/premiumOffer';
 import styles from '../../premium.module.css';
 
 /** Vérifications automatiques : toutes les 4 s pendant 3 minutes, puis à la demande. */
-const POLL_MS = 4000;
-const POLL_MAX = 45;
+const POLL_MS = 6000;   // le serveur n'interroge SasPay qu'une fois toutes les 5 s par commande
+const POLL_MAX = 30;
 
 type Step = 'commande' | 'paiement' | 'verification' | 'active';
 

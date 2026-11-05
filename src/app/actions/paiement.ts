@@ -6,7 +6,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { normalizeEmail } from '@/lib/email';
 import { appBaseUrl } from '@/lib/jobs/workerUrl';
 import { createCheckoutSession } from '@/lib/saspay';
-import { formatAmount } from '@/lib/saspayCore';
+import { formatAmount, isSaspayCheckoutUrl } from '@/lib/saspayCore';
 import {
   getPremiumSituation, getOrder, syncOrder, logOrderEvent, latestOrderFor,
   ORDER_AMOUNT, ORDER_CURRENCY, type PremiumOrder,
@@ -59,7 +59,7 @@ export async function startPremiumCheckout(): Promise<StartResult> {
   // Session encore ouverte et récente : on la réutilise (pas de seconde commande sur un double clic).
   const last = await latestOrderFor(user.id);
   if (last && ['created', 'pending'].includes(last.status) && last.checkout_url
-      && Date.now() - new Date(last.created_at).getTime() < REUSE_MS) {
+      && Date.now() - new Date(last.created_at).getTime() < REUSE_MS && isSaspayCheckoutUrl(last.checkout_url)) {
     return { url: last.checkout_url };
   }
 
@@ -96,7 +96,7 @@ export async function startPremiumCheckout(): Promise<StartResult> {
       expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
       country: 'BF',
     });
-    if (!session?.id || !session?.checkout_url) throw new Error('réponse SasPay incomplète');
+    if (!session?.id || !isSaspayCheckoutUrl(session.checkout_url)) throw new Error('réponse SasPay incomplète ou adresse inattendue');
     await supabaseAdmin.from('premium_orders')
       .update({ checkout_session_id: session.id, checkout_url: session.checkout_url, updated_at: new Date().toISOString() })
       .eq('id', order.id);
