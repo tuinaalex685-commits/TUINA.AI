@@ -57,6 +57,11 @@ export async function corrigerReponsesOuvertes(
       if (!attendues.has(position) || !Number.isFinite(ratio)) continue;
       out[String(position)] = { ratio: Math.max(0, Math.min(1, ratio)), retour: String(r?.retour || '').slice(0, 1200) };
     }
+    // L'IA a répondu mais a sauté une réponse (ex. texte d'étudiant qui tente de la faire ignorer) :
+    // 0, jamais « hors barème » — seule une PANNE du service (catch) exclut une question.
+    for (const x of items) {
+      if (!out[String(x.position)]) out[String(x.position)] = { ratio: 0, retour: 'Cette réponse n’a pas pu être rattachée à la question posée ; elle ne rapporte pas de point.' };
+    }
     return out;
   } catch (e) {
     console.error('[examen] correction des réponses ouvertes indisponible :', e instanceof Error ? e.message : e);
