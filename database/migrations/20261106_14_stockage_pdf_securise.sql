@@ -32,12 +32,28 @@ create policy "Depot PDF dans son dossier" on storage.objects
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+-- -------------------------------------------------------------------------------------
+-- Fiches de révision : un étudiant ne peut plus écrire le CONTENU des fiches.
+-- Les fiches d'un même cours sont copiées d'un étudiant à l'autre (empreinte source_hash). Les
+-- règles RLS laissaient un compte insérer ou modifier SES fiches, empreinte, question et réponse
+-- comprises : de fausses fiches pouvaient être recopiées chez d'autres étudiants.
+-- L'application ne crée les fiches que côté serveur (clé de service) ; l'étudiant ne met à jour
+-- que sa boîte de révision et la date de la prochaine révision (actions/ai.ts).
+-- -------------------------------------------------------------------------------------
+revoke insert, update on public.flashcards from anon, authenticated;
+grant update (box, next_review) on public.flashcards to authenticated;
+
 -- Vérification (lecture seule) : bucket limité aux PDF de 25 Mo, une seule règle d'envoi.
 select id, allowed_mime_types, file_size_limit from storage.buckets where id = 'documents';
 select policyname, cmd from pg_policies where schemaname = 'storage' and tablename = 'objects' order by cmd, policyname;
+-- Fiches : « authenticated » ne doit plus avoir INSERT ; UPDATE seulement sur box et next_review.
+select privilege_type, column_name from information_schema.column_privileges
+ where table_schema = 'public' and table_name = 'flashcards' and grantee = 'authenticated'
+   and privilege_type in ('INSERT', 'UPDATE') order by 1, 2;
 
 -- ROLLBACK :
 --   update storage.buckets set allowed_mime_types = null, file_size_limit = null where id = 'documents';
 --   drop policy if exists "Depot PDF dans son dossier" on storage.objects;
 --   create policy "Upload documents" on storage.objects as permissive for insert to public
 --     with check (bucket_id = 'documents' and auth.uid() = owner);
+--   grant insert, update on public.flashcards to authenticated;
