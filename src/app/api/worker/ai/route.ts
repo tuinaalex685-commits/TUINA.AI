@@ -344,9 +344,22 @@ async function processFlashcards(job: any, ctx: JobCtx): Promise<any> {
   if (result.inserted) return result; // idempotent : déjà fait
 
   // Clone cross-utilisateur : lit les cartes déjà générées pour ce contenu (n'importe quel user).
+  // Les cartes sont copiées pour CHAQUE étudiant du même contenu : la table contient donc le même
+  // jeu plusieurs fois. Sans dédoublonnage, `limit(count)` pouvait renvoyer deux fois les mêmes
+  // questions (ex. 20 cartes demandées = 2 × les 10 du premier étudiant).
   const lookupClone = async () => {
-    const { data } = await supabaseAdmin.from('flashcards').select('question, reponse').eq('source_hash', sourceHash).limit(count);
-    return (data && data.length > 0) ? data.map((c: any) => ({ question: c.question, reponse: c.reponse })) : null;
+    const { data } = await supabaseAdmin.from('flashcards').select('question, reponse')
+      .eq('source_hash', sourceHash).order('created_at', { ascending: true }).limit(count * 20);
+    const vues = new Set<string>();
+    const uniques: { question: string; reponse: string }[] = [];
+    for (const c of data || []) {
+      const cle = String(c.question || '').trim().toLowerCase();
+      if (!cle || vues.has(cle)) continue;
+      vues.add(cle);
+      uniques.push({ question: c.question, reponse: c.reponse });
+      if (uniques.length >= count) break;
+    }
+    return uniques.length > 0 ? uniques : null;
   };
   const insertForUser = async (cards: any[]) => {
     const rows = cards.map((c: any) => ({
@@ -934,8 +947,15 @@ async function chainWorker() {
  * Plafond de jobs IA traités en même temps (tous types). Au-delà, le surplus attend dans la file
  * au lieu de partir en rafale chez Gemini (429 en série, tentatives épuisées). À régler selon le
  * quota du compte Google (requêtes et tokens par minute) : GEMINI_MAX_INFLIGHT, 0 = sans plafond.
+ *
+ * Plafond GLOBAL (compté en base par claim_ai_job_v2, sous verrou), pas par instance Vercel.
+ * Défaut 24, dimensionné sur le quota réel du projet (Gemini 2.5 Flash, Tier 1, relevé le
+ * 06/11/2026 : 1 000 requêtes/min, 1 000 000 jetons/min). Un job occupe ~13 000 à 20 000 jetons
+ * sur 35 à 70 s, soit ~17 000 à 22 000 jetons/min par place : 24 places ≈ 410 000 à 530 000
+ * jetons/min, environ la moitié du quota (marge pour les pointes et les relances). L'ancien 12 en
+ * utilisait le quart. Le plafond ne change pas le coût : il change le temps d'attente.
  */
-const MAX_INFLIGHT = Math.max(0, Number(process.env.GEMINI_MAX_INFLIGHT ?? '12') || 0);
+const MAX_INFLIGHT = Math.max(0, Number(process.env.GEMINI_MAX_INFLIGHT ?? '24') || 0);
 /** Attente maximale d'un job dû très bientôt (étape suivante, attente d'un autre étudiant, reprise). */
 const WAIT_SOON_MS = 20_000;
 
