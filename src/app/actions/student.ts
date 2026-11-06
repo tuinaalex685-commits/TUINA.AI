@@ -174,8 +174,11 @@ export async function updateObjectifProgress(id: string, progression: number) {
   const ctx = await premiumUser();
   if ('error' in ctx) return { error: ctx.error };
   // RLS : seul l'objectif de l'étudiant est modifiable ; le filtre user_id le rend explicite.
-  const { error } = await ctx.supabase.from('objectifs').update({ progression }).eq('id', id).eq('user_id', ctx.user.id);
+  const { data: maj, error } = await ctx.supabase.from('objectifs').update({ progression })
+    .eq('id', id).eq('user_id', ctx.user.id).select('id');
   if (error) return { error: 'Mise à jour impossible.' };
+  // Aucun objectif modifié (identifiant d'un autre compte ou supprimé) : pas de faux « succès ».
+  if (!maj?.length) return { error: 'Objectif introuvable.' };
   revalidatePath('/app/objectifs');
   revalidatePath('/app/dashboard');
   return { success: true };
